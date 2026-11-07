@@ -178,7 +178,8 @@ function stopPopup(s) {
     `${s.typeLabel} · km ${(s.along / 1000).toFixed(1)}`,
     `Ankunft ca. ${formatDay(s.eta)} ${formatClock(s.eta)} – ${STATE_LABELS[s.state]}`,
   ];
-  if (s.poi.tags.opening_hours) lines.push(`Öffnungszeiten: ${s.poi.tags.opening_hours}`);
+  const hours = hoursText(s);
+  if (hours) lines.push(hours);
   if (s.region) lines.push(regionLabel(s.region, homeCountry()));
   if (s.holiday) lines.push(`🎉 Feiertag: ${s.holiday.name}`);
   el.append(title, ...lines.map(t => { const d = document.createElement('div'); d.textContent = t; return d; }));
@@ -191,7 +192,15 @@ function stopPopup(s) {
   return el;
 }
 
-const isWarn = s => ['unknown', 'unlikely', 'seasonal', 'closed', 'openHoliday'].includes(s.state);
+const isWarn = s => ['unknown', 'unlikely', 'seasonal', 'closed', 'openHoliday', 'openTypical', 'closedTypical'].includes(s.state);
+
+/** Öffnungszeiten-Zeile: eigene Angabe oder – gekennzeichnet – die typischen Zeiten der Kette. */
+function hoursText(s) {
+  if (s.poi.tags.opening_hours) return `Öffnungszeiten: ${s.poi.tags.opening_hours}`;
+  const t = s.poi.typical;
+  if (t) return `Typische Öffnungszeiten ${t.chain} (${t.count} von ${t.total} Filialen in der Umgebung): ${t.hours}`;
+  return '';
+}
 
 /** Land, in dem die Route beginnt – Regionen dort ohne Länderzusatz anzeigen. */
 const homeCountry = () => state.route?.regions?.find(s => s.country)?.country || 'DE';
@@ -258,7 +267,7 @@ function renderStops() {
 
   $('#stop-list').replaceChildren(...stops.map(s => {
     const li = document.createElement('li');
-    li.title = s.poi.tags.opening_hours ? `Öffnungszeiten: ${s.poi.tags.opening_hours}` : '';
+    li.title = hoursText(s) || '';
     const ico = document.createElement('span');
     ico.className = 'ico';
     ico.textContent = s.icon;

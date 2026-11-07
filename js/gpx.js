@@ -1,5 +1,8 @@
 const escapeXml = s => s.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
 
+const hours = s => s.poi.tags.opening_hours
+  || (s.poi.typical ? `${s.poi.typical.hours} (typisch für ${s.poi.typical.chain})` : '');
+
 export function toGpx(route, name) {
   const time = new Date().toISOString();
   const points = route.coords.map(([lat, lon, ele]) =>
@@ -8,8 +11,8 @@ export function toGpx(route, name) {
   const wpts = (route.stops || []).map(s => {
     const name = `${s.typeLabel}${s.poi.name ? ': ' + s.poi.name : ''}`;
     return `  <wpt lat="${s.poi.lat.toFixed(6)}" lon="${s.poi.lon.toFixed(6)}">
-    <name>${escapeXml(name)}</name>${s.poi.tags.opening_hours ? `
-    <desc>${escapeXml(s.poi.tags.opening_hours)}</desc>` : ''}
+    <name>${escapeXml(name)}</name>${hours(s) ? `
+    <desc>${escapeXml(hours(s))}</desc>` : ''}
     <sym>${s.gpxSym}</sym>
   </wpt>
 `;

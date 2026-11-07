@@ -1,5 +1,5 @@
 import { estimateTime, sampleRoute, indexAtDistance } from './utils.js';
-import { openState, hasHolidayRule } from './openingHours.js';
+import { openState, hasHolidayRule, parseOpeningHours } from './openingHours.js';
 import { regionsAlong, regionAtDistance } from './regions.js';
 import { holidayLookup } from './holidays.js';
 import { route } from './routing/index.js';
@@ -30,6 +30,8 @@ export const STATE_LABELS = {
   unlikely: 'Öffnungszeiten unbekannt – sonntags/nachts evtl. zu',
   closed: 'bei Ankunft evtl. geschlossen',
   openHoliday: 'Feiertag – laut Sonntagszeiten geöffnet',
+  openTypical: 'vermutlich geöffnet (typische Zeiten der Kette)',
+  closedTypical: 'laut typischen Zeiten der Kette evtl. zu',
 };
 
 // ---------- Geometrie ----------
@@ -222,7 +224,9 @@ function timeline(r, departure, bike) {
  * `holiday`: Feiertag am Ort der Stelle zur Ankunftszeit (oder null).
  */
 function evaluate(poi, eta, holiday) {
-  const oh = poi.tags.opening_hours;
+  const own = poi.tags.opening_hours;
+  if (!own && poi.typical) return evaluateTypical(poi, eta, holiday);
+  const oh = own;
   let st = oh ? openState(oh, eta, DWELL_MIN, !!holiday) : 'unknown';
   // Freitext wie „Zur Zeit geschlossen“ / „closed“
   if (st === 'unknown' && oh && /geschlossen|closed|^off$/i.test(oh)) st = 'closed';
@@ -243,6 +247,68 @@ function evaluate(poi, eta, holiday) {
   const hour = eta.getHours();
   if (poi.type !== 'fuel' && (holiday || eta.getDay() === 0 || hour < 7 || hour >= 21)) return { tier: 4 + bias, state: 'unlikely' };
   return { tier: 3 + bias, state: 'unknown' };
+}
+
+/**
+ * Filiale ohne eigene Angaben, aber mit typischen Öffnungszeiten ihrer Kette: etwas schlechter als echte
+ * Angaben, aber deutlich besser als „unbekannt“. Laut typischen Zeiten geschlossen → nur letzte Wahl
+ * (die Annahme kann falsch sein).
+ */
+function evaluateTypical(poi, eta, holiday) {
+  const bias = poi.type === 'supermarket' ? 0 : 0.3;
+  const st = openState(poi.typical.hours, eta, DWELL_MIN, !!holiday);
+  if (st === 'open') return { tier: (holiday && !hasHolidayRule(poi.typical.hours) ? 1.8 : 1.3) + bias, state: 'openTypical' };
+  return { tier: 4.5 + bias, state: 'closedTypical' };
+}
+
+// ---------- Typische Öffnungszeiten von Ketten ----------
+// Fehlen bei einer Filiale die Öffnungszeiten, werden die häufigsten Zeiten derselben Kette aus allen in
+// dieser Sitzung geladenen Kacheln übernommen – nur bei ausreichend klarer Datenlage.
+
+const TYPICAL_MIN_SAMPLES = 3;   // mindestens so viele Filialen mit Angaben
+const TYPICAL_MIN_SHARE = 0.4;   // und so viele davon mit genau diesen Zeiten
+
+const normalizeHours = oh => oh.trim().replace(/\s*;\s*/g, '; ').replace(/\s+/g, ' ');
+
+/** Kette einer Stelle: Marke (brand), sonst Name – nur für Läden und Tankstellen. */
+function chainKey(poi) {
+  if (poi.type === 'water') return null;
+  const name = (poi.tags.brand || poi.name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  return name ? `${poi.type}|${name}` : null;
+}
+
+function typicalHours(pool) {
+  const byChain = new Map(); // key → {label, counts: Map(hours → n), total}
+  const seen = new Set();
+  for (const p of pool) {
+    const oh = p.tags.opening_hours;
+    const key = chainKey(p);
+    if (!oh || !key || seen.has(p.id) || !parseOpeningHours(oh)) continue; // nur verständliche Angaben
+    seen.add(p.id);
+    const c = byChain.get(key) || { label: p.tags.brand || p.name, counts: new Map(), total: 0 };
+    const h = normalizeHours(oh);
+    c.counts.set(h, (c.counts.get(h) || 0) + 1);
+    c.total++;
+    byChain.set(key, c);
+  }
+  const out = new Map();
+  for (const [key, c] of byChain) {
+    if (c.total < TYPICAL_MIN_SAMPLES) continue;
+    const [hours, count] = [...c.counts].sort((a, b) => b[1] - a[1])[0];
+    if (count / c.total >= TYPICAL_MIN_SHARE) out.set(key, { hours, count, total: c.total, chain: c.label });
+  }
+  return out;
+}
+
+/** Ergänzt Stellen ohne Öffnungszeiten um `typical`, sofern für ihre Kette typische Zeiten bekannt sind. */
+export function withTypicalHours(pois) {
+  const pool = [...memTiles.values()].flatMap(e => e.pois).concat(pois);
+  const typical = typicalHours(pool);
+  return pois.map(p => {
+    if (p.tags.opening_hours) return p;
+    const t = typical.get(chainKey(p));
+    return t ? { ...p, typical: t } : p;
+  });
 }
 
 /**
@@ -305,7 +371,7 @@ export async function addStops(base, { provider, opts, interval, departure, bike
     holidayCheck: !!lookup, // false = Feiertage konnten nicht geprüft werden
   };
 
-  const { stops, gaps } = plan(base, locatePois(base, pois), { interval, departure, bike, holidayFor });
+  const { stops, gaps } = plan(base, locatePois(base, withTypicalHours(pois)), { interval, departure, bike, holidayFor });
   if (!stops.length) return { ...base, base, stops: [], gaps, ...info };
 
   // Stopps zwischen die vorhandenen Wegpunkte einsortieren
