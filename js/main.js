@@ -365,15 +365,67 @@ $('#btn-clear').addEventListener('click', () => {
   clearRoute();
 });
 
+// ---------- Heimatadresse ----------
+
+const homeInput = $('#home-input');
+let pendingHome = null; // Auswahl im Einstellungsdialog, wird erst beim Speichern übernommen
+
+const getHome = () => storage.get('home', null);
+const syncHomeButton = () => { $('#btn-home').hidden = !getHome(); };
+
+function useHomeAsStart() {
+  const home = getHome();
+  if (!home) return;
+  setPoint('start', home, { label: home.label });
+  if (state.mode !== 'ab' || !state.end) map.flyTo(home);
+}
+
+$('#btn-home').addEventListener('click', useHomeAsStart);
+
+attachSearch(homeInput, {
+  getBias: () => state.start || map.center(),
+  onSelect: place => { pendingHome = { lat: place.lat, lon: place.lon, label: place.label }; },
+});
+$('#btn-home-from-start').addEventListener('click', () => {
+  if (!state.start) return;
+  pendingHome = { ...state.start };
+  homeInput.value = state.start.label;
+});
+$('#btn-home-clear').addEventListener('click', () => {
+  pendingHome = null;
+  homeInput.value = '';
+  homeInput.focus();
+});
+
+// ---------- Einstellungen ----------
+
 const dialog = $('#settings-dialog');
 $('#btn-settings').addEventListener('click', () => {
   $('#ors-key').value = storage.get('orsKey', '');
+  pendingHome = getHome();
+  homeInput.value = pendingHome?.label || '';
+  $('#btn-home-from-start').disabled = !state.start;
   dialog.showModal();
 });
 dialog.addEventListener('close', () => {
   if (dialog.returnValue !== 'save') return;
   storage.set('orsKey', $('#ors-key').value.trim());
+  // Leeres Feld = Heimatadresse entfernen
+  const home = homeInput.value.trim() ? pendingHome : null;
+  storage.set('home', home);
+  syncHomeButton();
+  if (home && !state.start) useHomeAsStart();
   if (state.provider === 'ors') recalc();
 });
 
 syncUi();
+syncHomeButton();
+
+// Heimatadresse als Standard-Startort
+const home = getHome();
+if (home) {
+  state.start = { lat: home.lat, lon: home.lon, label: home.label };
+  ui.startInput.value = home.label;
+  map.flyTo(home);
+  updateMarkers();
+}

@@ -49,6 +49,9 @@
         <span class="label"><i class="dot start"></i>Start</span>
         <div class="search">
           <input id="start-input" type="text" placeholder="Ort suchen oder auf Karte klicken" autocomplete="off">
+          <button id="btn-home" class="icon-btn" title="Heimatadresse als Start" aria-label="Heimatadresse als Start" hidden>
+            <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
+          </button>
           <button id="btn-locate" class="icon-btn" title="Mein Standort" aria-label="Mein Standort">
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
           </button>
@@ -148,6 +151,20 @@
   <dialog id="settings-dialog">
     <form method="dialog">
       <h2>Einstellungen</h2>
+      <div class="field">
+        <span class="label">Heimatadresse</span>
+        <div class="search">
+          <input id="home-input" type="text" placeholder="Adresse suchen" autocomplete="off">
+          <button type="button" id="btn-home-from-start" class="icon-btn" title="Aktuellen Startort übernehmen" aria-label="Aktuellen Startort übernehmen">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Z"/></svg>
+          </button>
+          <button type="button" id="btn-home-clear" class="icon-btn" title="Heimatadresse entfernen" aria-label="Heimatadresse entfernen">
+            <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+          <ul class="suggestions" hidden></ul>
+        </div>
+      </div>
+      <p class="hint">Wird beim Öffnen automatisch als Startort gesetzt.</p>
       <label class="field">
         <span class="label">OpenRouteService API-Key</span>
         <input id="ors-key" type="password" placeholder="Key einfügen" autocomplete="off">
