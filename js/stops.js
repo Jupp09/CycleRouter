@@ -3,16 +3,12 @@ import { openState, hasHolidayRule } from './openingHours.js';
 import { regionsAlong, regionAtDistance } from './regions.js';
 import { holidayLookup } from './holidays.js';
 import { route } from './routing/index.js';
+import { tileKey, fetchTilesFromOverpass } from './poiSource.js';
 
 /**
  * Verpflegungsstopps: Trinkwasserstellen, Supermärkte und Tankstellen aus OpenStreetMap (Overpass)
  * entlang der Route suchen, etwa alle `interval` Meter einen auswählen und die Route durch sie führen.
  */
-
-const OVERPASS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-];
 
 /** Maximale Entfernung von der Route (Luftlinie, m). */
 const MAX_OFFSET = { water: 400, supermarket: 1000, convenience: 800, fuel: 800 };
@@ -67,32 +63,14 @@ function locateSequential(r, points) {
   });
 }
 
-// ---------- Overpass ----------
-
-function classify(tags) {
-  if (tags.drinking_water === 'no' || ['private', 'no'].includes(tags.access)) return null;
-  if (tags.amenity === 'drinking_water' || tags.amenity === 'water_point') return 'water';
-  if (tags.man_made === 'water_tap' && tags.drinking_water === 'yes') return 'water';
-  if (tags.shop === 'supermarket') return 'supermarket';
-  if (tags.shop === 'convenience') return 'convenience';
-  if (tags.amenity === 'fuel') return 'fuel';
-  return null;
-}
-
 // ---------- Kachel-Cache ----------
 // Die öffentlichen Overpass-Server haben oft lange Warteschlangen (auch kleine Abfragen dauern dann
-// 30 s). Deshalb werden Stellen pro Kachel (0,1° ≈ 11 × 7 km) dauerhaft im Browser gespeichert und
-// nur fehlende Kacheln abgefragt.
+// 30 s). Deshalb werden Stellen pro Kachel (0,1° ≈ 11 × 7 km) gecacht – im Browser (IndexedDB, 7 Tage)
+// und, wenn die App über server.mjs läuft, zusätzlich auf dem Server (Dateien, 30 Tage). Nur Kacheln,
+// die in keinem Cache liegen, werden bei Overpass abgefragt.
 
-const TILE = 0.1;
 const TILE_TTL = 7 * 24 * 3600 * 1000;
 const memTiles = new Map(); // key → {t, pois}
-
-const tileKey = (lat, lon) => `${Math.floor(lat / TILE)}_${Math.floor(lon / TILE)}`;
-function tileBox(key) {
-  const [i, j] = key.split('_').map(Number);
-  return [i * TILE, j * TILE, (i + 1) * TILE, (j + 1) * TILE].map(v => v.toFixed(4)).join(',');
-}
 
 /** Alle Kacheln, die die Route samt ~1 km Rand berührt. */
 function routeTiles(r) {
@@ -150,86 +128,49 @@ async function saveTiles(entries) {
   } catch { /* Cache ist optional */ }
 }
 
-const sleep = (ms, signal) => new Promise((resolve, reject) => {
-  const t = setTimeout(resolve, ms);
-  signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Abgebrochen', 'AbortError')); }, { once: true });
-});
+// ---------- Server-Cache (server.mjs) ----------
 
-/** Abbruch durch den Aufrufer oder nach `ms` (dann TimeoutError). */
-function withTimeout(signal, ms) {
-  if (!AbortSignal.any || !AbortSignal.timeout) return signal;
-  return signal ? AbortSignal.any([signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms);
-}
+const SERVER_API = new URL('../api/pois', import.meta.url);
+let serverAvailable = true; // wird false, wenn die App statisch (ohne server.mjs) ausgeliefert wird
 
-async function overpass(query, signal) {
-  let lastError;
-  for (const [n, endpoint] of OVERPASS.entries()) {
-    // Hauptserver lehnt bei Überlast sofort ab → mehrfach mit kurzer Pause versuchen
-    const main = n === 0;
-    for (let attempt = 0; attempt < (main ? 5 : 1); attempt++) {
-      try {
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          body: 'data=' + encodeURIComponent(query),
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          signal: withTimeout(signal, main ? 90000 : 45000),
-        });
-        const busy = [429, 502, 503, 504].includes(res.status);
-        if (!res.ok) throw Object.assign(new Error(busy ? 'Overpass ist ausgelastet' : `Overpass-Fehler ${res.status}`), { busy });
-        const json = await res.json();
-        // Bei Zeitüberschreitung liefert Overpass Status 200 mit leerer Liste und einem Hinweis
-        if (json.remark && /error|timed out|out of memory/i.test(json.remark)) {
-          throw Object.assign(new Error('Overpass-Zeitüberschreitung'), { busy: true });
-        }
-        return json;
-      } catch (e) {
-        if (e.name === 'AbortError' || signal?.aborted) throw e;
-        lastError = e.name === 'TimeoutError' ? new Error('Zeitüberschreitung') : e;
-        if (!e.busy) break; // anderer Fehler oder Timeout → nächster Server
-        await sleep(Math.min(1500 * 2 ** attempt, 6000), signal);
-      }
-    }
+/** Kacheln über den lokalen Server laden → Map, oder null, wenn kein Server-Cache verfügbar ist. */
+async function fetchTilesFromServer(keys, signal) {
+  if (!serverAvailable) return null;
+  let res;
+  try {
+    res = await fetch(SERVER_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tiles: keys }),
+      signal,
+    });
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    serverAvailable = false;
+    return null;
   }
-  throw new Error(`Verpflegungsstellen konnten nicht geladen werden (${lastError?.message || 'Netzwerkfehler'}).`);
+  if (res.status === 404 || res.status === 405 || !res.headers.get('content-type')?.includes('json')) {
+    serverAvailable = false;
+    return null;
+  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `Server-Fehler ${res.status}`);
+  return new Map(Object.entries(data.tiles));
 }
-
-/** Nur die Tags, die für Auswahl, Anzeige und GPX gebraucht werden (hält den Cache klein). */
-const KEEP_TAGS = ['opening_hours', 'seasonal', 'fee'];
 
 async function fetchPois(r, signal) {
   const keys = routeTiles(r);
   const cached = await loadTiles(keys);
   const missing = keys.filter(k => !cached.has(k));
-  const extra = []; // Flächen, deren Mittelpunkt außerhalb der abgefragten Kacheln liegt
 
   if (missing.length) {
-    const statements = missing.map(tileBox).map(b => `
-  nwr["amenity"~"^(drinking_water|water_point|fuel)$"](${b});
-  node["man_made"="water_tap"]["drinking_water"="yes"](${b});
-  nwr["shop"~"^(supermarket|convenience)$"](${b});`).join('');
-    const json = await overpass(`[out:json][timeout:90];(${statements}
-);
-out center tags;`, signal);
-
-    const fetched = new Map(missing.map(k => [k, []]));
-    const seen = new Set();
-    for (const el of json.elements) {
-      const id = `${el.type}/${el.id}`;
-      const tags = el.tags || {};
-      const type = classify(tags);
-      const lat = el.lat ?? el.center?.lat, lon = el.lon ?? el.center?.lon;
-      if (!type || lat == null || seen.has(id)) continue;
-      seen.add(id);
-      const keep = Object.fromEntries(KEEP_TAGS.filter(t => tags[t]).map(t => [t, tags[t]]));
-      const poi = { id, type, lat, lon, tags: keep, name: tags.name || tags.brand || '' };
-      (fetched.get(tileKey(lat, lon)) || extra).push(poi);
-    }
+    const fetched = await fetchTilesFromServer(missing, signal) ?? await fetchTilesFromOverpass(missing, { signal });
     await saveTiles(fetched);
     for (const [k, pois] of fetched) cached.set(k, pois);
   }
 
   const seen = new Set();
-  return [...cached.values(), extra].flat().filter(p => !seen.has(p.id) && seen.add(p.id));
+  return [...cached.values()].flat().filter(p => !seen.has(p.id) && seen.add(p.id));
 }
 
 /** Jede Stelle wird an jeder Passage der Route (z. B. Hin- und Rückweg) einmal Kandidat. */

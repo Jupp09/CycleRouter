@@ -5,6 +5,7 @@
   "description": "Routenplaner für Rennrad und Gravelbike",
   "type": "module",
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "warm": "node server/warm.mjs"
   }
 }

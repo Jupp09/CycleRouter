@@ -25,6 +25,18 @@ Danach <http://localhost:8000> öffnen. Der Server ([server.mjs](server.mjs)) li
 
 Alternativ geht jeder statische Server, er muss aber **im Projektordner** gestartet werden, sonst erscheint nur eine Dateiliste: `py -m http.server 8000`.
 
+### Server-Cache für Verpflegungsstellen
+
+Über `npm start` liefert der Server zusätzlich `POST /api/pois`: Supermärkte, Tankstellen und Trinkwasserstellen inkl. Öffnungszeiten werden je Kachel (≈ 11 × 7 km) im Ordner `cache/pois/` gespeichert. Gültigkeit 30 Tage (änderbar mit `POI_TTL_DAYS`). Danach wird der alte Stand sofort ausgeliefert und im Hintergrund erneuert. Overpass wird nur noch für noch nie geladene Gegenden abgefragt.
+
+Eine Region lässt sich vorab laden, z. B. 60 km um einen Ort:
+
+```sh
+npm run warm -- 53.07 8.80 60
+```
+
+Ohne diesen Server (statisch gehostet) fragt der Browser direkt bei Overpass an.
+
 ## Routing
 
 | Dienst | Rennrad | Gravel | Fahrrad (Trekking/Alltag) | Hinweise |
