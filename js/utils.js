@@ -78,8 +78,22 @@ export function indexAtDistance(r, along) {
 }
 
 /** Geschätzte Fahrzeit in Sekunden. */
+/** Standard-Durchschnittsgeschwindigkeit in der Ebene (km/h) je Fahrradtyp. */
+export const DEFAULT_SPEED = { road: 27, gravel: 20, trekking: 18 };
+export const SPEED_MIN = 10, SPEED_MAX = 35;
+
+let speedSetting = null; // vom Nutzer eingestellt (km/h) oder null = Standard je Fahrradtyp
+
+/** Eigene Durchschnittsgeschwindigkeit setzen (null = Standard je Fahrradtyp). */
+export function setAverageSpeed(kmh) {
+  speedSetting = Number.isFinite(kmh) ? Math.min(SPEED_MAX, Math.max(SPEED_MIN, kmh)) : null;
+}
+
+/** Durchschnittsgeschwindigkeit in der Ebene, die der Fahrzeit zugrunde liegt. */
+export const averageSpeed = bike => speedSetting ?? DEFAULT_SPEED[bike] ?? 20;
+
 export function estimateTime(distance, ascent, bike) {
-  const speed = { road: 27, gravel: 20, trekking: 18 }[bike] ?? 20;            // km/h in der Ebene
+  const speed = averageSpeed(bike);                                             // km/h in der Ebene
   const climbRate = { road: 1200, gravel: 1000, trekking: 800 }[bike] ?? 1000; // Höhenmeter, die ~1 h Zusatzzeit kosten
   return (distance / 1000 / speed + ascent / climbRate) * 3600;
 }

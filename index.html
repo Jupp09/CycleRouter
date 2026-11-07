@@ -211,6 +211,14 @@
       </div>
       <p class="hint">Wird beim Öffnen automatisch als Startort gesetzt.</p>
       <p class="hint" id="home-warm-hint" hidden></p>
+      <div class="field">
+        <span class="label">Durchschnittsgeschwindigkeit <output id="speed-out"></output></span>
+        <div class="range-row">
+          <input id="speed-range" type="range" min="10" max="35" step="1" aria-label="Durchschnittsgeschwindigkeit in km/h">
+        </div>
+        <p class="hint">Tempo in der Ebene – Anstiege werden zusätzlich berücksichtigt. Grundlage für Fahrzeit und Ankunftszeiten.
+          <button type="button" class="link-btn inline" id="speed-reset">Auf Standard zurücksetzen</button></p>
+      </div>
       <label class="field">
         <span class="label">OpenRouteService API-Key</span>
         <input id="ors-key" type="password" placeholder="Key einfügen" autocomplete="off">

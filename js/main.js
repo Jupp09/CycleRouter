@@ -9,7 +9,10 @@ import { addStops, STATE_LABELS, DWELL_MIN, arrivalAt, openingAt } from './stops
 import { PLACE_CATEGORIES, searchAlongRoute } from './placeSearch.js';
 import { regionAt, regionLabel } from './regions.js';
 import { holidayAt } from './holidays.js';
-import { storage, newSeed, seededRandom, estimateTime, formatKm, formatM, formatDuration, haversine, debounce } from './utils.js';
+import {
+  storage, newSeed, seededRandom, estimateTime, formatKm, formatM, formatDuration, haversine, debounce,
+  DEFAULT_SPEED, setAverageSpeed, averageSpeed,
+} from './utils.js';
 
 const $ = sel => document.querySelector(sel);
 const MODE_LABELS = { ab: 'Route', distance: 'Strecke', loop: 'Rundkurs' };
@@ -326,6 +329,7 @@ function showRoute(r, { fit = true } = {}) {
   $('#stat-up').textContent = formatM(r.ascent);
   $('#stat-down').textContent = formatM(r.descent);
   $('#stat-time').textContent = formatDuration(estimateTime(r.distance, r.ascent, state.bike));
+  $('#stat-time').title = `Ø ${averageSpeed(state.bike)} km/h in der Ebene, Anstiege zusätzlich – einstellbar unter Einstellungen`;
   const ld = longDistanceShare(r);
   const evEl = $('#eurovelo-share');
   // Anzeigen, wenn bevorzugt wurde oder die Route ohnehin nennenswert auf Radfernwegen verläuft
@@ -962,6 +966,34 @@ function flashStatus(text) {
   setTimeout(() => { if (ui.status.textContent === text) setStatus(null); }, 10000);
 }
 
+// ---------- Durchschnittsgeschwindigkeit ----------
+// Gespeichert als km/h oder null (= Standard je Fahrradtyp). Grundlage für Fahrzeit und Ankunftszeiten.
+
+const BIKE_LABELS = { road: 'Rennrad', gravel: 'Gravel', trekking: 'Fahrrad' };
+const speedRange = $('#speed-range');
+let pendingSpeed = null; // Auswahl im Dialog, null = Standard
+
+function renderSpeed() {
+  const value = pendingSpeed ?? DEFAULT_SPEED[state.bike];
+  speedRange.value = value;
+  $('#speed-out').textContent = pendingSpeed == null
+    ? `${value} km/h (Standard ${BIKE_LABELS[state.bike]})`
+    : `${value} km/h`;
+  $('#speed-reset').hidden = pendingSpeed == null;
+}
+
+speedRange.addEventListener('input', () => { pendingSpeed = Number(speedRange.value); renderSpeed(); });
+$('#speed-reset').addEventListener('click', () => { pendingSpeed = null; renderSpeed(); });
+
+setAverageSpeed(storage.get('avgSpeed', null));
+
+/** Fahrzeit und Ankunftszeiten nach geänderter Geschwindigkeit neu berechnen (Route bleibt gleich). */
+function refreshTimes() {
+  if (!state.route) return;
+  if (state.supply.enabled) replanStops(); // Ankunftszeiten bestimmen Öffnungsstatus und Auswahl der Stopps
+  else showRoute(state.route, { fit: false });
+}
+
 // ---------- Einstellungen ----------
 
 const dialog = $('#settings-dialog');
@@ -970,12 +1002,21 @@ $('#btn-settings').addEventListener('click', () => {
   pendingHome = getHome();
   homeInput.value = pendingHome?.label || '';
   $('#btn-home-from-start').disabled = !state.start;
+  pendingSpeed = storage.get('avgSpeed', null);
+  renderSpeed();
   showWarmStatus();
   dialog.showModal();
 });
 dialog.addEventListener('close', async () => {
   if (dialog.returnValue !== 'save') return;
   storage.set('orsKey', $('#ors-key').value.trim());
+
+  const speedBefore = storage.get('avgSpeed', null);
+  if (pendingSpeed !== speedBefore) {
+    storage.set('avgSpeed', pendingSpeed);
+    setAverageSpeed(pendingSpeed);
+    if (state.provider !== 'ors') refreshTimes(); // bei ORS berechnet recalc() unten ohnehin neu
+  }
   // Leeres Feld = Heimatadresse entfernen
   const before = getHome();
   const home = homeInput.value.trim() ? pendingHome : null;
