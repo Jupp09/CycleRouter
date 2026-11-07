@@ -212,6 +212,7 @@ input[type="datetime-local"] {
 }
 .along-list li:hover { background: var(--accent-soft); }
 .along-list .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.along-list small.warn { color: var(--warn-text); }
 .along-list small { display: block; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .along-list .km { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
 .along-list .add { width: 30px; height: 30px; padding: 0; font-weight: 700; }

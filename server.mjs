@@ -6,7 +6,7 @@ import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getTiles } from './server/poiCache.mjs';
 import { initWarmQueue, requestWarm, warmStatus, RADIUS_KM } from './server/warmQueue.mjs';
-import { isTileKey } from './js/poiSource.js';
+import { isTileKey, isLayer } from './js/poiSource.js';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 8000;
@@ -36,21 +36,26 @@ async function readBody(req, limit = 64 * 1024) {
 
 async function handlePois(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Nur POST' });
-  let keys;
+  let keys, layers, cacheOnly;
   try {
-    keys = JSON.parse(await readBody(req)).tiles;
+    ({ tiles: keys, layers = ['supply'], cacheOnly = false } = JSON.parse(await readBody(req)));
   } catch (e) {
     return json(res, 400, { error: e.message });
   }
   if (!Array.isArray(keys) || !keys.length || keys.length > 1000 || !keys.every(isTileKey)) {
     return json(res, 400, { error: 'Ungültige Kachelliste' });
   }
+  if (!Array.isArray(layers) || !layers.length || !layers.every(isLayer)) {
+    return json(res, 400, { error: 'Ungültige Datenebene' });
+  }
   const t0 = Date.now();
   try {
-    const { tiles, stats } = await getTiles([...new Set(keys)], { log: msg => console.log(msg) });
-    console.log(`/api/pois: ${keys.length} Kacheln (${stats.cached} Cache, ${stats.stale} abgelaufen, `
+    const { tiles, stats, missing } = await getTiles([...new Set(keys)], {
+      layers: [...new Set(layers)], cacheOnly: cacheOnly === true, log: msg => console.log(msg),
+    });
+    console.log(`/api/pois [${layers.join(',')}]: ${keys.length} Kacheln (${stats.cached} Cache, ${stats.stale} abgelaufen, `
       + `${stats.fetched} neu) in ${Date.now() - t0} ms`);
-    json(res, 200, { tiles });
+    json(res, 200, { tiles, missing });
   } catch (e) {
     console.error('/api/pois:', e.message);
     json(res, 502, { error: e.message });

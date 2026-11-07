@@ -1,9 +1,11 @@
 import { sampleRoute } from './utils.js';
+import { fetchPois, withTypicalHours } from './stops.js';
+import { layerOfType } from './poiSource.js';
 
 /**
  * Orte einer Kategorie (Café, Restaurant, Bäckerei, Supermarkt, Tankstelle) entlang einer Route finden.
- * Quelle: Photon-Kategoriesuche (`include=osm.<key>.<value>`, ohne Suchbegriff) – abschnittsweise in
- * Rechtecken entlang der Route, danach lokal nach Entfernung zur Route gefiltert.
+ * Quelle: der Kachel-Cache (mit Öffnungszeiten), sonst die Photon-Kategoriesuche (`include=osm.<key>.<value>`,
+ * ohne Suchbegriff) – abschnittsweise in Rechtecken entlang der Route, danach lokal nach Entfernung gefiltert.
  */
 
 const PHOTON = 'https://photon.komoot.io/api/';
@@ -53,12 +55,59 @@ function describe(p) {
 
 /**
  * → [{id, lat, lon, name, detail, along (m), offset (m), category}] nach Position entlang der Route sortiert;
- * `partial` am Ergebnis ist true, wenn einzelne Abschnitte nicht abgefragt werden konnten.
+ * `partial` am Ergebnis ist true, wenn einzelne Abschnitte nicht abgefragt werden konnten; `source` ist
+ * 'cache' (Kachel-Cache, mit Öffnungszeiten in `poi`) oder 'photon'.
  * `maxOffset`: höchste Entfernung von der Route (Luftlinie).
+ *
+ * Zuerst wird der Kachel-Cache (Browser/Server) gefragt – ohne auf Overpass zu warten. Ist er für die
+ * Route vollständig, kommen die Treffer von dort; sonst von Photon, während der Server die fehlenden
+ * Kacheln im Hintergrund nachlädt (beim nächsten Mal sind sie da).
  */
 export async function searchAlongRoute(r, category, { maxOffset = 1000, signal } = {}) {
-  const cat = PLACE_CATEGORIES[category];
   const samples = sampleRoute(r, 100);
+  let cached = [];
+  try {
+    cached = await fetchPois(r, signal, [layerOfType(category)], { cacheOnly: true });
+  } catch (e) {
+    if (signal?.aborted) throw e;
+  }
+  const typed = withTypicalHours(cached).filter(p => p.type === category);
+  const fromCache = () => {
+    const out = [];
+    for (const poi of typed) {
+      const { along, offset } = nearest(samples, poi.lat, poi.lon);
+      if (offset > maxOffset) continue;
+      out.push({ id: poi.id, lat: poi.lat, lon: poi.lon, name: poi.name || PLACE_CATEGORIES[category].label,
+        detail: '', along, offset, category, poi });
+    }
+    out.sort((a, b) => a.along - b.along);
+    out.source = 'cache';
+    out.partial = !cached.complete;
+    return out;
+  };
+  if (cached.complete) return fromCache();
+  try {
+    // Teilweise vorhandene Cache-Daten (Öffnungszeiten) an die Photon-Treffer hängen
+    return await searchPhoton(r, category, samples, new Map(typed.map(p => [p.id, p])), { maxOffset, signal });
+  } catch (e) {
+    // Photon nicht erreichbar → wenigstens das, was der Cache schon hat
+    if (signal?.aborted || !typed.length) throw e;
+    return fromCache();
+  }
+}
+
+function nearest(samples, lat, lon) {
+  let offset = Infinity, along = 0;
+  for (const s of samples) {
+    if (Math.abs(s.lat - lat) > 0.02) continue;
+    const d = approxDist(s.lat, s.lon, lat, lon);
+    if (d < offset) { offset = d; along = s.along; }
+  }
+  return { along, offset };
+}
+
+async function searchPhoton(r, category, samples, known, { maxOffset, signal }) {
+  const cat = PLACE_CATEGORIES[category];
   const boxes = windows(samples);
 
   const features = [];
@@ -90,16 +139,12 @@ export async function searchAlongRoute(r, category, { maxOffset = 1000, signal }
     if (seen.has(id)) continue;
     seen.add(id);
     const [lon, lat] = f.geometry.coordinates;
-    let best = Infinity, along = 0;
-    for (const s of samples) {
-      if (Math.abs(s.lat - lat) > 0.02) continue;
-      const d = approxDist(s.lat, s.lon, lat, lon);
-      if (d < best) { best = d; along = s.along; }
-    }
-    if (best > maxOffset) continue;
-    out.push({ id, lat, lon, name: p.name || cat.label, detail: describe(p), along, offset: best, category });
+    const { along, offset } = nearest(samples, lat, lon);
+    if (offset > maxOffset) continue;
+    out.push({ id, lat, lon, name: p.name || cat.label, detail: describe(p), along, offset, category, poi: known.get(id) });
   }
   out.sort((a, b) => a.along - b.along);
   out.partial = failed > 0; // einzelne Abschnitte konnten nicht durchsucht werden
+  out.source = 'photon';
   return out;
 }

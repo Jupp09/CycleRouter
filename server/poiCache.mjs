@@ -1,10 +1,12 @@
-// Datei-Cache für Verpflegungsstellen je Kachel (Supermärkte, Tankstellen, Trinkwasser inkl. Öffnungszeiten).
-// Die Daten ändern sich selten, Overpass ist dagegen oft langsam – deshalb lange Gültigkeit und
-// „stale-while-revalidate“: Abgelaufene Kacheln werden sofort ausgeliefert und im Hintergrund erneuert.
-import { mkdir, readFile, writeFile, rename, stat } from 'node:fs/promises';
+// Datei-Cache für Orte je Kachel und Datenebene (siehe LAYERS in js/poiSource.js):
+//   cache/pois/<ebene>/<kachel>.json   z. B. cache/pois/supply/530_88.json, cache/pois/food/530_88.json
+// Jede Ebene hat ihre eigene Gültigkeit – eine neue Ebene wird für vorhandene Kacheln nachgeladen, ohne die
+// übrigen Ebenen erneut abzufragen. Die Daten ändern sich selten, Overpass ist dagegen oft langsam – deshalb
+// lange Gültigkeit und „stale-while-revalidate“: Abgelaufenes wird sofort ausgeliefert und im Hintergrund erneuert.
+import { mkdir, readFile, writeFile, rename, stat, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchTilesFromOverpass, TILE, tileKey } from '../js/poiSource.js';
+import { fetchTilesFromOverpass, LAYERS, TILE, tileKey } from '../js/poiSource.js';
 
 const DIR = fileURLToPath(new URL('../cache/pois/', import.meta.url));
 const DAY = 24 * 3600 * 1000;
@@ -16,20 +18,32 @@ const MAX_STALE = 365 * DAY;
 const CHUNK = 40;
 // Overpass lehnt Anfragen ohne aussagekräftigen User-Agent ab (406)
 const HEADERS = { 'User-Agent': 'CycleRouter/1.0 (+https://github.com/Jupp09/CycleRouter)' };
+export const ALL_LAYERS = Object.keys(LAYERS);
 
-const inflight = new Map(); // key → Promise<pois>
+const inflight = new Map(); // `${ebene}/${kachel}` → Promise<pois>
 
-const file = key => join(DIR, `${key}.json`);
+const file = (layer, key) => join(DIR, layer, `${key}.json`);
 
-async function readTile(key) {
-  try { return JSON.parse(await readFile(file(key), 'utf8')); } catch { return null; }
+// Kacheln aus der Zeit vor den Ebenen (cache/pois/<kachel>.json) enthalten die Versorgungs-Ebene →
+// einmalig nach cache/pois/supply/ verschieben, damit sie nicht neu geladen werden müssen.
+const migrated = (async () => {
+  let files;
+  try { files = (await readdir(DIR)).filter(f => f.endsWith('.json')); } catch { return; }
+  if (!files.length) return;
+  await mkdir(join(DIR, 'supply'), { recursive: true });
+  await Promise.all(files.map(f => rename(join(DIR, f), join(DIR, 'supply', f)).catch(() => {})));
+  console.log(`Cache: ${files.length} vorhandene Kacheln als Ebene „supply“ übernommen`);
+})();
+
+async function readTile(layer, key) {
+  try { return JSON.parse(await readFile(file(layer, key), 'utf8')); } catch { return null; }
 }
 
-async function writeTile(key, pois) {
-  await mkdir(DIR, { recursive: true });
-  const tmp = file(key) + '.tmp';
+async function writeTile(layer, key, pois) {
+  await mkdir(join(DIR, layer), { recursive: true });
+  const tmp = file(layer, key) + '.tmp';
   await writeFile(tmp, JSON.stringify({ t: Date.now(), pois }));
-  await rename(tmp, file(key)); // atomar, damit parallele Leser keine halbe Datei sehen
+  await rename(tmp, file(layer, key)); // atomar, damit parallele Leser keine halbe Datei sehen
 }
 
 // Overpass erlaubt je Absender nur wenige gleichzeitige Abfragen – mehr führt zu Ablehnungen (429)
@@ -42,33 +56,33 @@ async function limited(fn) {
   try { return await fn(); } finally { running--; waiting.shift()?.(); }
 }
 
-/** Startet Overpass-Abfragen für Kacheln, die nicht schon geladen werden. */
-function startFetch(keys, log) {
-  const todo = keys.filter(k => !inflight.has(k));
+/** Startet Overpass-Abfragen einer Ebene für Kacheln, die nicht schon geladen werden. */
+function startFetch(keys, layer, log) {
+  const todo = keys.filter(k => !inflight.has(`${layer}/${k}`));
   for (let i = 0; i < todo.length; i += CHUNK) {
     const chunk = todo.slice(i, i + CHUNK);
     const p = limited(async () => {
       const t0 = Date.now();
-      return [await fetchTilesFromOverpass(chunk, { headers: HEADERS }), t0];
+      return [await fetchTilesFromOverpass(chunk, { layer, headers: HEADERS }), t0];
     }).then(async ([tiles, t0]) => {
-      await Promise.all([...tiles].map(([k, pois]) => writeTile(k, pois)));
-      log?.(`Overpass: ${chunk.length} Kacheln in ${((Date.now() - t0) / 1000).toFixed(1)} s geladen`);
+      await Promise.all([...tiles].map(([k, pois]) => writeTile(layer, k, pois)));
+      log?.(`Overpass: ${chunk.length} Kacheln (${layer}) in ${((Date.now() - t0) / 1000).toFixed(1)} s geladen`);
       return tiles;
     });
     for (const k of chunk) {
       const kp = p.then(tiles => tiles.get(k));
-      inflight.set(k, kp);
-      kp.catch(() => {}).finally(() => inflight.delete(k));
+      inflight.set(`${layer}/${k}`, kp);
+      kp.catch(() => {}).finally(() => inflight.delete(`${layer}/${k}`));
     }
   }
-  return keys.map(k => inflight.get(k));
+  return keys.map(k => inflight.get(`${layer}/${k}`));
 }
 
 /** Laufen gerade Overpass-Abfragen (z. B. für Routen von Nutzern)? */
 export const isBusy = () => inflight.size > 0;
 
-/** Lädt Kacheln von Overpass in den Cache und wartet darauf. */
-export const fetchTiles = (keys, log) => Promise.all(startFetch(keys, log));
+/** Lädt Kacheln einer Ebene von Overpass in den Cache und wartet darauf. */
+export const fetchTiles = (keys, layer, log) => Promise.all(startFetch(keys, layer, log));
 
 /** Kacheln im Umkreis, sortiert nach Entfernung vom Mittelpunkt (nahe zuerst). */
 export function tilesAround(lat, lon, radiusKm) {
@@ -85,38 +99,55 @@ export function tilesAround(lat, lon, radiusKm) {
   return [...dist].sort((x, y) => x[1] - y[1]).map(([k]) => k);
 }
 
-/** Kacheln, die fehlen oder abgelaufen sind (nur Dateizeitstempel – schnell auch für tausende Kacheln). */
-export async function tilesNeedingFetch(keys) {
+/** Kacheln, deren Ebene fehlt oder abgelaufen ist (nur Dateizeitstempel – schnell auch für tausende Kacheln). */
+export async function tilesNeedingFetch(keys, layer) {
+  await migrated;
   const now = Date.now();
   const need = await Promise.all(keys.map(async k => {
-    try { return now - (await stat(file(k))).mtimeMs >= TTL; } catch { return true; }
+    try { return now - (await stat(file(layer, k))).mtimeMs >= TTL; } catch { return true; }
   }));
   return keys.filter((_, i) => need[i]);
 }
 
 /**
- * Liefert {tiles: {key: pois}, stats}. Frische und abgelaufene Kacheln kommen sofort aus dem Cache
- * (abgelaufene werden im Hintergrund erneuert), fehlende werden bei Overpass geladen.
+ * Liefert {tiles: {key: pois}, stats, missing} – die Orte aller angefragten Ebenen je Kachel zusammengeführt.
+ * Frisches und Abgelaufenes kommt sofort aus dem Cache (Abgelaufenes wird im Hintergrund erneuert),
+ * Fehlendes wird bei Overpass geladen – je Ebene nur das, was fehlt. Mit `cacheOnly` wird auf Fehlendes
+ * nicht gewartet: Es wird im Hintergrund geladen und in `missing` gemeldet (fehlt in `tiles`).
  */
-export async function getTiles(keys, { log } = {}) {
+export async function getTiles(keys, { layers = ['supply'], log, cacheOnly = false } = {}) {
+  await migrated;
   const now = Date.now();
-  const tiles = {};
-  const stale = [], missing = [];
-  await Promise.all(keys.map(async k => {
-    const entry = await readTile(k);
-    const age = entry ? now - entry.t : Infinity;
-    if (age < MAX_STALE) tiles[k] = entry.pois;
-    if (age >= MAX_STALE) missing.push(k);
-    else if (age >= TTL) stale.push(k);
-  }));
+  const tiles = Object.fromEntries(keys.map(k => [k, []]));
+  const stats = { cached: 0, stale: 0, fetched: 0 };
+  const notCached = new Set(); // nur bei cacheOnly: Kacheln, bei denen mindestens eine Ebene fehlt
 
-  if (stale.length) {
-    // Nicht abwarten – der Aufrufer bekommt den alten Stand sofort
-    Promise.all(startFetch(stale, log)).catch(e => log?.(`Aktualisierung fehlgeschlagen: ${e.message}`));
-  }
-  if (missing.length) {
-    const results = await Promise.all(startFetch(missing, log));
-    missing.forEach((k, i) => { tiles[k] = results[i] || []; });
-  }
-  return { tiles, stats: { cached: keys.length - missing.length - stale.length, stale: stale.length, fetched: missing.length } };
+  await Promise.all(layers.map(async layer => {
+    const stale = [], missing = [];
+    await Promise.all(keys.map(async k => {
+      const entry = await readTile(layer, k);
+      const age = entry ? now - entry.t : Infinity;
+      if (age < MAX_STALE) tiles[k].push(...entry.pois);
+      if (age >= MAX_STALE) missing.push(k);
+      else if (age >= TTL) stale.push(k);
+      else stats.cached++;
+    }));
+    stats.stale += stale.length;
+    stats.fetched += missing.length;
+
+    if (stale.length) {
+      // Nicht abwarten – der Aufrufer bekommt den alten Stand sofort
+      Promise.all(startFetch(stale, layer, log)).catch(e => log?.(`Aktualisierung fehlgeschlagen: ${e.message}`));
+    }
+    if (missing.length && cacheOnly) {
+      // Nicht warten: im Hintergrund laden, der Aufrufer erfährt, was (noch) fehlt
+      Promise.all(startFetch(missing, layer, log)).catch(e => log?.(`Nachladen fehlgeschlagen: ${e.message}`));
+      missing.forEach(k => notCached.add(k));
+    } else if (missing.length) {
+      const results = await Promise.all(startFetch(missing, layer, log));
+      missing.forEach((k, i) => tiles[k].push(...(results[i] || [])));
+    }
+  }));
+  for (const k of notCached) delete tiles[k];
+  return { tiles, stats, missing: [...notCached] };
 }

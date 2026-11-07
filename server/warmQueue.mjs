@@ -4,7 +4,7 @@
 // Routenanfragen haben Vorrang. Die Warteschlange überlebt Neustarts (cache/warm-queue.json).
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { tilesAround, tilesNeedingFetch, fetchTiles, isBusy } from './poiCache.mjs';
+import { tilesAround, tilesNeedingFetch, fetchTiles, isBusy, ALL_LAYERS } from './poiCache.mjs';
 import { TILE, tileKey } from '../js/poiSource.js';
 
 export const RADIUS_KM = 200;
@@ -46,13 +46,18 @@ export async function initWarmQueue(logger) {
   run();
 }
 
-/** Fortschritt für die Region um einen Punkt: {total, missing, queued, position}. */
+/**
+ * Fortschritt für die Region um einen Punkt: {total, missing, queued, position}.
+ * Gezählt werden Kachel-Ebenen (Kacheln × Datenebenen) – fehlt nur eine Ebene, zählt nur diese.
+ */
 export async function warmStatus(lat, lon) {
   const center = snap(lat, lon);
   const keys = tilesAround(center.lat, center.lon, RADIUS_KM);
-  const missing = (await tilesNeedingFetch(keys)).length;
+  let missing = 0;
+  for (const layer of ALL_LAYERS) missing += (await tilesNeedingFetch(keys, layer)).length;
+  const total = keys.length * ALL_LAYERS.length;
   const position = state.jobs.findIndex(j => distKm(j, center) <= SAME_REGION_KM);
-  return { total: keys.length, missing, queued: position >= 0, position: position >= 0 ? position + 1 : null };
+  return { total, missing, queued: position >= 0, position: position >= 0 ? position + 1 : null };
 }
 
 /**
@@ -87,23 +92,28 @@ async function run() {
   try {
     while (state.jobs.length) {
       const job = state.jobs[0];
-      const keys = await tilesNeedingFetch(tilesAround(job.lat, job.lon, RADIUS_KM));
       const t0 = Date.now();
-      log(`Vorrat: Region ${job.lat}, ${job.lon} – ${keys.length} Kacheln werden geladen`);
-      for (let i = 0; i < keys.length; i += CHUNK) {
-        while (isBusy()) await sleep(2000); // Routenanfragen von Nutzern haben Vorrang
-        const chunk = keys.slice(i, i + CHUNK);
-        for (let attempt = 1; ; attempt++) {
-          try {
-            await fetchTiles(chunk);
-            break;
-          } catch (e) {
-            if (attempt >= 3) { log(`Vorrat: ${chunk.length} Kacheln übersprungen (${e.message})`); break; }
-            await sleep(60000 * attempt); // Overpass überlastet → länger warten
+      const area = tilesAround(job.lat, job.lon, RADIUS_KM);
+      // Je Ebene nur Kacheln laden, bei denen genau diese Ebene fehlt oder abgelaufen ist
+      for (const layer of ALL_LAYERS) {
+        const keys = await tilesNeedingFetch(area, layer);
+        if (!keys.length) continue;
+        log(`Vorrat: Region ${job.lat}, ${job.lon} – Ebene „${layer}“: ${keys.length} Kacheln werden geladen`);
+        for (let i = 0; i < keys.length; i += CHUNK) {
+          while (isBusy()) await sleep(2000); // Routenanfragen von Nutzern haben Vorrang
+          const chunk = keys.slice(i, i + CHUNK);
+          for (let attempt = 1; ; attempt++) {
+            try {
+              await fetchTiles(chunk, layer);
+              break;
+            } catch (e) {
+              if (attempt >= 3) { log(`Vorrat: ${chunk.length} Kacheln übersprungen (${e.message})`); break; }
+              await sleep(60000 * attempt); // Overpass überlastet → länger warten
+            }
           }
+          log(`Vorrat (${layer}): ${Math.min(i + CHUNK, keys.length)} / ${keys.length} Kacheln`);
+          await sleep(PAUSE_MS);
         }
-        log(`Vorrat: ${Math.min(i + CHUNK, keys.length)} / ${keys.length} Kacheln`);
-        await sleep(PAUSE_MS);
       }
       log(`Vorrat: Region ${job.lat}, ${job.lon} fertig in ${Math.round((Date.now() - t0) / 60000)} min`);
       state.jobs.shift();

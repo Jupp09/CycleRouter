@@ -6,12 +6,14 @@ import { route } from './routing/index.js';
 import { tileKey, fetchTilesFromOverpass } from './poiSource.js';
 
 /**
- * Verpflegungsstopps: Trinkwasserstellen, Supermärkte und Tankstellen aus OpenStreetMap (Overpass)
- * entlang der Route suchen, etwa alle `interval` Meter einen auswählen und die Route durch sie führen.
+ * Verpflegungsstopps: Trinkwasserstellen, Supermärkte, Bäckereien, Cafés und Tankstellen aus OpenStreetMap
+ * (Overpass) entlang der Route suchen, etwa alle `interval` Meter einen auswählen und die Route durch sie führen.
  */
 
-/** Maximale Entfernung von der Route (Luftlinie, m). */
-const MAX_OFFSET = { water: 400, supermarket: 1000, convenience: 800, fuel: 800 };
+/** Maximale Entfernung von der Route (Luftlinie, m) – zugleich die Typen, die als Verpflegungsstopp infrage kommen. */
+const MAX_OFFSET = { water: 400, supermarket: 1000, convenience: 800, fuel: 800, bakery: 600, cafe: 600 };
+/** Vorrang unter geöffneten Läden: Supermarkt vor Bäckerei vor Café vor Laden/Tankstelle. */
+const TYPE_BIAS = { supermarket: 0, bakery: 0.1, cafe: 0.2, convenience: 0.3, fuel: 0.3 };
 /** Angenommene Aufenthaltsdauer je Stopp in Minuten (für die Ankunftszeit folgender Stopps). */
 export const DWELL_MIN = 10;
 
@@ -20,6 +22,8 @@ export const STOP_TYPES = {
   supermarket: { label: 'Supermarkt', icon: '🛒', gpxSym: 'Shopping Center' },
   convenience: { label: 'Laden/Kiosk', icon: '🛒', gpxSym: 'Shopping Center' },
   fuel: { label: 'Tankstelle', icon: '⛽', gpxSym: 'Gas Station' },
+  bakery: { label: 'Bäckerei', icon: '🥐', gpxSym: 'Shopping Center' },
+  cafe: { label: 'Café', icon: '☕', gpxSym: 'Restaurant' },
 };
 
 export const STATE_LABELS = {
@@ -67,12 +71,13 @@ function locateSequential(r, points) {
 
 // ---------- Kachel-Cache ----------
 // Die öffentlichen Overpass-Server haben oft lange Warteschlangen (auch kleine Abfragen dauern dann
-// 30 s). Deshalb werden Stellen pro Kachel (0,1° ≈ 11 × 7 km) gecacht – im Browser (IndexedDB, 7 Tage)
-// und, wenn die App über server.mjs läuft, zusätzlich auf dem Server (Dateien, 30 Tage). Nur Kacheln,
-// die in keinem Cache liegen, werden bei Overpass abgefragt.
+// 30 s). Deshalb werden Orte pro Kachel (0,1° ≈ 11 × 7 km) und Datenebene (Versorgung, Gastronomie)
+// gecacht – im Browser (IndexedDB, 7 Tage) und, wenn die App über server.mjs läuft, zusätzlich auf dem
+// Server (Dateien, 30 Tage). Nur Kachel-Ebenen, die in keinem Cache liegen, werden bei Overpass abgefragt.
 
 const TILE_TTL = 7 * 24 * 3600 * 1000;
-const memTiles = new Map(); // key → {t, pois}
+const memTiles = new Map(); // `${ebene}/${kachel}` → {t, pois}
+const cacheKey = (layer, key) => `${layer}/${key}`;
 
 /** Alle Kacheln, die die Route samt ~1 km Rand berührt. */
 function routeTiles(r) {
@@ -95,38 +100,42 @@ function db() {
   return dbPromise;
 }
 
-async function loadTiles(keys) {
+/** Gecachte Kacheln einer Ebene → Map key → pois (nur frische). */
+async function loadTiles(keys, layer) {
   const now = Date.now();
   const out = new Map();
   const fresh = e => e && now - e.t < TILE_TTL;
-  const missing = keys.filter(k => { const e = memTiles.get(k); if (fresh(e)) out.set(k, e.pois); return !fresh(e); });
+  const missing = keys.filter(k => {
+    const e = memTiles.get(cacheKey(layer, k));
+    if (fresh(e)) out.set(k, e.pois);
+    return !fresh(e);
+  });
   const d = await db();
   if (!d || !missing.length) return out;
-  await new Promise(resolve => {
-    try {
-      const store = d.transaction('poiTiles').objectStore('poiTiles');
-      let pending = missing.length;
-      for (const k of missing) {
-        const req = store.get(k);
-        req.onsuccess = () => {
-          if (fresh(req.result)) { memTiles.set(k, req.result); out.set(k, req.result.pois); }
-          if (--pending === 0) resolve();
-        };
-        req.onerror = () => { if (--pending === 0) resolve(); };
-      }
-    } catch { resolve(); }
+  const get = (store, id) => new Promise(resolve => {
+    const req = store.get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve(null);
   });
+  try {
+    const store = d.transaction('poiTiles').objectStore('poiTiles');
+    await Promise.all(missing.map(async k => {
+      // Einträge aus der Zeit vor den Ebenen (Schlüssel ohne Präfix) enthalten die Versorgungs-Ebene
+      const entry = await get(store, cacheKey(layer, k)) ?? (layer === 'supply' ? await get(store, k) : null);
+      if (fresh(entry)) { memTiles.set(cacheKey(layer, k), entry); out.set(k, entry.pois); }
+    }));
+  } catch { /* Cache ist optional */ }
   return out;
 }
 
-async function saveTiles(entries) {
+async function saveTiles(entries, layer) {
   const t = Date.now();
-  for (const [k, pois] of entries) memTiles.set(k, { t, pois });
+  for (const [k, pois] of entries) memTiles.set(cacheKey(layer, k), { t, pois });
   const d = await db();
   if (!d) return;
   try {
     const store = d.transaction('poiTiles', 'readwrite').objectStore('poiTiles');
-    for (const [k, pois] of entries) store.put({ t, pois }, k);
+    for (const [k, pois] of entries) store.put({ t, pois }, cacheKey(layer, k));
   } catch { /* Cache ist optional */ }
 }
 
@@ -135,15 +144,18 @@ async function saveTiles(entries) {
 const SERVER_API = new URL('../api/pois', import.meta.url);
 let serverAvailable = true; // wird false, wenn die App statisch (ohne server.mjs) ausgeliefert wird
 
-/** Kacheln über den lokalen Server laden → Map, oder null, wenn kein Server-Cache verfügbar ist. */
-async function fetchTilesFromServer(keys, signal) {
+/**
+ * Kacheln einer Ebene über den lokalen Server laden → Map, oder null, wenn kein Server-Cache verfügbar ist.
+ * `cacheOnly`: nur, was der Server schon hat (Fehlendes lädt er im Hintergrund nach; es fehlt in der Map).
+ */
+async function fetchTilesFromServer(keys, layer, signal, cacheOnly = false) {
   if (!serverAvailable) return null;
   let res;
   try {
     res = await fetch(SERVER_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tiles: keys }),
+      body: JSON.stringify({ tiles: keys, layers: [layer], cacheOnly }),
       signal,
     });
   } catch (e) {
@@ -160,19 +172,35 @@ async function fetchTilesFromServer(keys, signal) {
   return new Map(Object.entries(data.tiles));
 }
 
-async function fetchPois(r, signal) {
-  const keys = routeTiles(r);
-  const cached = await loadTiles(keys);
+/**
+ * Orte einer Ebene in den Kacheln – Browser-Cache, sonst Server-Cache, sonst direkt Overpass.
+ * `cacheOnly`: nie auf Overpass warten → {pois, complete: false}, wenn Kacheln (noch) fehlen.
+ */
+async function layerPois(keys, layer, signal, cacheOnly) {
+  const cached = await loadTiles(keys, layer);
   const missing = keys.filter(k => !cached.has(k));
-
   if (missing.length) {
-    const fetched = await fetchTilesFromServer(missing, signal) ?? await fetchTilesFromOverpass(missing, { signal });
-    await saveTiles(fetched);
-    for (const [k, pois] of fetched) cached.set(k, pois);
+    let fetched = await fetchTilesFromServer(missing, layer, signal, cacheOnly);
+    if (!fetched && !cacheOnly) fetched = await fetchTilesFromOverpass(missing, { layer, signal });
+    if (fetched) {
+      await saveTiles(fetched, layer);
+      for (const [k, pois] of fetched) cached.set(k, pois);
+    }
   }
+  return { pois: [...cached.values()].flat(), complete: cached.size === keys.length };
+}
 
+/**
+ * Orte der angegebenen Ebenen entlang der Route (Kacheln samt ~1 km Rand).
+ * Das Ergebnis-Array trägt `complete` = false, wenn mit `cacheOnly` nicht alle Kacheln vorhanden waren.
+ */
+export async function fetchPois(r, signal, layers = ['supply'], { cacheOnly = false } = {}) {
+  const keys = routeTiles(r);
+  const parts = await Promise.all(layers.map(l => layerPois(keys, l, signal, cacheOnly)));
   const seen = new Set();
-  return [...cached.values()].flat().filter(p => !seen.has(p.id) && seen.add(p.id));
+  const out = parts.flatMap(p => p.pois).filter(p => !seen.has(p.id) && seen.add(p.id));
+  out.complete = parts.every(p => p.complete);
+  return out;
 }
 
 /** Jede Stelle wird an jeder Passage der Route (z. B. Hin- und Rückweg) einmal Kandidat. */
@@ -219,6 +247,25 @@ function timeline(r, departure, bike) {
   };
 }
 
+/** Ankunftszeit an Position `along` (m) einer Route – ohne Pausen. */
+export function arrivalAt(r, departure, bike) {
+  const eta = timeline(r, departure, bike);
+  return along => eta(along, 0);
+}
+
+/**
+ * Öffnungsstatus eines Orts zur Zeit `eta` → {state: 'open' | 'closed' | 'unknown', typical, hours}.
+ * `typical`: Es wurden die typischen Zeiten der Kette verwendet (siehe withTypicalHours).
+ */
+export function openingAt(poi, eta) {
+  const own = poi.tags?.opening_hours;
+  const hours = own || poi.typical?.hours;
+  if (!hours) return { state: 'unknown', typical: false, hours: '' };
+  let state = openState(hours, eta, DWELL_MIN);
+  if (state === 'unknown' && own && /geschlossen|closed/i.test(own)) state = 'closed';
+  return { state, typical: !own, hours };
+}
+
 /**
  * Bewertung einer Stelle zur Ankunftszeit → {tier, state} oder null (geschlossen). Kleinerer tier = besser.
  * `holiday`: Feiertag am Ort der Stelle zur Ankunftszeit (oder null).
@@ -238,14 +285,18 @@ function evaluate(poi, eta, holiday) {
     if (oh && st === 'unknown') return { tier: 2, state: 'unknown' };
     return { tier: 0, state: st === 'open' ? 'open' : 'free' };
   }
-  const bias = poi.type === 'supermarket' ? 0 : 0.3; // Supermarkt leicht bevorzugt
+  const bias = TYPE_BIAS[poi.type] ?? 0.3;
   if (st === 'open') {
     // Feiertag ohne eigene PH-Regel: es wurden die Sonntagszeiten angenommen
     return holiday && !hasHolidayRule(oh) ? { tier: 1.5 + bias, state: 'openHoliday' } : { tier: 1 + bias, state: 'open' };
   }
   // Läden ohne Angaben haben sonn-/feiertags und nachts meist geschlossen – nur als letzte Wahl
   const hour = eta.getHours();
-  if (poi.type !== 'fuel' && (holiday || eta.getDay() === 0 || hour < 7 || hour >= 21)) return { tier: 4 + bias, state: 'unlikely' };
+  // Ausnahme: Bäckereien haben sonn- und feiertags vormittags oft geöffnet
+  const bakeryMorning = poi.type === 'bakery' && hour >= 7 && hour < 12;
+  if (poi.type !== 'fuel' && !bakeryMorning && (holiday || eta.getDay() === 0 || hour < 7 || hour >= 21)) {
+    return { tier: 4 + bias, state: 'unlikely' };
+  }
   return { tier: 3 + bias, state: 'unknown' };
 }
 
@@ -255,7 +306,7 @@ function evaluate(poi, eta, holiday) {
  * (die Annahme kann falsch sein).
  */
 function evaluateTypical(poi, eta, holiday) {
-  const bias = poi.type === 'supermarket' ? 0 : 0.3;
+  const bias = TYPE_BIAS[poi.type] ?? 0.3;
   const st = openState(poi.typical.hours, eta, DWELL_MIN, !!holiday);
   if (st === 'open') return { tier: (holiday && !hasHolidayRule(poi.typical.hours) ? 1.8 : 1.3) + bias, state: 'openTypical' };
   return { tier: 4.5 + bias, state: 'closedTypical' };
@@ -353,7 +404,7 @@ function shapeAnchors(r) {
 export async function addStops(base, { provider, opts, interval, departure, bike, signal }) {
   // Stellen, Regionen (Land/Bundesland) und Feiertage parallel laden
   const [pois, regions] = await Promise.all([
-    fetchPois(base, signal),
+    fetchPois(base, signal, ['supply', 'food']),
     regionsAlong(base, signal).catch(e => { if (e.name === 'AbortError') throw e; console.warn(e); return null; }),
   ]);
   let lookup = null;
@@ -371,7 +422,9 @@ export async function addStops(base, { provider, opts, interval, departure, bike
     holidayCheck: !!lookup, // false = Feiertage konnten nicht geprüft werden
   };
 
-  const { stops, gaps } = plan(base, locatePois(base, withTypicalHours(pois)), { interval, departure, bike, holidayFor });
+  // Restaurants gehören nicht zu den Verpflegungsstopps (zu lange Pause) – nur Typen mit MAX_OFFSET
+  const candidates = withTypicalHours(pois).filter(p => MAX_OFFSET[p.type]);
+  const { stops, gaps } = plan(base, locatePois(base, candidates), { interval, departure, bike, holidayFor });
   if (!stops.length) return { ...base, base, stops: [], gaps, ...info };
 
   // Stopps zwischen die vorhandenen Wegpunkte einsortieren

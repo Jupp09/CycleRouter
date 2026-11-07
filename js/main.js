@@ -5,7 +5,7 @@ import { attachSearch, reverse } from './geocode.js';
 import { createElevation } from './elevation.js';
 import { downloadGpx } from './gpx.js';
 import { summarize, estimatedShare, longDistanceShare } from './surfaces.js';
-import { addStops, STATE_LABELS, DWELL_MIN } from './stops.js';
+import { addStops, STATE_LABELS, DWELL_MIN, arrivalAt, openingAt } from './stops.js';
 import { PLACE_CATEGORIES, searchAlongRoute } from './placeSearch.js';
 import { regionAt, regionLabel } from './regions.js';
 import { holidayAt } from './holidays.js';
@@ -525,6 +525,17 @@ function renderAlongChips() {
   }));
 }
 
+/** „bei Ankunft ca. 14:20 geöffnet“ – aus den Öffnungszeiten im Cache (sonst unbekannt). */
+function openingText(res) {
+  const when = `bei Ankunft ca. ${formatClock(res.eta)}`;
+  const o = res.opening;
+  if (o.state === 'unknown') return { text: `${when} · Öffnungszeiten unbekannt`, warn: false };
+  const typical = o.typical ? ` (typisch für ${res.poi.typical.chain})` : '';
+  return o.state === 'open'
+    ? { text: `${when} geöffnet${typical}`, warn: o.typical }
+    : { text: `${when} geschlossen${typical}`, warn: true };
+}
+
 function alongPopup(res) {
   const el = document.createElement('div');
   el.className = 'stop-popup';
@@ -534,6 +545,15 @@ function alongPopup(res) {
   info.textContent = `km ${(res.along / 1000).toFixed(1)} · ${Math.round(res.offset / 50) * 50} m neben der Route`;
   el.append(title);
   if (res.detail) { const d = document.createElement('div'); d.className = 'muted'; d.textContent = res.detail; el.append(d); }
+  const opening = document.createElement('div');
+  opening.textContent = openingText(res).text;
+  el.append(opening);
+  if (res.opening.hours) {
+    const h = document.createElement('div');
+    h.className = 'muted';
+    h.textContent = `Öffnungszeiten${res.opening.typical ? ' (typisch)' : ''}: ${res.opening.hours}`;
+    el.append(h);
+  }
   const add = document.createElement('button');
   add.className = 'primary';
   add.textContent = 'Als Zwischenstopp hinzufügen';
@@ -560,7 +580,9 @@ function renderAlongResults() {
     name.className = 'name';
     name.textContent = r.name;
     const detail = document.createElement('small');
-    detail.textContent = [r.detail, `${Math.round(r.offset / 50) * 50} m neben der Route`].filter(Boolean).join(' · ');
+    const op = openingText(r);
+    detail.textContent = `${op.text} · ${Math.round(r.offset / 50) * 50} m neben der Route`;
+    if (op.warn) detail.className = 'warn';
     main.append(name, detail);
     const km = document.createElement('span');
     km.className = 'km';
@@ -594,11 +616,18 @@ async function searchAlong(category) {
     if (ctrl.signal.aborted) return;
     // Bereits übernommene Zwischenstopps nicht erneut anbieten
     const added = state.route.waypoints.filter(p => p.manual);
-    alongResults = found.filter(r => !added.some(p => haversine(p, r) < 50));
+    // Ankunftszeit (Abfahrt aus den Verpflegungs-Einstellungen) und Öffnungsstatus zu dieser Zeit
+    const departure = new Date(state.supply.departure || defaultDeparture());
+    const eta = arrivalAt(state.route, isNaN(departure) ? new Date() : departure, state.bike);
+    alongResults = found.filter(r => !added.some(p => haversine(p, r) < 50)).map(r => {
+      const t = eta(r.along);
+      return { ...r, eta: t, opening: r.poi ? openingAt(r.poi, t) : { state: 'unknown', typical: false, hours: '' } };
+    });
     hint.textContent = (alongResults.length
       ? `${alongResults.length} × ${c.label} bis 1 km neben der Route – mit „+“ als Zwischenstopp übernehmen.`
       : `Kein ${c.label} bis 1 km neben der Route gefunden.`)
-      + (found.partial ? ' Einzelne Abschnitte konnten nicht durchsucht werden (Ortssuche antwortet nicht) – ggf. erneut versuchen.' : '');
+      + (found.partial ? ' Einzelne Abschnitte konnten nicht durchsucht werden – ggf. erneut versuchen.' : '')
+      + (found.source === 'photon' ? ' Öffnungszeiten für diesen Abschnitt werden gerade nachgeladen und stehen beim nächsten Mal zur Verfügung.' : '');
     renderAlongResults();
   } catch (e) {
     if (e.name !== 'AbortError') hint.textContent = e.message;
