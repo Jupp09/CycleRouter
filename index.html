@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CycleRouter</title>
+  <meta name="description" content="Routenplaner für Rennrad und Gravelbike – A→B, Distanz-Routen, Rundkurse und GPX-Export.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='8' cy='21' r='6' fill='none' stroke='%237c3aed' stroke-width='3'/%3E%3Ccircle cx='24' cy='21' r='6' fill='none' stroke='%237c3aed' stroke-width='3'/%3E%3Cpath d='M8 21l6-10h7l3 10M14 11l-2-4h-3' fill='none' stroke='%237c3aed' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <aside class="panel">
+    <header class="brand">
+      <svg class="brand-icon" viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="8" cy="21" r="6"/><circle cx="24" cy="21" r="6"/>
+        <path d="M8 21l6-10h7l3 10M14 11l-2-4h-3"/>
+      </svg>
+      <h1>CycleRouter</h1>
+      <button id="btn-settings" class="icon-btn" title="Einstellungen" aria-label="Einstellungen">
+        <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+      </button>
+    </header>
+
+    <section class="group">
+      <div class="segmented" id="bike-switch" role="radiogroup" aria-label="Fahrradtyp">
+        <button role="radio" data-value="road">Rennrad</button>
+        <button role="radio" data-value="gravel">Gravel</button>
+      </div>
+      <label class="field inline" id="traffic-field">
+        <span>Verkehr meiden</span>
+        <select id="traffic">
+          <option value="normal">Normal</option>
+          <option value="low">Stark</option>
+          <option value="verylow">Sehr stark</option>
+        </select>
+      </label>
+      <p class="hint" id="provider-hint" hidden></p>
+    </section>
+
+    <nav class="tabs" id="mode-tabs" role="tablist">
+      <button role="tab" data-mode="ab">A → B</button>
+      <button role="tab" data-mode="distance">Distanz</button>
+      <button role="tab" data-mode="loop">Rundkurs</button>
+    </nav>
+
+    <section class="group">
+      <div class="field">
+        <span class="label"><i class="dot start"></i>Start</span>
+        <div class="search">
+          <input id="start-input" type="text" placeholder="Ort suchen oder auf Karte klicken" autocomplete="off">
+          <button id="btn-locate" class="icon-btn" title="Mein Standort" aria-label="Mein Standort">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+          </button>
+          <ul class="suggestions" hidden></ul>
+        </div>
+      </div>
+
+      <div class="field" data-show="ab">
+        <span class="label"><i class="dot end"></i>Ziel</span>
+        <div class="search">
+          <input id="end-input" type="text" placeholder="Ort suchen oder auf Karte klicken" autocomplete="off">
+          <button id="btn-swap" class="icon-btn" title="Start und Ziel tauschen" aria-label="Start und Ziel tauschen">
+            <svg viewBox="0 0 24 24"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>
+          </button>
+          <ul class="suggestions" hidden></ul>
+        </div>
+      </div>
+
+      <div class="field" data-show="distance loop">
+        <span class="label">Distanz <output id="distance-out"></output></span>
+        <div class="range-row">
+          <input id="distance-range" type="range" min="10" max="300" step="5">
+          <input id="distance-num" type="number" min="5" max="400" step="1" aria-label="Distanz in km">
+          <span class="unit">km</span>
+        </div>
+      </div>
+
+      <label class="field" data-show="distance loop">
+        <span class="label">Richtung</span>
+        <select id="direction">
+          <option value="random">Zufällig</option>
+          <option value="0">Norden</option>
+          <option value="45">Nordosten</option>
+          <option value="90">Osten</option>
+          <option value="135">Südosten</option>
+          <option value="180">Süden</option>
+          <option value="225">Südwesten</option>
+          <option value="270">Westen</option>
+          <option value="315">Nordwesten</option>
+        </select>
+      </label>
+
+      <div class="actions" data-show="distance loop">
+        <button id="btn-generate" class="primary">Route erstellen</button>
+        <button id="btn-reroll" title="Andere Variante erzeugen">Neu würfeln</button>
+      </div>
+    </section>
+
+    <div id="status" class="status" hidden></div>
+
+    <section class="group results" id="results" hidden>
+      <div class="stats">
+        <div><span class="k">Distanz</span><span class="v" id="stat-dist"></span></div>
+        <div><span class="k">Anstieg</span><span class="v" id="stat-up"></span></div>
+        <div><span class="k">Abstieg</span><span class="v" id="stat-down"></span></div>
+        <div><span class="k">Fahrzeit ca.</span><span class="v" id="stat-time"></span></div>
+      </div>
+      <div class="breakdown" id="breakdown">
+        <div class="segmented small" id="breakdown-switch" role="radiogroup" aria-label="Aufschlüsselung">
+          <button role="radio" data-value="surface">Untergrund</button>
+          <button role="radio" data-value="waytype">Wegtyp</button>
+        </div>
+        <div class="bar" id="breakdown-bar" aria-hidden="true"></div>
+        <ul class="legend" id="breakdown-legend"></ul>
+        <p class="hint" id="breakdown-hint" hidden></p>
+        <label class="check"><input type="checkbox" id="color-route"> Route auf Karte einfärben</label>
+      </div>
+      <label class="field">
+        <span class="label">Routenname</span>
+        <input id="route-name" type="text">
+      </label>
+      <div class="actions">
+        <button id="btn-gpx" class="primary">GPX exportieren</button>
+        <button id="btn-clear">Löschen</button>
+      </div>
+      <p class="hint">Marker auf der Karte lassen sich verschieben – die Route wird dann neu berechnet.</p>
+    </section>
+
+    <footer class="panel-footer">
+      <label class="field inline">
+        <span>Routing</span>
+        <select id="provider">
+          <option value="brouter">BRouter</option>
+          <option value="ors">OpenRouteService</option>
+        </select>
+      </label>
+    </footer>
+  </aside>
+
+  <main class="map-area">
+    <div id="map"></div>
+    <section id="elevation" class="elevation" hidden>
+      <div class="elevation-chart" id="elevation-chart"></div>
+    </section>
+  </main>
+
+  <dialog id="settings-dialog">
+    <form method="dialog">
+      <h2>Einstellungen</h2>
+      <label class="field">
+        <span class="label">OpenRouteService API-Key</span>
+        <input id="ors-key" type="password" placeholder="Key einfügen" autocomplete="off">
+      </label>
+      <p class="hint">Kostenlos erhältlich unter <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice.org</a>. Der Key wird nur lokal in deinem Browser gespeichert.</p>
+      <div class="actions">
+        <button value="save" class="primary">Speichern</button>
+        <button value="cancel">Abbrechen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
