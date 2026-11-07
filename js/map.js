@@ -50,6 +50,8 @@ export function createMap(el, { onClick, onMarkerDrag }) {
 
   const markerLayer = L.layerGroup().addTo(map);
   const routeLayer = L.layerGroup().addTo(map);
+  const stopLayer = L.layerGroup().addTo(map);
+  const stopMarkers = new Map();
   const hoverMarker = L.circleMarker([0, 0], { radius: 7, color: '#111827', weight: 3, fillColor: ROUTE_COLOR, fillOpacity: 1 });
 
   return {
@@ -95,6 +97,29 @@ export function createMap(el, { onClick, onMarkerDrag }) {
         run = { key: s[colorBy], from: s.from, to: s.to };
       }
       flush();
+    },
+
+    /** stops: [{id, lat, lon, icon, warn, popup: HTMLElement}] */
+    setStops(stops = []) {
+      stopLayer.clearLayers();
+      stopMarkers.clear();
+      for (const s of stops) {
+        const marker = L.marker([s.lat, s.lon], {
+          icon: L.divIcon({
+            className: '', iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -14],
+            html: `<div class="stop-pin${s.warn ? ' warn' : ''}">${s.icon}</div>`,
+          }),
+          zIndexOffset: 500,
+        }).bindPopup(s.popup).addTo(stopLayer);
+        stopMarkers.set(s.id, marker);
+      }
+    },
+
+    openStop(id) {
+      const m = stopMarkers.get(id);
+      if (!m) return;
+      map.setView(m.getLatLng(), Math.max(map.getZoom(), 14));
+      m.openPopup();
     },
 
     fitRoute(coords) {

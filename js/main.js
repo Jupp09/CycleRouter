@@ -5,6 +5,7 @@ import { attachSearch, reverse } from './geocode.js';
 import { createElevation } from './elevation.js';
 import { downloadGpx } from './gpx.js';
 import { summarize, estimatedShare } from './surfaces.js';
+import { addStops, STATE_LABELS, DWELL_MIN } from './stops.js';
 import { storage, newSeed, seededRandom, estimateTime, formatKm, formatM, formatDuration } from './utils.js';
 
 const $ = sel => document.querySelector(sel);
@@ -19,6 +20,11 @@ const state = {
   direction: 'random',
   breakdown: storage.get('breakdown', 'surface'), // 'surface' | 'waytype'
   colorRoute: storage.get('colorRoute', true),
+  supply: {
+    enabled: storage.get('supplyEnabled', false),
+    intervalKm: storage.get('supplyInterval', 30),
+    departure: defaultDeparture(), // Wert eines datetime-local-Felds
+  },
   start: null, // {lat, lon, label}
   end: null,
   seed: newSeed(),
@@ -35,6 +41,16 @@ const ui = {
   results: $('#results'),
   routeName: $('#route-name'),
 };
+
+/** Nächste volle Viertelstunde, als Wert für <input type="datetime-local">. */
+function defaultDeparture() {
+  const d = new Date(Math.ceil(Date.now() / 900000) * 900000);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+const formatClock = d => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+const formatDay = d => d.toLocaleDateString('de-DE', { weekday: 'short' });
 
 const provider = () => providers[state.provider];
 const routeOpts = () => ({ bike: state.bike, traffic: state.traffic });
@@ -61,6 +77,10 @@ function syncUi() {
   for (const t of document.querySelectorAll('#mode-tabs button')) t.setAttribute('aria-selected', t.dataset.mode === state.mode);
   for (const b of document.querySelectorAll('#breakdown-switch button')) b.setAttribute('aria-checked', b.dataset.value === state.breakdown);
   $('#color-route').checked = state.colorRoute;
+  $('#supply-enabled').checked = state.supply.enabled;
+  $('#supply-options').hidden = !state.supply.enabled;
+  $('#supply-interval').value = state.supply.intervalKm;
+  $('#departure').value = state.supply.departure;
   for (const n of document.querySelectorAll('[data-show]')) n.hidden = !n.dataset.show.split(' ').includes(state.mode);
 
   $('#traffic-field').hidden = state.bike !== 'road' || !provider().supportsTraffic;
@@ -83,9 +103,10 @@ function updateMarkers() {
   if (r && r.waypoints.length >= 2) {
     const wps = isLoop(r) ? r.waypoints.slice(0, -1) : r.waypoints;
     const last = r.waypoints.length - 1;
+    // Verpflegungsstopps bekommen eigene Marker (nicht verschiebbar), `index` bleibt der Wegpunkt-Index
     map.setMarkers(wps.map((point, index) => ({
       point, index, kind: index === 0 ? 'start' : !isLoop(r) && index === last ? 'end' : 'via',
-    })));
+    })).filter(m => !m.point.stop));
     return;
   }
   const markers = [];
@@ -140,10 +161,80 @@ function renderBreakdown() {
   hint.textContent = `${Math.round(estimated * 100)} % des Untergrunds ist in OpenStreetMap nicht explizit erfasst und aus Straßen- bzw. Wegtyp abgeleitet.`;
 }
 
+function stopPopup(s) {
+  const el = document.createElement('div');
+  el.className = 'stop-popup';
+  const title = document.createElement('b');
+  title.textContent = `${s.icon} ${s.poi.name || s.typeLabel}`;
+  const lines = [
+    `${s.typeLabel} · km ${(s.along / 1000).toFixed(1)}`,
+    `Ankunft ca. ${formatDay(s.eta)} ${formatClock(s.eta)} – ${STATE_LABELS[s.state]}`,
+  ];
+  if (s.poi.tags.opening_hours) lines.push(`Öffnungszeiten: ${s.poi.tags.opening_hours}`);
+  el.append(title, ...lines.map(t => { const d = document.createElement('div'); d.textContent = t; return d; }));
+  const link = document.createElement('a');
+  link.href = `https://www.openstreetmap.org/${s.poi.id}`;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = 'In OpenStreetMap ansehen';
+  el.append(link);
+  return el;
+}
+
+const isWarn = s => ['unknown', 'unlikely', 'seasonal', 'closed'].includes(s.state);
+
+function renderStops() {
+  const r = state.route;
+  const stops = r?.stops || [];
+  map.setStops(stops.map(s => ({
+    id: s.poi.id, lat: s.poi.lat, lon: s.poi.lon, icon: s.icon, warn: isWarn(s), popup: stopPopup(s),
+  })));
+
+  const box = $('#stops');
+  box.hidden = !r || !r.stops;
+  if (box.hidden) return;
+
+  $('#stop-list').replaceChildren(...stops.map(s => {
+    const li = document.createElement('li');
+    li.title = s.poi.tags.opening_hours ? `Öffnungszeiten: ${s.poi.tags.opening_hours}` : '';
+    const ico = document.createElement('span');
+    ico.className = 'ico';
+    ico.textContent = s.icon;
+    const main = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = s.poi.name || s.typeLabel;
+    const detail = document.createElement('small');
+    detail.textContent = `${s.poi.name ? s.typeLabel + ' · ' : ''}${STATE_LABELS[s.state]}`;
+    if (isWarn(s)) detail.className = 'warn';
+    main.append(name, detail);
+    const when = document.createElement('div');
+    when.className = 'when';
+    when.innerHTML = '<b></b><small></small>';
+    when.firstChild.textContent = formatKm(s.along);
+    when.lastChild.textContent = `ca. ${formatClock(s.eta)}`;
+    li.append(ico, main, when);
+    li.addEventListener('click', () => map.openStop(s.poi.id));
+    return li;
+  }));
+
+  const gaps = $('#stop-gaps');
+  const messages = [];
+  if (!stops.length && !r.gaps.length) messages.push(`Die Route ist kürzer als ${state.supply.intervalKm} km – kein Stopp nötig.`);
+  for (const g of r.gaps) {
+    messages.push(`Zwischen km ${Math.round(g.from / 1000)} und ${Math.round(g.to / 1000)} wurde keine passende, geöffnete Verpflegungsstelle gefunden.`);
+  }
+  if (stops.length) messages.push(`Ankunftszeiten inkl. ${DWELL_MIN} min Pause je Stopp.`);
+  gaps.hidden = !messages.length;
+  gaps.className = 'hint' + (r.gaps.length ? ' warn' : '');
+  gaps.textContent = messages.join(' ');
+}
+
 function showRoute(r, { fit = true } = {}) {
   state.route = r;
   drawRouteLine();
   updateMarkers();
+  renderStops();
   elevation.show(r, state.breakdown);
   renderBreakdown();
   relayout();
@@ -162,6 +253,7 @@ function clearRoute() {
   controller?.abort();
   state.route = null;
   map.setRoute(null);
+  renderStops();
   elevation.hide();
   ui.results.hidden = true;
   setStatus(null);
@@ -178,15 +270,43 @@ async function run(task, { loadingText = 'Route wird berechnet …', fit = true 
   const ctrl = controller = new AbortController();
   setStatus(loadingText, 'loading');
   try {
-    const r = await task(ctrl.signal);
+    let r = await task(ctrl.signal);
     if (ctrl.signal.aborted) return;
-    setStatus(null);
+    let warning = null;
+    if (state.supply.enabled) {
+      setStatus('Verpflegungsstopps werden gesucht …', 'loading');
+      try {
+        r = await withSupply(r, ctrl.signal);
+      } catch (e) {
+        if (e.name === 'AbortError') throw e;
+        console.error(e);
+        warning = e.message;
+      }
+      if (ctrl.signal.aborted) return;
+    }
+    setStatus(warning, warning ? 'error' : null);
     showRoute(r, { fit });
   } catch (e) {
     if (e.name === 'AbortError') return;
     console.error(e);
     setStatus(e.message, 'error');
   }
+}
+
+/** Route (ohne Stopps) um Verpflegungsstopps ergänzen. */
+function withSupply(base, signal) {
+  const departure = new Date(state.supply.departure || defaultDeparture());
+  return addStops(base, {
+    provider: provider(), opts: routeOpts(), bike: state.bike, signal,
+    interval: state.supply.intervalKm * 1000,
+    departure: isNaN(departure) ? new Date() : departure,
+  });
+}
+
+/** Stopps für die aktuelle Route neu planen (oder entfernen), ohne die Route selbst neu zu erzeugen. */
+function replanStops() {
+  const base = state.route?.base || state.route;
+  if (base) run(async () => base, { fit: false, loadingText: 'Verpflegungsstopps werden gesucht …' });
 }
 
 function calcAB() {
@@ -248,7 +368,9 @@ function handleMarkerDrag(index, point) {
     if (!loop && index === wps.length - 1) setPoint('end', point, { silent: true });
     // Start bleibt dasselbe Objekt am Anfang und Ende, damit der Rundkurs als solcher erkannt wird
     if (loop && index === 0) wps[0] = wps[wps.length - 1] = state.start;
-    run(signal => route(provider(), wps, routeOpts(), signal), { fit: false });
+    // Verpflegungsstopps werden für die geänderte Route neu gewählt
+    const base = wps.filter(p => !p.stop);
+    run(signal => route(provider(), base, routeOpts(), signal), { fit: false });
     return;
   }
   // Ohne bearbeitbare Wegpunkte (z. B. ORS-Rundkurs): Start/Ziel versetzen
@@ -320,6 +442,25 @@ $('#color-route').addEventListener('change', e => {
   state.colorRoute = e.target.checked;
   storage.set('colorRoute', state.colorRoute);
   drawRouteLine();
+});
+
+$('#supply-enabled').addEventListener('change', e => {
+  state.supply.enabled = e.target.checked;
+  storage.set('supplyEnabled', state.supply.enabled);
+  syncUi();
+  replanStops();
+});
+$('#supply-interval').addEventListener('change', e => {
+  const v = Math.min(200, Math.max(10, Math.round(Number(e.target.value) || state.supply.intervalKm)));
+  state.supply.intervalKm = v;
+  storage.set('supplyInterval', v);
+  syncUi();
+  if (state.supply.enabled) replanStops();
+});
+$('#departure').addEventListener('change', e => {
+  state.supply.departure = e.target.value || defaultDeparture();
+  syncUi();
+  if (state.supply.enabled) replanStops();
 });
 
 function setDistance(km) {

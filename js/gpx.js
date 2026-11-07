@@ -5,6 +5,15 @@ export function toGpx(route, name) {
   const points = route.coords.map(([lat, lon, ele]) =>
     `      <trkpt lat="${lat.toFixed(6)}" lon="${lon.toFixed(6)}">${ele != null ? `<ele>${ele.toFixed(1)}</ele>` : ''}</trkpt>`,
   ).join('\n');
+  const wpts = (route.stops || []).map(s => {
+    const name = `${s.typeLabel}${s.poi.name ? ': ' + s.poi.name : ''}`;
+    return `  <wpt lat="${s.poi.lat.toFixed(6)}" lon="${s.poi.lon.toFixed(6)}">
+    <name>${escapeXml(name)}</name>${s.poi.tags.opening_hours ? `
+    <desc>${escapeXml(s.poi.tags.opening_hours)}</desc>` : ''}
+    <sym>${s.gpxSym}</sym>
+  </wpt>
+`;
+  }).join('');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="CycleRouter" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
@@ -12,7 +21,7 @@ export function toGpx(route, name) {
     <name>${escapeXml(name)}</name>
     <time>${time}</time>
   </metadata>
-  <trk>
+${wpts}  <trk>
     <name>${escapeXml(name)}</name>
     <type>cycling</type>
     <trkseg>

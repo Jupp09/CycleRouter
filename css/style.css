@@ -13,6 +13,7 @@
   --end: #dc2626;
   --error-bg: #fef2f2;
   --error-text: #991b1b;
+  --warn-text: #b45309;
   --route: #7c3aed;
   --shadow: 0 1px 2px rgba(20, 16, 40, .06), 0 4px 16px rgba(20, 16, 40, .06);
   --radius: 10px;
@@ -32,6 +33,7 @@
     --accent-soft: #2e2546;
     --error-bg: #3b1518;
     --error-text: #fca5a5;
+    --warn-text: #fbbf24;
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .3);
     color-scheme: dark;
   }
@@ -158,6 +160,27 @@ button.primary:hover { background: var(--accent-hover); }
 .check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 .check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
 
+.supply-options { display: flex; flex-direction: column; gap: 8px; padding-left: 24px; }
+.supply-options .range-row input[type="number"] { width: 72px; }
+input[type="datetime-local"] {
+  padding: 6px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; outline: none; min-width: 0;
+}
+
+.stops { display: flex; flex-direction: column; gap: 6px; }
+.stops > .label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.stop-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.stop-list li {
+  display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center;
+  padding: 6px 8px; border-radius: 8px; background: var(--surface); cursor: pointer; font-size: 13px;
+}
+.stop-list li:hover { background: var(--accent-soft); }
+.stop-list .ico { font-size: 18px; text-align: center; }
+.stop-list .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stop-list small { display: block; color: var(--muted); font-size: 12px; }
+.stop-list small.warn, .hint.warn { color: var(--warn-text); }
+.stop-list .when { text-align: right; font-variant-numeric: tabular-nums; }
+.stop-list .when b { display: block; }
+
 .panel-footer { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); }
 
 /* ---------- Map ---------- */
@@ -171,6 +194,15 @@ button.primary:hover { background: var(--accent-hover); }
 .marker-pin.start { background: var(--start); }
 .marker-pin.end { background: var(--end); }
 .marker-pin.via { width: 14px; height: 14px; border-width: 2px; background: var(--route); }
+.stop-pin {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: #fff; border: 2px solid #111827; box-shadow: 0 1px 4px rgba(0, 0, 0, .45); font-size: 15px; line-height: 1;
+}
+.stop-pin.warn { border-color: #d97706; }
+.stop-popup { font: 13px/1.4 system-ui, sans-serif; min-width: 180px; }
+.stop-popup b { font-size: 14px; }
+.stop-popup .muted { color: #6b6878; }
+.stop-popup a { color: #6d28d9; }
 
 /* ---------- Elevation ---------- */
 .elevation { height: 160px; flex: none; background: var(--panel); border-top: 1px solid var(--border); padding: 8px 12px 4px; }

@@ -100,6 +100,24 @@
       </div>
     </section>
 
+    <section class="group supply">
+      <label class="check"><input type="checkbox" id="supply-enabled"> Verpflegungsstopps einplanen</label>
+      <div class="supply-options" id="supply-options">
+        <div class="field inline">
+          <span>Stopp alle</span>
+          <div class="range-row">
+            <input id="supply-interval" type="number" min="10" max="200" step="5" aria-label="Abstand der Stopps in km">
+            <span class="unit">km</span>
+          </div>
+        </div>
+        <label class="field inline">
+          <span>Abfahrt</span>
+          <input id="departure" type="datetime-local">
+        </label>
+        <p class="hint">Bevorzugt kostenlose Trinkwasserstellen. Gibt es keine in der Nähe, werden Supermärkte oder Tankstellen gewählt, die bei der geschätzten Ankunft geöffnet haben.</p>
+      </div>
+    </section>
+
     <div id="status" class="status" hidden></div>
 
     <section class="group results" id="results" hidden>
@@ -118,6 +136,11 @@
         <ul class="legend" id="breakdown-legend"></ul>
         <p class="hint" id="breakdown-hint" hidden></p>
         <label class="check"><input type="checkbox" id="color-route"> Route auf Karte einfärben</label>
+      </div>
+      <div class="stops" id="stops" hidden>
+        <span class="label">Verpflegungsstopps</span>
+        <ol class="stop-list" id="stop-list"></ol>
+        <p class="hint warn" id="stop-gaps" hidden></p>
       </div>
       <label class="field">
         <span class="label">Routenname</span>
