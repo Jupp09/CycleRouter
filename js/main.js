@@ -3,7 +3,7 @@ import { generateLoop, generateOneWay } from './generators.js';
 import { createMap } from './map.js';
 import { attachSearch, reverse } from './geocode.js';
 import { createElevation } from './elevation.js';
-import { downloadGpx } from './gpx.js';
+import { downloadGpx, canShareGpx, shareGpx } from './gpx.js';
 import { summarize, estimatedShare, longDistanceShare } from './surfaces.js';
 import { addStops, STATE_LABELS, DWELL_MIN, arrivalAt, openingAt } from './stops.js';
 import { PLACE_CATEGORIES, searchAlongRoute } from './placeSearch.js';
@@ -864,9 +864,50 @@ $('#btn-locate').addEventListener('click', () => {
   );
 });
 
-$('#btn-gpx').addEventListener('click', () => {
-  if (state.route) downloadGpx(state.route, ui.routeName.value.trim() || defaultName(state.route));
+// ---------- GPX: teilen (Smartphone, z. B. an Komoot) oder herunterladen ----------
+
+const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS meldet sich als Mac
+// Teilen nur auf Smartphones/Tablets als Hauptfunktion – am Desktop will man die Datei speichern
+const shareSupported = isMobile && canShareGpx();
+const gpxName = () => ui.routeName.value.trim() || defaultName(state.route);
+
+function setupGpxButton() {
+  const btn = $('#btn-gpx');
+  const hint = $('#gpx-hint');
+  if (shareSupported) {
+    btn.textContent = 'GPX teilen';
+    btn.title = 'Über das Teilen-Menü an eine App senden, z. B. Komoot';
+    // Alternative: Datei speichern
+    hint.hidden = false;
+    hint.replaceChildren('An eine Navigations-App senden (z. B. Komoot) oder ');
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.className = 'link-btn inline';
+    save.textContent = 'als Datei speichern';
+    save.addEventListener('click', () => state.route && downloadGpx(state.route, gpxName()));
+    hint.append(save, '.');
+  } else if (isMobile) {
+    // z. B. Chrome auf Android (erlaubt kein GPX beim Teilen) oder Aufruf ohne HTTPS
+    hint.hidden = false;
+    hint.textContent = window.isSecureContext
+      ? 'Die Datei wird heruntergeladen. Zum Navigieren in der Download-Benachrichtigung bzw. im Download-Ordner öffnen und eine App wie Komoot wählen.'
+      : 'Die Datei wird heruntergeladen. Direktes Teilen an Apps (z. B. Komoot) ist nur möglich, wenn CycleRouter über HTTPS aufgerufen wird.';
+  }
+}
+
+$('#btn-gpx').addEventListener('click', async () => {
+  if (!state.route) return;
+  if (!shareSupported) { downloadGpx(state.route, gpxName()); return; }
+  try {
+    await shareGpx(state.route, gpxName());
+  } catch (e) {
+    console.warn('Teilen nicht möglich, lade herunter:', e);
+    downloadGpx(state.route, gpxName());
+  }
 });
+
+setupGpxButton();
 
 $('#btn-clear').addEventListener('click', () => {
   if (state.mode === 'ab') { state.end = null; ui.endInput.value = ''; state.vias = []; renderVias(); }

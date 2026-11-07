@@ -41,14 +41,46 @@ ${points}
 `;
 }
 
+const GPX_TYPE = 'application/gpx+xml';
+const fileName = name => name.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_') + '.gpx';
+
 export function downloadGpx(route, name) {
-  const blob = new Blob([toGpx(route, name)], { type: 'application/gpx+xml' });
+  const blob = new Blob([toGpx(route, name)], { type: GPX_TYPE });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = name.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_') + '.gpx';
+  a.download = fileName(name);
   document.body.append(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Kann der Browser eine GPX-Datei über das Teilen-Menü des Systems weitergeben (z. B. an Komoot)?
+ * Voraussetzungen: Web Share API mit Dateien (iOS Safari ≥ 15, Chrome/Edge u. a.), sichere Verbindung
+ * (HTTPS oder localhost) und ein vom Browser erlaubter Dateityp – Chrome auf Android erlaubt z. B. kein GPX.
+ */
+export function canShareGpx() {
+  if (!window.isSecureContext || !navigator.share || !navigator.canShare) return false;
+  try {
+    return navigator.canShare({ files: [new File(['<gpx/>'], 'test.gpx', { type: GPX_TYPE })] });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * GPX über das Teilen-Menü weitergeben. → 'shared' | 'cancelled'.
+ * Wirft, wenn das Teilen nicht möglich ist (der Aufrufer bietet dann den Download an).
+ */
+export async function shareGpx(route, name) {
+  const file = new File([toGpx(route, name)], fileName(name), { type: GPX_TYPE });
+  try {
+    await navigator.share({ files: [file], title: name });
+    return 'shared';
+  } catch (e) {
+    if (e.name === 'AbortError') return 'cancelled'; // Menü geschlossen, ohne zu teilen
+    throw e;
+  }
 }
