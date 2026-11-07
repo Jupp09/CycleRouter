@@ -6,6 +6,7 @@ const ENDPOINT = 'https://brouter.de/brouter';
 const PROFILES = {
   road: { normal: 'fastbike', low: 'fastbike-lowtraffic', verylow: 'fastbike-verylowtraffic' },
   gravel: { normal: 'gravel', low: 'gravel', verylow: 'gravel' },
+  trekking: { normal: 'trekking', low: 'trekking', verylow: 'trekking' }, // Trekking-/Alltagsrad
 };
 
 function translateError(text) {

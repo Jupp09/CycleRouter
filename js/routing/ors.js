@@ -4,7 +4,7 @@ import { ORS_SURFACE, ORS_WAYTYPE, mergeSegments } from '../surfaces.js';
 const ENDPOINT = 'https://api.openrouteservice.org/v2/directions';
 
 // ORS kennt kein Gravel-Profil; "cycling-regular" nutzt befestigte und unbefestigte Wege.
-const PROFILES = { road: 'cycling-road', gravel: 'cycling-regular' };
+const PROFILES = { road: 'cycling-road', gravel: 'cycling-regular', trekking: 'cycling-regular' };
 
 async function request(bike, body, signal) {
   const key = storage.get('orsKey', '');

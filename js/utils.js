@@ -79,8 +79,8 @@ export function indexAtDistance(r, along) {
 
 /** Geschätzte Fahrzeit in Sekunden. */
 export function estimateTime(distance, ascent, bike) {
-  const speed = bike === 'gravel' ? 20 : 27;     // km/h in der Ebene
-  const climbRate = bike === 'gravel' ? 1000 : 1200; // Höhenmeter, die ~1 h Zusatzzeit kosten
+  const speed = { road: 27, gravel: 20, trekking: 18 }[bike] ?? 20;            // km/h in der Ebene
+  const climbRate = { road: 1200, gravel: 1000, trekking: 800 }[bike] ?? 1000; // Höhenmeter, die ~1 h Zusatzzeit kosten
   return (distance / 1000 / speed + ascent / climbRate) * 3600;
 }
 

@@ -1,6 +1,6 @@
 # CycleRouter
 
-Routenplaner für **Rennrad** und **Gravelbike** auf Basis von OpenStreetMap.
+Routenplaner für **Rennrad**, **Gravelbike** und **Fahrrad** (Trekking-/Alltagsrad) auf Basis von OpenStreetMap.
 
 - **A → B** – Route zwischen Start und Ziel
 - **Distanz** – Start + Wunschdistanz, das Ziel wird automatisch gewählt
@@ -27,10 +27,10 @@ Alternativ geht jeder statische Server, er muss aber **im Projektordner** gestar
 
 ## Routing
 
-| Dienst | Rennrad | Gravel | Hinweise |
-|---|---|---|---|
-| **BRouter** (Standard) | `fastbike`, `fastbike-lowtraffic`, `fastbike-verylowtraffic` | `gravel` | kein Key nötig |
-| **OpenRouteService** | `cycling-road` | `cycling-regular` | kostenloser API-Key ([Registrierung](https://openrouteservice.org/dev/#/signup)), Eingabe über das Zahnrad; Rundkurse nativ über `round_trip` |
+| Dienst | Rennrad | Gravel | Fahrrad (Trekking/Alltag) | Hinweise |
+|---|---|---|---|---|
+| **BRouter** (Standard) | `fastbike`, `fastbike-lowtraffic`, `fastbike-verylowtraffic` | `gravel` | `trekking` | kein Key nötig |
+| **OpenRouteService** | `cycling-road` | `cycling-regular` | `cycling-regular` | kostenloser API-Key ([Registrierung](https://openrouteservice.org/dev/#/signup)), Eingabe über das Zahnrad; Rundkurse nativ über `round_trip` |
 
 Rundkurse und Distanz-Routen mit BRouter werden in [js/generators.js](js/generators.js) erzeugt: Wegpunkte auf einem Kreis bzw. ein Ziel in passender Luftlinie. Danach wird iterativ skaliert, bis die Länge höchstens 6 % von der Wunschdistanz abweicht.
 
