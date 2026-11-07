@@ -26,6 +26,9 @@ const OVERLAYS = {
   }),
 };
 
+// Kräftiges Magenta: kommt in CyclOSM/Topo/Satellit praktisch nicht vor und sticht daher heraus.
+const ROUTE_COLOR = '#e6007e';
+
 const icon = cls => L.divIcon({ className: '', html: `<div class="marker-pin ${cls}"></div>`, iconSize: [22, 22], iconAnchor: [11, 11] });
 const viaIcon = L.divIcon({ className: '', html: '<div class="marker-pin via"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
 
@@ -47,7 +50,7 @@ export function createMap(el, { onClick, onMarkerDrag }) {
 
   const markerLayer = L.layerGroup().addTo(map);
   const routeLayer = L.layerGroup().addTo(map);
-  const hoverMarker = L.circleMarker([0, 0], { radius: 6, color: '#fff', weight: 2, fillColor: '#7c3aed', fillOpacity: 1 });
+  const hoverMarker = L.circleMarker([0, 0], { radius: 7, color: '#111827', weight: 3, fillColor: ROUTE_COLOR, fillOpacity: 1 });
 
   return {
     /**
@@ -74,14 +77,17 @@ export function createMap(el, { onClick, onMarkerDrag }) {
       routeLayer.clearLayers();
       if (!coords) return;
       const latlngs = coords.map(c => [c[0], c[1]]);
-      L.polyline(latlngs, { color: '#fff', weight: 9, opacity: 0.85, interactive: false }).addTo(routeLayer);
+      // Dreilagig: dunkle Kontur + weißer Halo + farbige Linie – hebt sich auf hellen wie dunklen Karten ab.
+      const line = { interactive: false, lineCap: 'round', lineJoin: 'round' };
+      L.polyline(latlngs, { ...line, color: '#111827', weight: 12, opacity: 0.75 }).addTo(routeLayer);
+      L.polyline(latlngs, { ...line, color: '#fff', weight: 9, opacity: 1 }).addTo(routeLayer);
       if (!colorBy || !segments?.length) {
-        L.polyline(latlngs, { color: '#7c3aed', weight: 5, opacity: 0.95, interactive: false }).addTo(routeLayer);
+        L.polyline(latlngs, { ...line, color: ROUTE_COLOR, weight: 6, opacity: 1 }).addTo(routeLayer);
         return;
       }
       let run = null;
       const flush = () => run && L.polyline(latlngs.slice(run.from, run.to + 1), {
-        color: CATEGORIES[colorBy][run.key].color, weight: 5, opacity: 1, interactive: false,
+        ...line, color: CATEGORIES[colorBy][run.key].color, weight: 6, opacity: 1,
       }).addTo(routeLayer);
       for (const s of segments) {
         if (run && run.key === s[colorBy]) { run.to = s.to; continue; }
