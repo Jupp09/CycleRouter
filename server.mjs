@@ -1,4 +1,4 @@
-// Server für CycleRouter – liefert die App aus (nur öffentliche Dateien, siehe PUBLIC), egal von wo gestartet.
+// Server für CycloRouter – liefert die App aus (nur öffentliche Dateien, siehe PUBLIC), egal von wo gestartet.
 // Zusätzlich: POST /api/pois – Verpflegungsstellen je Kachel aus dem Datei-Cache (server/poiCache.mjs),
 // /api/warm – Vorrat für Heimatregionen, /api/account|settings|routes|shared – Konten (server/accountApi.mjs).
 import './server/env.mjs'; // muss der erste Import bleiben (.env laden, bevor andere Module Werte lesen)
@@ -25,6 +25,8 @@ const TYPES = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.md': 'text/markdown; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.brf': 'text/plain; charset=utf-8',
 };
 
 const json = (res, status, data) =>
@@ -94,7 +96,7 @@ async function handleWarm(req, res, url) {
  * Nur diese Dateien/Ordner werden ausgeliefert – alles andere im Projektordner (.env mit Zugangsdaten,
  * server/, node_modules/, cache/, package.json …) bleibt privat.
  */
-const PUBLIC = [/^\/index\.html$/, /^\/(js|css|profiles)\/[\w./-]+$/];
+const PUBLIC = [/^\/index\.html$/, /^\/manifest\.webmanifest$/, /^\/(js|css|profiles|icons)\/[\w./-]+$/];
 
 createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -117,7 +119,7 @@ createServer(async (req, res) => {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Nicht gefunden');
   }
 }).listen(PORT, () => {
-  console.log(`CycleRouter läuft auf http://localhost:${PORT}`);
+  console.log(`CycloRouter läuft auf http://localhost:${PORT}`);
   initWarmQueue(msg => console.log(msg));
   initDb(msg => console.log(msg));
 });

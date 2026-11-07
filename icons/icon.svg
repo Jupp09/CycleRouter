@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- App-Icon: vollflächig (iOS/Android runden die Ecken selbst); Motiv im inneren Sicherheitsbereich (≈ 60 %) -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#5b21b6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g transform="translate(96 104) scale(10)" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="8" cy="21" r="6"/>
+    <circle cx="24" cy="21" r="6"/>
+    <path d="M8 21l6-10h7l3 10M14 11l-2-4h-3"/>
+  </g>
+</svg>

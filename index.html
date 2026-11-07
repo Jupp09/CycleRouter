@@ -2,10 +2,21 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CycleRouter</title>
-  <meta name="description" content="Routenplaner für Rennrad und Gravelbike – A→B, Distanz-Routen, Rundkurse und GPX-Export.">
+  <!-- viewport-fit=cover: Inhalt bis unter Notch/Home-Leiste, Abstände über env(safe-area-inset-*) im CSS -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>CycloRouter</title>
+  <meta name="description" content="Routenplaner für Rennrad, Gravelbike und Fahrrad – A→B, Distanz-Routen, Rundkurse, Verpflegungsstopps und GPX-Export.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='8' cy='21' r='6' fill='none' stroke='%237c3aed' stroke-width='3'/%3E%3Ccircle cx='24' cy='21' r='6' fill='none' stroke='%237c3aed' stroke-width='3'/%3E%3Cpath d='M8 21l6-10h7l3 10M14 11l-2-4h-3' fill='none' stroke='%237c3aed' stroke-width='2.5' stroke-linejoin='round'/%3E%3C/svg%3E">
+
+  <!-- Installierbare WebApp („Zum Home-Bildschirm“) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="CycloRouter">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1b1a22" media="(prefers-color-scheme: dark)">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -16,7 +27,7 @@
         <circle cx="8" cy="21" r="6"/><circle cx="24" cy="21" r="6"/>
         <path d="M8 21l6-10h7l3 10M14 11l-2-4h-3"/>
       </svg>
-      <h1>CycleRouter</h1>
+      <h1>CycloRouter</h1>
       <button id="btn-settings" class="icon-btn" title="Einstellungen" aria-label="Einstellungen">
         <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
       </button>
@@ -264,6 +275,19 @@
       <div class="actions">
         <button value="save" class="primary">Speichern</button>
         <button value="cancel">Abbrechen</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Rückfrage/Eingabe im App-Stil (statt prompt()/confirm(), die im iOS-Vollbildmodus fremd wirken) -->
+  <dialog id="ask-dialog">
+    <form method="dialog">
+      <h2 id="ask-title"></h2>
+      <p class="hint" id="ask-text" hidden></p>
+      <input id="ask-input" type="text" autocomplete="off" hidden>
+      <div class="actions">
+        <button value="ok" id="ask-ok" class="primary">OK</button>
+        <button value="cancel" formnovalidate>Abbrechen</button>
       </div>
     </form>
   </dialog>

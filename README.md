@@ -1,4 +1,4 @@
-# CycleRouter
+# CycloRouter
 
 Routenplaner für **Rennrad**, **Gravelbike** und **Fahrrad** (Trekking-/Alltagsrad) auf Basis von OpenStreetMap.
 
@@ -55,7 +55,7 @@ CREATE USER 'cyclerouter'@'localhost' IDENTIFIED BY 'ein-sicheres-passwort';
 GRANT ALL ON cyclerouter.* TO 'cyclerouter'@'localhost';
 ```
 
-Dann `.env.example` nach `.env` kopieren, die Zugangsdaten eintragen und `npm install` sowie `npm start` ausführen. Die Tabellen legt der Server beim Start selbst an ([server/db.mjs](server/db.mjs)). Ohne `DB_HOST` läuft CycleRouter wie gewohnt ohne Konten.
+Dann `.env.example` nach `.env` kopieren, die Zugangsdaten eintragen und `npm install` sowie `npm start` ausführen. Die Tabellen legt der Server beim Start selbst an ([server/db.mjs](server/db.mjs)). Ohne `DB_HOST` läuft CycloRouter wie gewohnt ohne Konten.
 
 MySQL 8 meldet Benutzer standardmäßig per `caching_sha2_password` an. Läuft die Datenbank auf demselben Rechner, funktioniert das automatisch. Bei einer Datenbank auf einem anderen Rechner `DB_SSL=true` (oder `skip-verify` bei selbst signiertem Zertifikat) setzen. Bei Verbindungsproblemen nennt die Startmeldung des Servers die Ursache und die passende Einstellung.
 

@@ -901,7 +901,7 @@ function setupGpxButton() {
     hint.hidden = false;
     hint.textContent = window.isSecureContext
       ? 'Die Datei wird heruntergeladen. Zum Navigieren in der Download-Benachrichtigung bzw. im Download-Ordner öffnen und eine App wie Komoot wählen.'
-      : 'Die Datei wird heruntergeladen. Direktes Teilen an Apps (z. B. Komoot) ist nur möglich, wenn CycleRouter über HTTPS aufgerufen wird.';
+      : 'Die Datei wird heruntergeladen. Direktes Teilen an Apps (z. B. Komoot) ist nur möglich, wenn CycloRouter über HTTPS aufgerufen wird.';
   }
 }
 
@@ -1135,8 +1135,31 @@ async function openSaved(id) {
   }
 }
 
+/**
+ * Rückfrage im App-Stil (statt confirm()/prompt()). Mit `input` (Vorgabewert) als Eingabe → Text oder null;
+ * sonst → true/null.
+ */
+function ask({ title, text = '', input = null, ok = 'OK', danger = false }) {
+  const dlg = $('#ask-dialog');
+  const field = $('#ask-input');
+  $('#ask-title').textContent = title;
+  $('#ask-text').textContent = text;
+  $('#ask-text').hidden = !text;
+  field.hidden = input == null;
+  field.value = input ?? '';
+  $('#ask-ok').textContent = ok;
+  $('#ask-ok').className = danger ? 'danger' : 'primary';
+  dlg.returnValue = '';
+  dlg.showModal();
+  if (input != null) { field.focus(); field.select(); }
+  return new Promise(resolve => dlg.addEventListener('close', () => {
+    if (dlg.returnValue !== 'ok') resolve(null);
+    else resolve(input != null ? field.value : true);
+  }, { once: true }));
+}
+
 async function renameSaved(r) {
-  const name = prompt('Neuer Name der Route:', r.name)?.trim();
+  const name = (await ask({ title: 'Route umbenennen', input: r.name, ok: 'Umbenennen' }))?.trim();
   if (!name || name === r.name) return;
   try {
     await updateRoute(r.id, { name });
@@ -1148,7 +1171,12 @@ async function renameSaved(r) {
 }
 
 async function deleteSaved(r) {
-  if (!confirm(`„${r.name}“ wirklich löschen?${r.shared ? ' Der Teilen-Link funktioniert dann nicht mehr.' : ''}`)) return;
+  const sure = await ask({
+    title: `„${r.name}“ löschen?`,
+    text: r.shared ? 'Der Teilen-Link funktioniert danach nicht mehr.' : 'Das lässt sich nicht rückgängig machen.',
+    ok: 'Löschen', danger: true,
+  });
+  if (!sure) return;
   try {
     await deleteRoute(r.id);
     if (state.saved?.id === r.id) { state.saved = null; renderSaveActions(); }

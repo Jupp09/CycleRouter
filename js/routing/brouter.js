@@ -62,7 +62,7 @@ export function patchProfile(src, penalty) {
   const end = offset < 0 ? src.length : start + 1 + offset;
   return src.slice(0, start)
     + src.slice(start, end).replace(/^assign costfactor\b/m, 'assign costfactor_base')
-    + `# CycleRouter: EuroVelo (internationale Radrouten) bevorzugen\n`
+    + `# CycloRouter: EuroVelo (internationale Radrouten) bevorzugen\n`
     + `assign costfactor = multiply costfactor_base switch route_bicycle_icn=yes 1 switch route_bicycle_ncn=yes ${ncn} ${penalty}\n\n`
     + src.slice(end);
 }

@@ -4,7 +4,7 @@
 //   DB_SSL                         true = verschlüsselt mit Zertifikatsprüfung, skip-verify = ohne Prüfung
 //   DB_ALLOW_PUBLIC_KEY_RETRIEVAL  für MySQL 8 ohne TLS (Anmeldeverfahren caching_sha2_password);
 //                                  bei localhost automatisch an, sonst lieber DB_SSL verwenden
-// Ohne DB_HOST läuft CycleRouter wie bisher ohne Konten – die App blendet die Funktionen dann aus.
+// Ohne DB_HOST läuft CycloRouter wie bisher ohne Konten – die App blendet die Funktionen dann aus.
 import mariadb from 'mariadb';
 
 let pool = null;

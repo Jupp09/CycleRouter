@@ -17,7 +17,7 @@ const MAX_STALE = 365 * DAY;
 /** Kacheln je Overpass-Abfrage – größere Abfragen brechen bei Last eher ab. */
 const CHUNK = 40;
 // Overpass lehnt Anfragen ohne aussagekräftigen User-Agent ab (406)
-const HEADERS = { 'User-Agent': 'CycleRouter/1.0 (+https://github.com/Jupp09/CycleRouter)' };
+const HEADERS = { 'User-Agent': 'CycloRouter/1.0 (+https://github.com/Jupp09/CycleRouter)' };
 export const ALL_LAYERS = Object.keys(LAYERS);
 
 const inflight = new Map(); // `${ebene}/${kachel}` → Promise<pois>
