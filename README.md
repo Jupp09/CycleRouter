@@ -39,9 +39,9 @@ npm run warm -- 53.07 8.80 60
 
 Ohne diesen Server (statisch gehostet) fragt der Browser direkt bei Overpass an.
 
-### Konten, gespeicherte Routen und Teilen-Links (optional, MariaDB)
+### Konten, gespeicherte Routen und Teilen-Links (optional, MariaDB oder MySQL)
 
-Mit einer MariaDB-Datenbank bietet der Server Benutzerkonten (Benutzername + Passwort). Damit lassen sich:
+Mit einer Datenbank – **MariaDB ab 10.5** oder **MySQL ab 8.0.16**, beide getestet (MariaDB 11.4, MySQL 8.4) – bietet der Server Benutzerkonten (Benutzername + Passwort). Damit lassen sich:
 
 - **Routen speichern** („Meine Routen“) und auf jedem Gerät exakt so wieder öffnen, wie sie gespeichert wurden,
 - **Teilen-Links** erzeugen – wer den Link öffnet, sieht die Route auch ohne Konto; Links lassen sich zurückziehen,
@@ -56,6 +56,8 @@ GRANT ALL ON cyclerouter.* TO 'cyclerouter'@'localhost';
 ```
 
 Dann `.env.example` nach `.env` kopieren, die Zugangsdaten eintragen und `npm install` sowie `npm start` ausführen. Die Tabellen legt der Server beim Start selbst an ([server/db.mjs](server/db.mjs)). Ohne `DB_HOST` läuft CycleRouter wie gewohnt ohne Konten.
+
+MySQL 8 meldet Benutzer standardmäßig per `caching_sha2_password` an. Läuft die Datenbank auf demselben Rechner, funktioniert das automatisch. Bei einer Datenbank auf einem anderen Rechner `DB_SSL=true` (oder `skip-verify` bei selbst signiertem Zertifikat) setzen. Bei Verbindungsproblemen nennt die Startmeldung des Servers die Ursache und die passende Einstellung.
 
 Sicherheit: Passwörter werden mit scrypt gehasht, Sitzungen laufen über ein HttpOnly-Cookie (in der Datenbank nur als Hash), ändernde Anfragen müssen JSON sein und von derselben Seite kommen, fehlgeschlagene Anmeldungen werden je IP begrenzt. Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Proxy wie Caddy oder nginx) – dann wird das Cookie automatisch als `Secure` gesetzt.
 
