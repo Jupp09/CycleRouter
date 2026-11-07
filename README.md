@@ -9,6 +9,7 @@ Routenplaner für **Rennrad**, **Gravelbike** und **Fahrrad** (Trekking-/Alltags
 - Höhenprofil, Höhenmeter, geschätzte Fahrzeit
 - Aufschlüsselung nach **Untergrund** (Asphalt, Pflaster, Schotter …) und **Wegtyp** (Radweg, Hauptstraße, Wirtschaftsweg …) mit km und %, optional als Einfärbung der Route und als Farbband im Höhenprofil ([js/surfaces.js](js/surfaces.js))
 - Marker verschiebbar – die Route wird neu berechnet
+- **Mehrtagestouren** auf Knopfdruck (sobald die Route länger als die eingestellten km pro Tag ist): Tagesetappen, je Nacht wählbare Unterkunft (Hotel, Pension, Hostel, Zeltplatz aus OpenStreetMap) mit geschätztem Preis gegen das Budget pro Nacht und „Preis prüfen“-Link mit Datum ([js/stays.js](js/stays.js))
 - „Neu würfeln" erzeugt eine andere Variante, optional mit Wunschrichtung
 
 ## Starten

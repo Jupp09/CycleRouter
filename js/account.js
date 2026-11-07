@@ -10,7 +10,8 @@ export const account = { enabled: false, user: null };
 
 /** Einstellungen, die zwischen Geräten abgeglichen werden (wie SYNC_KEYS auf dem Server). Der ORS-Key bleibt lokal. */
 export const SYNC_KEYS = ['home', 'bike', 'traffic', 'eurovelo', 'provider', 'breakdown', 'colorRoute',
-  'supplyEnabled', 'supplyInterval', 'avgSpeed', 'mode', 'distanceKm'];
+  'supplyEnabled', 'supplyInterval', 'avgSpeed', 'mode', 'distanceKm',
+  'stageMaxKm', 'nightBudget', 'stayTypes', 'endStay'];
 
 async function api(method, path, body) {
   let res;

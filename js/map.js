@@ -58,6 +58,8 @@ export function createMap(el, { onClick, onMarkerDrag }) {
   const routeLayer = L.layerGroup().addTo(map);
   const stopLayer = L.layerGroup().addTo(map);
   const stopMarkers = new Map();
+  const stayLayer = L.layerGroup().addTo(map);
+  const stayMarkers = new Map();
   const searchLayer = L.layerGroup().addTo(map);
   const searchMarkers = new Map();
   const hoverMarker = L.circleMarker([0, 0], { radius: 7, color: '#111827', weight: 3, fillColor: ROUTE_COLOR, fillOpacity: 1 });
@@ -124,6 +126,29 @@ export function createMap(el, { onClick, onMarkerDrag }) {
         }).bindPopup(s.popup).addTo(stopLayer);
         stopMarkers.set(s.id, marker);
       }
+    },
+
+    /** Gewählte Unterkünfte einer Mehrtagestour: [{id, lat, lon, icon, popup: HTMLElement}] */
+    setStays(stays = []) {
+      stayLayer.clearLayers();
+      stayMarkers.clear();
+      for (const s of stays) {
+        const marker = L.marker([s.lat, s.lon], {
+          icon: L.divIcon({
+            className: '', iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -15],
+            html: `<div class="stay-pin">${s.icon}</div>`,
+          }),
+          zIndexOffset: 700,
+        }).bindPopup(s.popup).addTo(stayLayer);
+        stayMarkers.set(s.id, marker);
+      }
+    },
+
+    openStay(id) {
+      const m = stayMarkers.get(id);
+      if (!m) return;
+      map.setView(m.getLatLng(), Math.max(map.getZoom(), 14));
+      m.openPopup();
     },
 
     /** Suchtreffer entlang der Route: [{id, lat, lon, icon, popup: HTMLElement}] */

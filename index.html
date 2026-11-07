@@ -152,6 +152,18 @@
         <div><span class="k">Fahrzeit ca.</span><span class="v" id="stat-time"></span></div>
       </div>
       <p class="hint" id="eurovelo-share" hidden></p>
+      <div class="stages" id="stages" hidden>
+        <button id="btn-multiday" class="primary"></button>
+        <div id="stages-body" hidden>
+          <p class="hint" id="stages-summary"></p>
+          <label class="field inline">
+            <span>Start</span>
+            <input id="stage-departure" type="datetime-local">
+          </label>
+          <ol class="stage-list" id="stage-list"></ol>
+          <p class="hint">Preise sind Schätzungen nach Unterkunftsart und Sternen – den echten Preis zeigt „Preis prüfen“. Budget, km pro Tag und Unterkunftsarten unter Einstellungen.</p>
+        </div>
+      </div>
       <div class="breakdown" id="breakdown">
         <div class="segmented small" id="breakdown-switch" role="radiogroup" aria-label="Aufschlüsselung">
           <button role="radio" data-value="surface">Untergrund</button>
@@ -266,6 +278,20 @@
         </div>
         <p class="hint">Tempo in der Ebene – Anstiege werden zusätzlich berücksichtigt. Grundlage für Fahrzeit und Ankunftszeiten.
           <button type="button" class="link-btn inline" id="speed-reset">Auf Standard zurücksetzen</button></p>
+      </div>
+      <div class="field stay-settings">
+        <span class="label">Mehrtagestouren</span>
+        <label class="field inline">
+          <span>Max. km pro Tag</span>
+          <input id="stage-max" type="number" min="30" max="300" step="5" inputmode="numeric">
+        </label>
+        <label class="field inline">
+          <span>Budget pro Nacht (€)</span>
+          <input id="night-budget" type="number" min="10" max="500" step="5" inputmode="numeric">
+        </label>
+        <div class="stay-types" id="stay-types"></div>
+        <label class="check"><input type="checkbox" id="end-stay"> Bei Touren ohne Rückkehr auch am Ziel übernachten</label>
+        <p class="hint">Ist eine Route länger, erscheint in den Ergebnissen „Als Mehrtagestour planen“.</p>
       </div>
       <label class="field">
         <span class="label">OpenRouteService API-Key</span>

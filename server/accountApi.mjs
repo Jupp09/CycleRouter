@@ -63,7 +63,8 @@ function checkOrigin(req) {
 
 /** Nur diese Einstellungen werden abgeglichen – der ORS-API-Key bleibt bewusst nur im Browser. */
 export const SYNC_KEYS = ['home', 'bike', 'traffic', 'eurovelo', 'provider', 'breakdown', 'colorRoute',
-  'supplyEnabled', 'supplyInterval', 'avgSpeed', 'mode', 'distanceKm'];
+  'supplyEnabled', 'supplyInterval', 'avgSpeed', 'mode', 'distanceKm',
+  'stageMaxKm', 'nightBudget', 'stayTypes', 'endStay'];
 
 function cleanSettings(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new HttpError(400, 'Ungültige Einstellungen');

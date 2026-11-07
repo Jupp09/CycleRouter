@@ -11,6 +11,10 @@ import { downloadGpx, canShareGpx, shareGpx } from './gpx.js';
 import { summarize, estimatedShare, longDistanceShare } from './surfaces.js';
 import { addStops, STATE_LABELS, DWELL_MIN, arrivalAt, openingAt } from './stops.js';
 import { PLACE_CATEGORIES, searchAlongRoute } from './placeSearch.js';
+import {
+  STAY_TYPES, STAY_GROUPS, isMultiDayCandidate, planStays, routeThroughStays, stageStats,
+  priceLabel, priceLink, websiteOf, AVAILABILITY_LABEL,
+} from './stays.js';
 import { regionAt, regionLabel } from './regions.js';
 import { holidayAt } from './holidays.js';
 import {
@@ -39,6 +43,15 @@ const state = {
   start: null, // {lat, lon, label}
   end: null,
   vias: [], // A→B-Zwischenstopps: {lat, lon, label, manual: true, icon?} – lat null = noch nicht gewählt
+  // Mehrtagestouren: Einstellungen (Zahnrad), ob die aktuelle Route aufgeteilt ist, gewählte Unterkünfte je Nacht
+  stays: {
+    maxKm: storage.get('stageMaxKm', 100),
+    budget: storage.get('nightBudget', 80),
+    groups: storage.get('stayTypes', ['hotel', 'guest_house', 'hostel', 'camp_site']),
+    endStay: storage.get('endStay', true),
+  },
+  multiDay: false,
+  stayChoices: [], // OSM-Kennung der gewählten Unterkunft je Nacht
   seed: newSeed(),
   route: null,
 };
@@ -125,7 +138,7 @@ function updateMarkers() {
     map.setMarkers(wps.map((point, index) => {
       const kind = index === 0 ? 'start' : !isLoop(r) && index === last ? 'end' : point.manual ? 'manual' : 'via';
       return { point, index, kind, ...(kind === 'manual' && manualMarker(point, ++n)) };
-    }).filter(m => !m.point.stop));
+    }).filter(m => !m.point.stop && !m.point.stay)); // Stopps und Unterkünfte haben eigene Marker
     return;
   }
   const markers = [];
@@ -348,6 +361,7 @@ function showRoute(r, { fit = true } = {}) {
   // Name einer geöffneten gespeicherten/geteilten Route beibehalten
   ui.routeName.value = state.loadedName ?? defaultName(r);
   renderSaveActions();
+  renderStages();
   ui.results.hidden = false;
 
   if (fit) map.fitRoute(r.coords);
@@ -358,7 +372,10 @@ function clearRoute() {
   state.route = null;
   state.saved = null;
   state.loadedName = null;
+  state.multiDay = false;
+  state.stayChoices = [];
   renderSaveActions();
+  renderStages();
   map.setRoute(null);
   renderStops();
   searchAlong(null);
@@ -378,10 +395,25 @@ async function run(task, { loadingText = 'Route wird berechnet …', fit = true 
   const ctrl = controller = new AbortController();
   setStatus(loadingText, 'loading');
   try {
-    const r = await task(ctrl.signal);
+    let r = await task(ctrl.signal);
     if (ctrl.signal.aborted) return;
     setStatus(null);
     showRoute(r, { fit });
+
+    // Mehrtagestour (nur auf Wunsch): Unterkünfte suchen und die Route durch sie führen
+    if (state.multiDay && isMultiDayCandidate(r, state.stays.maxKm)) {
+      setStatus('Unterkünfte für die Übernachtungen werden gesucht …', 'loading');
+      try {
+        r = await withStays(r, ctrl.signal);
+        if (ctrl.signal.aborted) return;
+        setStatus(null);
+        showRoute(r, { fit: false });
+      } catch (e) {
+        if (e.name === 'AbortError' || ctrl.signal.aborted) return;
+        console.error(e);
+        setStatus(e.message, 'error');
+      }
+    }
     if (!state.supply.enabled) return;
 
     // Route steht schon auf der Karte; Stopps werden nachgeladen und die Route dann durch sie geführt
@@ -403,20 +435,39 @@ async function run(task, { loadingText = 'Route wird berechnet …', fit = true 
   }
 }
 
+/** Abfahrt (Datum/Uhrzeit aus den Verpflegungs-Einstellungen) – auch Start der Mehrtagestour. */
+function departureDate() {
+  const d = new Date(state.supply.departure || defaultDeparture());
+  return isNaN(d) ? new Date() : d;
+}
+
 /** Route (ohne Stopps) um Verpflegungsstopps ergänzen. */
 function withSupply(base, signal) {
-  const departure = new Date(state.supply.departure || defaultDeparture());
   return addStops(base, {
     provider: provider(), opts: routeOpts(), bike: state.bike, signal,
     interval: state.supply.intervalKm * 1000,
-    departure: isNaN(departure) ? new Date() : departure,
+    departure: departureDate(),
   });
 }
 
-/** Stopps für die aktuelle Route neu planen (oder entfernen), ohne die Route selbst neu zu erzeugen. */
+/** Route ohne Übernachtungen und Stopps um Etappen und Unterkünfte ergänzen. */
+async function withStays(origin, signal) {
+  const plan = await planStays(origin, {
+    maxKm: state.stays.maxKm, budget: state.stays.budget, groups: state.stays.groups,
+    endStay: state.stays.endStay && state.mode !== 'loop', // Rundkurs endet zu Hause
+    departure: departureDate(), choices: state.stayChoices, signal,
+  });
+  state.stayChoices = plan.nights.map(n => n.chosen?.poi.id ?? null);
+  return routeThroughStays(origin, plan, { provider: provider(), opts: routeOpts(), signal });
+}
+
+/** Grundroute ohne Übernachtungen und Verpflegungsstopps – Ausgangspunkt jeder Neuplanung. */
+const originRoute = () => state.route?.origin || state.route?.base || state.route;
+
+/** Übernachtungen und Stopps für die aktuelle Route neu planen, ohne die Route selbst neu zu erzeugen. */
 function replanStops() {
-  const base = state.route?.base || state.route;
-  if (base) run(async () => base, { fit: false, loadingText: 'Verpflegungsstopps werden gesucht …' });
+  const base = originRoute();
+  if (base) run(async () => base, { fit: false, loadingText: 'Wird neu geplant …' });
 }
 
 function calcAB() {
@@ -456,12 +507,12 @@ function addVia(point, { label = '', icon = null } = {}) {
   }
 
   // Distanz/Rundkurs: in die Wegpunkte der vorhandenen Route einfügen und neu berechnen
-  const base = state.route?.base || state.route;
+  const base = originRoute();
   if (!base || base.waypoints.length < 2) {
     setStatus('Bei diesem Rundkurs (OpenRouteService) lassen sich keine Zwischenstopps einfügen – bitte BRouter wählen.', 'error');
     return;
   }
-  const wps = base.waypoints.filter(p => !p.stop);
+  const wps = base.waypoints.filter(p => !p.stop && !p.stay);
   wps.splice(bestInsertIndex(wps, via), 0, via);
   run(signal => route(provider(), wps, routeOpts(), signal), { fit: false });
 }
@@ -728,7 +779,7 @@ function handleMarkerDrag(index, point) {
     // Start bleibt dasselbe Objekt am Anfang und Ende, damit der Rundkurs als solcher erkannt wird
     if (loop && index === 0) wps[0] = wps[wps.length - 1] = state.start;
     // Verpflegungsstopps werden für die geänderte Route neu gewählt
-    const base = wps.filter(p => !p.stop);
+    const base = wps.filter(p => !p.stop && !p.stay);
     if (state.mode === 'ab' && !loop) {
       base[0] = state.start;
       base[base.length - 1] = state.end;
@@ -918,6 +969,188 @@ $('#btn-gpx').addEventListener('click', async () => {
 
 setupGpxButton();
 
+// ---------- Mehrtagestouren ----------
+// Nur auf Knopfdruck: Ist die Route deutlich länger als die Tagesetappe, bietet „Als Mehrtagestour planen“
+// die Aufteilung an. Dann werden je Nacht Unterkünfte vorgeschlagen und die Route durch die gewählten geführt.
+
+const fmtDayDate = d => d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+const FIT_LABEL = { ok: 'im Budget', maybe: 'evtl. im Budget', over: 'über Budget' };
+
+function stayPopup(night) {
+  const { poi, price, fit, offset } = night.chosen;
+  const el = document.createElement('div');
+  el.className = 'stop-popup';
+  const title = document.createElement('b');
+  title.textContent = `${STAY_TYPES[poi.type].icon} ${poi.name || STAY_TYPES[poi.type].label}`;
+  const lines = [
+    `${night.end ? 'Übernachtung am Ziel' : `Nacht ${night.index + 1}`} · ${fmtDayDate(night.date)}`,
+    `${STAY_TYPES[poi.type].label}${poi.tags.stars ? ` · ${poi.tags.stars}★` : ''} · ${(offset / 1000).toFixed(1)} km neben der Route`,
+    `${priceLabel(price)} – ${FIT_LABEL[fit]}`,
+  ];
+  el.append(title, ...lines.map(t => { const d = document.createElement('div'); d.textContent = t; return d; }));
+  el.append(stayLinks(night));
+  return el;
+}
+
+function stayLinks(night) {
+  const box = document.createElement('div');
+  box.className = 'links';
+  const link = (text, href) => {
+    const a = document.createElement('a');
+    a.href = href; a.target = '_blank'; a.rel = 'noopener'; a.textContent = text;
+    box.append(a);
+  };
+  link('Preis prüfen', priceLink(night.chosen.poi, night));
+  const web = websiteOf(night.chosen.poi);
+  if (web && /^https?:\/\//i.test(web)) link('Webseite', web);
+  link('In OSM', `https://www.openstreetmap.org/${night.chosen.poi.id}`);
+  return box;
+}
+
+function optionLabel(o) {
+  const t = STAY_TYPES[o.poi.type];
+  const name = o.poi.name || t.label;
+  return `${t.icon} ${name}${o.poi.tags.stars ? ` ${o.poi.tags.stars}★` : ''} · ${priceLabel(o.price)} · ${(o.offset / 1000).toFixed(1)} km`
+    + `${o.fit === 'over' ? ' · über Budget' : ''}${o.open === 'season' ? ' · Saison prüfen' : ''}`;
+}
+
+function renderStages() {
+  const box = $('#stages');
+  const r = state.route;
+  const origin = originRoute();
+  const candidate = !!origin && isMultiDayCandidate(origin, state.stays.maxKm);
+  box.hidden = !r || (!candidate && !state.multiDay);
+  const plan = r?.stays;
+  map.setStays(plan ? plan.nights.filter(n => n.chosen).map(n => ({
+    id: n.chosen.poi.id, lat: n.chosen.poi.lat, lon: n.chosen.poi.lon, icon: STAY_TYPES[n.chosen.poi.type].icon, popup: stayPopup(n),
+  })) : []);
+  if (box.hidden) return;
+
+  const days = Math.max(2, Math.ceil(origin.distance / (state.stays.maxKm * 1000)));
+  $('#btn-multiday').textContent = state.multiDay
+    ? 'Mehrtagestour aufheben'
+    : `Als Mehrtagestour planen (${days} Tage à ca. ${Math.round(origin.distance / days / 1000)} km)`;
+  $('#btn-multiday').className = state.multiDay ? '' : 'primary';
+  $('#stages-body').hidden = !state.multiDay || !plan;
+  if (!plan) return;
+
+  $('#stage-departure').value = state.supply.departure;
+  const stats = stageStats(r, state.bike);
+  const chosen = plan.nights.filter(n => n.chosen);
+  const sum = k => chosen.reduce((s, n) => s + n.chosen.price[k], 0);
+  const missing = plan.nights.length - chosen.length;
+  $('#stages-summary').textContent = `${stats.length} Tage · ${plan.nights.length} ${plan.nights.length === 1 ? 'Nacht' : 'Nächte'}`
+    + (chosen.length ? ` · Übernachtungen geschätzt ${sum('min')}–${sum('max')} €` : '')
+    + (missing ? ` · für ${missing} ${missing === 1 ? 'Nacht' : 'Nächte'} keine passende Unterkunft gefunden` : '');
+
+  const start = departureDate();
+  $('#stage-list').replaceChildren(...stats.map((s, i) => {
+    const li = document.createElement('li');
+    const day = document.createElement('div');
+    day.className = 'day';
+    const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    day.innerHTML = '<span></span><small></small>';
+    day.firstChild.textContent = `Tag ${s.day} · ${fmtDayDate(date)}`;
+    day.lastChild.textContent = `${formatKm(s.distance)} · ${formatM(s.ascent)} ↑ · ca. ${formatDuration(s.time)}`;
+    li.append(day);
+    // Nacht nach diesem Tag (bzw. am Ziel nach dem letzten Tag)
+    const night = plan.nights[i];
+    if (night) li.append(renderNight(night));
+    return li;
+  }));
+}
+
+function renderNight(night) {
+  const box = document.createElement('div');
+  box.className = 'night';
+  const label = document.createElement('span');
+  label.className = 'meta';
+  label.textContent = night.end ? 'Übernachtung am Ziel' : `Übernachtung nach Tag ${night.index + 1}`;
+  box.append(label);
+  if (!night.options.length) {
+    const none = document.createElement('span');
+    none.className = 'meta over';
+    none.textContent = 'Keine passende Unterkunft bis 3 km neben der Route – km pro Tag oder Unterkunftsarten anpassen.';
+    box.append(none);
+    return box;
+  }
+  const select = document.createElement('select');
+  select.ariaLabel = label.textContent;
+  for (const o of night.options) {
+    const opt = document.createElement('option');
+    opt.value = o.poi.id;
+    opt.textContent = optionLabel(o);
+    opt.selected = o === night.chosen;
+    select.append(opt);
+  }
+  select.addEventListener('change', () => {
+    state.stayChoices[night.index] = select.value;
+    replanStops(); // Route durch die neue Unterkunft führen, Stopps neu planen
+  });
+  const meta = document.createElement('span');
+  const c = night.chosen;
+  meta.className = 'meta' + (c.fit === 'over' || c.open === 'season' ? ' over' : '');
+  meta.textContent = `${STAY_TYPES[c.poi.type].label} · ${priceLabel(c.price)} – ${FIT_LABEL[c.fit]} (Budget ${state.stays.budget} €)`
+    + (AVAILABILITY_LABEL[c.open] ? ` · ${AVAILABILITY_LABEL[c.open]}` : '');
+  const show = document.createElement('button');
+  show.type = 'button';
+  show.className = 'link-btn inline';
+  show.textContent = 'Auf der Karte zeigen';
+  show.addEventListener('click', () => map.openStay(night.chosen.poi.id));
+  const links = stayLinks(night);
+  links.prepend(show);
+  box.append(select, meta, links);
+  return box;
+}
+
+$('#btn-multiday').addEventListener('click', () => {
+  state.multiDay = !state.multiDay;
+  if (!state.multiDay) state.stayChoices = [];
+  replanStops();
+});
+$('#stage-departure').addEventListener('change', e => {
+  // gleiche Abfahrt wie bei den Verpflegungsstopps – bestimmt Datum der Nächte und Öffnungszeiten
+  state.supply.departure = e.target.value || defaultDeparture();
+  syncUi();
+  updateDepartureHint();
+  replanStops();
+});
+
+// Einstellungen (Zahnrad): km pro Tag, Budget, Unterkunftsarten, Übernachtung am Ziel
+$('#stay-types').replaceChildren(...Object.entries(STAY_GROUPS).map(([key, g]) => {
+  const label = document.createElement('label');
+  label.className = 'check';
+  label.innerHTML = `<input type="checkbox" value="${key}"> `;
+  label.append(g.label);
+  return label;
+}));
+
+function renderStaySettings() {
+  $('#stage-max').value = state.stays.maxKm;
+  $('#night-budget').value = state.stays.budget;
+  $('#end-stay').checked = state.stays.endStay;
+  for (const cb of document.querySelectorAll('#stay-types input')) cb.checked = state.stays.groups.includes(cb.value);
+}
+
+/** Werte aus dem Dialog übernehmen → true, wenn sich etwas geändert hat. */
+function saveStaySettings() {
+  const clamp = (v, lo, hi, fallback) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : fallback);
+  const next = {
+    maxKm: clamp(Number($('#stage-max').value), 30, 300, state.stays.maxKm),
+    budget: clamp(Number($('#night-budget').value), 10, 500, state.stays.budget),
+    groups: [...document.querySelectorAll('#stay-types input:checked')].map(cb => cb.value),
+    endStay: $('#end-stay').checked,
+  };
+  if (!next.groups.length) next.groups = state.stays.groups; // mindestens eine Art
+  const changed = JSON.stringify(next) !== JSON.stringify(state.stays);
+  state.stays = next;
+  storage.set('stageMaxKm', next.maxKm);
+  storage.set('nightBudget', next.budget);
+  storage.set('stayTypes', next.groups);
+  storage.set('endStay', next.endStay);
+  return changed;
+}
+
 // ---------- Gespeicherte Routen und Teilen-Links (Konto) ----------
 // state.saved: die geöffnete eigene gespeicherte Route {id, name, shareToken} – „Speichern“ aktualisiert sie.
 // state.loadedName: Name einer geöffneten gespeicherten oder geteilten Route (bleibt bei Neuberechnung erhalten).
@@ -925,9 +1158,12 @@ setupGpxButton();
 const round5 = v => Math.round(v * 1e5) / 1e5;
 const pointLabel = p => p.label || `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
 
-/** Aktuelle Route für die Datenbank – ohne Verpflegungsstopps (die werden beim Öffnen neu geplant). */
+/**
+ * Aktuelle Route für die Datenbank – ohne Verpflegungsstopps und Übernachtungen (die werden beim Öffnen
+ * neu geplant; die gewählten Unterkünfte werden über `stayChoices` wieder übernommen).
+ */
 function serializeRoute(name) {
-  const r = state.route.base || state.route;
+  const r = originRoute();
   const wp = p => ({
     lat: round5(p.lat), lon: round5(p.lon),
     ...(p.label && { label: p.label }), ...(p.manual && { manual: true }), ...(p.icon && { icon: p.icon }),
@@ -938,7 +1174,8 @@ function serializeRoute(name) {
       v: 1, traffic: state.traffic, eurovelo: state.eurovelo, provider: state.provider,
       coords: r.coords.map(([lat, lon, ele]) => [round5(lat), round5(lon), ele == null ? null : Math.round(ele * 10) / 10]),
       segments: r.segments || [],
-      waypoints: r.waypoints.filter(p => !p.stop).map(wp),
+      waypoints: r.waypoints.filter(p => !p.stop && !p.stay).map(wp),
+      ...(state.multiDay && { multiDay: true, stayChoices: state.stayChoices }),
     },
   };
 }
@@ -973,8 +1210,12 @@ function restoreRoute(saved, { own }) {
   syncUi();
   renderVias();
   updateDepartureHint();
-  showRoute(withStats({ coords: d.coords, segments: d.segments }, wps));
-  if (state.supply.enabled) replanStops();
+  state.multiDay = !!d.multiDay;
+  state.stayChoices = d.stayChoices || [];
+  const r = withStats({ coords: d.coords, segments: d.segments }, wps);
+  showRoute(r);
+  // Übernachtungen (mit den gespeicherten Unterkünften) und Stopps auf die gespeicherte Route aufsetzen
+  if (state.multiDay || state.supply.enabled) run(async () => r, { fit: false, loadingText: 'Wird geplant …' });
   renderMyRoutes();
 }
 
@@ -1428,6 +1669,7 @@ $('#btn-settings').addEventListener('click', () => {
   $('#btn-home-from-start').disabled = !state.start;
   pendingSpeed = storage.get('avgSpeed', null);
   renderSpeed();
+  renderStaySettings();
   showWarmStatus();
   dialog.showModal();
 });
@@ -1436,10 +1678,16 @@ dialog.addEventListener('close', async () => {
   storage.set('orsKey', $('#ors-key').value.trim());
 
   const speedBefore = storage.get('avgSpeed', null);
-  if (pendingSpeed !== speedBefore) {
+  const speedChanged = pendingSpeed !== speedBefore;
+  if (speedChanged) {
     storage.set('avgSpeed', pendingSpeed);
     setAverageSpeed(pendingSpeed);
-    if (state.provider !== 'ors') refreshTimes(); // bei ORS berechnet recalc() unten ohnehin neu
+  }
+  const staysChanged = saveStaySettings();
+  if (state.provider !== 'ors') { // bei ORS berechnet recalc() unten ohnehin neu
+    if (staysChanged && state.multiDay && state.route) replanStops(); // Etappen/Unterkünfte neu planen
+    else if (speedChanged) refreshTimes();
+    else if (staysChanged) renderStages(); // z. B. Knopf „Als Mehrtagestour planen“ ein-/ausblenden
   }
   // Leeres Feld = Heimatadresse entfernen
   const before = getHome();

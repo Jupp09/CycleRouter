@@ -219,6 +219,29 @@ input[type="datetime-local"] {
 .along-list .km { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
 .along-list .add { width: 30px; height: 30px; padding: 0; font-weight: 700; }
 
+/* Mehrtagestouren */
+.stages { display: flex; flex-direction: column; gap: 8px; }
+#stages-body { display: flex; flex-direction: column; gap: 8px; }
+.stage-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.stage-list > li { background: var(--surface); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.stage-list .day { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+.stage-list .day small { font-weight: 400; color: var(--muted); }
+.stage-list .night { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
+.stage-list .night select { width: 100%; }
+.stage-list .night .meta { color: var(--muted); font-size: 12px; }
+.stage-list .night .meta.over { color: var(--warn-text); }
+.stage-list .night .links { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; align-items: baseline; }
+.stage-list .night .links > * { white-space: nowrap; }
+.stage-list .night .links .link-btn { font-size: 12px; }
+.stage-list .night .links a { color: var(--accent); }
+.stay-settings { display: flex; flex-direction: column; gap: 6px; }
+.stay-settings input[type="number"] { width: 90px; }
+.stay-types { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.stay-pin {
+  width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+  background: #fff; border: 2px solid var(--route); box-shadow: 0 1px 4px rgba(0, 0, 0, .45); font-size: 16px; line-height: 1;
+}
+
 /* Konto */
 .account { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .account > .label { font-size: 12px; font-weight: 600; color: var(--muted); }

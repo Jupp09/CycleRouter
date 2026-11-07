@@ -79,15 +79,17 @@ const TILE_TTL = 7 * 24 * 3600 * 1000;
 const memTiles = new Map(); // `${ebene}/${kachel}` → {t, pois}
 const cacheKey = (layer, key) => `${layer}/${key}`;
 
-/** Alle Kacheln, die die Route samt ~1 km Rand berührt. */
-function routeTiles(r) {
-  const m = 0.012;
+/** Kacheln, die Punkte samt Rand (`m` Grad) berühren. */
+function tilesNear(points, m) {
   const keys = new Set();
-  for (const p of sample(r, 250)) {
-    for (const dLat of [-m, m]) for (const dLon of [-m, m]) keys.add(tileKey(p.lat + dLat, p.lon + dLon));
+  for (const p of points) {
+    for (const dLat of [-m, 0, m]) for (const dLon of [-m, 0, m]) keys.add(tileKey(p.lat + dLat, p.lon + dLon));
   }
   return [...keys];
 }
+
+/** Alle Kacheln, die die Route samt ~1 km Rand berührt. */
+const routeTiles = r => tilesNear(sample(r, 250), 0.012);
 
 let dbPromise = null;
 function db() {
@@ -194,8 +196,13 @@ async function layerPois(keys, layer, signal, cacheOnly) {
  * Orte der angegebenen Ebenen entlang der Route (Kacheln samt ~1 km Rand).
  * Das Ergebnis-Array trägt `complete` = false, wenn mit `cacheOnly` nicht alle Kacheln vorhanden waren.
  */
-export async function fetchPois(r, signal, layers = ['supply'], { cacheOnly = false } = {}) {
-  const keys = routeTiles(r);
+export const fetchPois = (r, signal, layers = ['supply'], opts = {}) => fetchPoisInTiles(routeTiles(r), signal, layers, opts);
+
+/** Orte der Ebenen rund um einzelne Punkte (`margin` in Grad, z. B. 0,03 ≈ 3 km) – etwa um Etappenenden. */
+export const fetchPoisNear = (points, signal, layers, { margin = 0.03, ...opts } = {}) =>
+  fetchPoisInTiles(tilesNear(points, margin), signal, layers, opts);
+
+async function fetchPoisInTiles(keys, signal, layers, { cacheOnly = false } = {}) {
   const parts = await Promise.all(layers.map(l => layerPois(keys, l, signal, cacheOnly)));
   const seen = new Set();
   const out = parts.flatMap(p => p.pois).filter(p => !seen.has(p.id) && seen.add(p.id));
@@ -227,7 +234,11 @@ function locatePois(r, pois) {
 
 // ---------- Zeitachse ----------
 
-/** Liefert along(m), Anzahl bisheriger Stopps → geschätzte Ankunftszeit. */
+/**
+ * Liefert along(m), Anzahl bisheriger Stopps desselben Tages → geschätzte Ankunftszeit.
+ * Mehrtagestouren: `r.stageStarts` (m) sind die Übernachtungsorte – danach beginnt ein neuer Tag
+ * zur selben Uhrzeit wie die Abfahrt. `fn.dayOf(along)` liefert den Tag (0, 1, …).
+ */
 function timeline(r, departure, bike) {
   // Kumulierter Anstieg je Koordinate, mit derselben Hysterese wie computeStats
   const asc = [];
@@ -240,11 +251,17 @@ function timeline(r, departure, bike) {
     }
     asc.push(total);
   }
-  return (along, stopsBefore) => {
-    const i = indexAt(r, along);
-    const sec = estimateTime(along, asc[i] || 0, bike) + stopsBefore * DWELL_MIN * 60;
-    return new Date(departure.getTime() + sec * 1000);
+  const starts = [0, ...(r.stageStarts || [])];
+  const dayOf = along => { let d = 0; while (d + 1 < starts.length && starts[d + 1] <= along) d++; return d; };
+  const fn = (along, stopsBefore) => {
+    const d = dayOf(along);
+    const from = starts[d];
+    const i = indexAt(r, along), i0 = indexAt(r, from);
+    const sec = estimateTime(along - from, (asc[i] || 0) - (asc[i0] || 0), bike) + stopsBefore * DWELL_MIN * 60;
+    return new Date(departure.getTime() + d * 86400000 + sec * 1000);
   };
+  fn.dayOf = dayOf;
+  return fn;
 }
 
 /** Ankunftszeit an Position `along` (m) einer Route – ohne Pausen. */
@@ -370,13 +387,18 @@ export function withTypicalHours(pois) {
 function plan(r, candidates, { interval, departure, bike, holidayFor }) {
   const eta = timeline(r, departure, bike);
   const stops = [], gaps = [];
+  const stageStarts = r.stageStarts || [];
   let pos = 0;
   while (r.distance - pos > interval) {
     const lo = pos + interval * 0.5, hi = pos + interval;
+    // Übernachtung im Abschnitt: dort wird ohnehin aufgefüllt – am nächsten Morgen neu zählen
+    const night = stageStarts.find(s => s > pos && s <= hi);
+    if (night != null) { pos = night; continue; }
     let best = null;
     for (const c of candidates) {
       if (c.along <= lo || c.along > hi) continue;
-      const t = eta(c.along, stops.length);
+      const day = eta.dayOf(c.along);
+      const t = eta(c.along, stops.filter(s => eta.dayOf(s.along) === day).length);
       const holiday = holidayFor(c.along, t);
       const ev = evaluate(c.poi, t, holiday);
       if (!ev) continue;
@@ -428,28 +450,21 @@ export async function addStops(base, { provider, opts, interval, departure, bike
   if (!stops.length) return { ...base, base, stops: [], gaps, ...info };
 
   // Stopps zwischen die vorhandenen Wegpunkte einsortieren
-  const anchors = shapeAnchors(base);
-  const anchorAlong = locateSequential(base, anchors);
   const points = stops.map(s => ({ lat: s.poi.lat, lon: s.poi.lon, stop: true }));
-  const wps = [];
-  anchors.forEach((a, k) => {
-    wps.push(a);
-    if (k === anchors.length - 1) return;
-    stops.forEach((s, i) => {
-      if (s.along >= anchorAlong[k] && s.along < anchorAlong[k + 1]) wps.push(points[i]);
-    });
-  });
+  const wps = insertWaypoints(base, stops.map((s, i) => ({ along: s.along, point: points[i] })));
 
   const routed = await route(provider, wps, opts, signal);
 
   // Positionen und Ankunftszeiten auf der neuen Route bestimmen
   const along = locateSequential(routed, wps);
+  routed.stageStarts = wps.flatMap((p, i) => (p.stay ? [along[i]] : []));
   const eta = timeline(routed, departure, bike);
   const finalStops = [];
   wps.forEach((p, i) => {
     if (!p.stop) return;
     const s = stops[points.indexOf(p)];
-    const t = eta(along[i], finalStops.length);
+    const day = eta.dayOf(along[i]);
+    const t = eta(along[i], finalStops.filter(f => eta.dayOf(f.along) === day).length);
     // Region aus der Planung (Position auf der Basisroute), Feiertag zur neuen Ankunftszeit
     const region = regionFor(s.along);
     const holiday = lookup?.(region, t) ?? null;
@@ -460,8 +475,30 @@ export async function addStops(base, { provider, opts, interval, departure, bike
       icon: type.icon, typeLabel: type.label, gpxSym: type.gpxSym,
     });
   });
-  return { ...routed, base, stops: finalStops, gaps, ...info };
+  // Mehrtagestour: Übernachtungen und die Route ohne Übernachtungen (origin) weitergeben
+  return { ...routed, base, origin: base.origin, stays: base.stays, stops: finalStops, gaps, ...info };
 }
+
+/**
+ * Zusätzliche Wegpunkte an ihrer Position (`along`, m auf `base`) zwischen die vorhandenen Wegpunkte
+ * einsortieren → neue Wegpunktliste für die Neuberechnung. items: [{along, point}]
+ */
+export function insertWaypoints(base, items) {
+  const anchors = shapeAnchors(base);
+  const anchorAlong = locateSequential(base, anchors);
+  const wps = [];
+  anchors.forEach((a, k) => {
+    wps.push(a);
+    if (k === anchors.length - 1) return;
+    items.filter(it => it.along >= anchorAlong[k] && it.along < anchorAlong[k + 1])
+      .sort((x, y) => x.along - y.along)
+      .forEach(it => wps.push(it.point));
+  });
+  return wps;
+}
+
+/** Position (m) jedes Punkts auf der Route, in Reihenfolge. */
+export const locateOnRoute = locateSequential;
 
 /**
  * Feiertage, die während der Fahrt in durchfahrenen Regionen gelten:

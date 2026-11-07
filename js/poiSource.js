@@ -56,12 +56,30 @@ export const LAYERS = {
   },
 };
 
+// Übernachtung: Hotels, Motels, Pensionen/B&B, Hostels, Zeltplätze (für Mehrtagestouren)
+LAYERS.stay = {
+  statements: b => `
+  nwr["tourism"~"^(hotel|motel|guest_house|hostel|camp_site)$"](${b});`,
+  classify(tags) {
+    if (['private', 'no'].includes(tags.access) || tags.disused === 'yes') return null;
+    if (tags.tourism === 'camp_site') return tags.tents === 'no' ? null : 'camp_site'; // reine Wohnmobilplätze nicht
+    if (['hotel', 'motel', 'guest_house', 'hostel'].includes(tags.tourism)) return tags.tourism;
+    return null;
+  },
+};
+
 export const isLayer = l => Object.hasOwn(LAYERS, l);
+const LAYER_OF_TYPE = {
+  cafe: 'food', restaurant: 'food', bakery: 'food',
+  hotel: 'stay', motel: 'stay', guest_house: 'stay', hostel: 'stay', camp_site: 'stay',
+};
 /** Ebene, zu der ein Ort-Typ gehört. */
-export const layerOfType = type => (['cafe', 'restaurant', 'bakery'].includes(type) ? 'food' : 'supply');
+export const layerOfType = type => LAYER_OF_TYPE[type] || 'supply';
 
 /** Nur die Tags, die für Auswahl, Anzeige und GPX gebraucht werden (hält die Caches klein). */
-const KEEP_TAGS = ['opening_hours', 'seasonal', 'fee', 'brand'];
+const KEEP_TAGS = ['opening_hours', 'seasonal', 'fee', 'brand',
+  // Unterkünfte: Sterne, Preisangaben (Freitext), Webseite, Ort für die Preissuche
+  'stars', 'charge', 'website', 'contact:website', 'addr:city', 'addr:place', 'addr:postcode'];
 
 const sleep = (ms, signal) => new Promise((resolve, reject) => {
   const t = setTimeout(resolve, ms);

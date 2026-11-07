@@ -14,7 +14,16 @@ export function toGpx(route, name) {
     <sym>Flag, Blue</sym>
   </wpt>
 `).join('');
-  const wpts = vias + (route.stops || []).map(s => {
+  // Übernachtungen einer Mehrtagestour
+  const stays = (route.stays?.nights || []).filter(n => n.chosen).map(n => {
+    const p = n.chosen.poi;
+    return `  <wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}">
+    <name>${escapeXml(`Nacht ${n.index + 1}: ${p.name || 'Unterkunft'}`)}</name>
+    <sym>${p.type === 'camp_site' ? 'Campground' : 'Lodging'}</sym>
+  </wpt>
+`;
+  }).join('');
+  const wpts = vias + stays + (route.stops || []).map(s => {
     const name = `${s.typeLabel}${s.poi.name ? ': ' + s.poi.name : ''}`;
     return `  <wpt lat="${s.poi.lat.toFixed(6)}" lon="${s.poi.lon.toFixed(6)}">
     <name>${escapeXml(name)}</name>${hours(s) ? `
