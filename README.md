@@ -29,7 +29,9 @@ Alternativ geht jeder statische Server, er muss aber **im Projektordner** gestar
 
 Über `npm start` liefert der Server zusätzlich `POST /api/pois`: Supermärkte, Tankstellen und Trinkwasserstellen inkl. Öffnungszeiten werden je Kachel (≈ 11 × 7 km) im Ordner `cache/pois/` gespeichert. Gültigkeit 30 Tage (änderbar mit `POI_TTL_DAYS`). Danach wird der alte Stand sofort ausgeliefert und im Hintergrund erneuert. Overpass wird nur noch für noch nie geladene Gegenden abgefragt.
 
-Eine Region lässt sich vorab laden, z. B. 60 km um einen Ort:
+**Heimatregion auf Vorrat:** Speichert jemand in den Einstellungen eine Heimatadresse, lädt der Server alle Kacheln im Umkreis von 200 km (≈ 1.900 Kacheln) in den gemeinsamen Cache – sie stehen danach allen Nutzern des Servers zur Verfügung ([server/warmQueue.mjs](server/warmQueue.mjs)). Übermittelt werden nur auf ~10 km gerundete Koordinaten, nie die Adresse. Der Abruf läuft im Hintergrund nacheinander mit Pausen (Routenanfragen haben Vorrang), nahe Kacheln zuerst, und dauert je nach Overpass-Last etwa 30–90 Minuten. Die Warteschlange (`cache/warm-queue.json`) überlebt Neustarts. Schutz: höchstens 3 neue Regionen je Nutzer und Tag, 20 wartende Regionen insgesamt, nahe beieinander liegende Heimatorte (≤ 30 km) zählen als eine Region. Den Fortschritt zeigt der Einstellungsdialog.
+
+Eine beliebige Region lässt sich auch manuell vorab laden, z. B. 60 km um einen Ort:
 
 ```sh
 npm run warm -- 53.07 8.80 60

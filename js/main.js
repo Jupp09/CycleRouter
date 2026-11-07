@@ -632,6 +632,67 @@ $('#btn-home-clear').addEventListener('click', () => {
   homeInput.focus();
 });
 
+// ---------- Vorrat für die Heimatregion (Server) ----------
+// Der Server (server.mjs) lädt Verpflegungsstellen im Umkreis von 200 km um den Heimatort in seinen
+// gemeinsamen Cache. Übermittelt werden nur auf ~10 km gerundete Koordinaten – nie die Adresse.
+
+const WARM_API = new URL('api/warm', document.baseURI);
+const WARM_RESEND = 7 * 24 * 3600 * 1000;
+const round1 = v => Math.round(v * 10) / 10;
+const fmtInt = n => n.toLocaleString('de-DE');
+
+/** Ruft /api/warm auf; null, wenn kein Server-Cache verfügbar ist (statisches Hosting). */
+async function warmApi(method, home) {
+  const lat = round1(home.lat), lon = round1(home.lon);
+  try {
+    const res = method === 'GET'
+      ? await fetch(`${WARM_API}?lat=${lat}&lon=${lon}`)
+      : await fetch(WARM_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lat, lon }) });
+    if (!res.ok || !res.headers.get('content-type')?.includes('json')) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+function warmMessage(d) {
+  const have = `${fmtInt(d.total - d.missing)} von ${fmtInt(d.total)} Kacheln vorhanden`;
+  const region = `Verpflegungsstellen im Umkreis von ${d.radiusKm} km um die Heimat`;
+  if (!d.missing || d.status === 'complete') return `${region} sind auf dem Server vorrätig (${fmtInt(d.total)} Kacheln).`;
+  if (d.status === 'rate-limited') return `Vorladen der Heimatregion wurde heute schon zu oft angefordert – bitte morgen erneut speichern (${have}).`;
+  if (d.status === 'full') return `Der Server lädt gerade viele Regionen vor – bitte später erneut speichern (${have}).`;
+  if (d.queued) {
+    const where = d.position > 1 ? `warten in der Warteschlange (Platz ${d.position})` : 'werden gerade im Hintergrund geladen';
+    return `${region} ${where} – ${have}.`;
+  }
+  return `${region}: ${have}.`;
+}
+
+/** Heimatregion beim Server vormerken – höchstens einmal pro Woche, außer bei neuer Heimat. */
+async function sendHomeToServer(home, { force = false } = {}) {
+  const key = `${round1(home.lat)},${round1(home.lon)}`;
+  const last = storage.get('homeWarm', null);
+  if (!force && last?.key === key && Date.now() - last.t < WARM_RESEND) return null;
+  const data = await warmApi('POST', home);
+  if (data) storage.set('homeWarm', { key, t: Date.now() });
+  return data;
+}
+
+async function showWarmStatus() {
+  const el = $('#home-warm-hint');
+  const home = getHome();
+  el.hidden = true;
+  if (!home) return;
+  const data = await warmApi('GET', home);
+  if (!data || getHome()?.label !== home.label) return; // Dialog inzwischen mit anderer Heimat gespeichert
+  el.textContent = warmMessage(data);
+  el.hidden = false;
+}
+
+/** Kurzer Hinweis in der Statuszeile, der nach einigen Sekunden verschwindet (wenn nichts anderes läuft). */
+function flashStatus(text) {
+  setStatus(text);
+  setTimeout(() => { if (ui.status.textContent === text) setStatus(null); }, 10000);
+}
+
 // ---------- Einstellungen ----------
 
 const dialog = $('#settings-dialog');
@@ -640,17 +701,25 @@ $('#btn-settings').addEventListener('click', () => {
   pendingHome = getHome();
   homeInput.value = pendingHome?.label || '';
   $('#btn-home-from-start').disabled = !state.start;
+  showWarmStatus();
   dialog.showModal();
 });
-dialog.addEventListener('close', () => {
+dialog.addEventListener('close', async () => {
   if (dialog.returnValue !== 'save') return;
   storage.set('orsKey', $('#ors-key').value.trim());
   // Leeres Feld = Heimatadresse entfernen
+  const before = getHome();
   const home = homeInput.value.trim() ? pendingHome : null;
   storage.set('home', home);
   syncHomeButton();
   if (home && !state.start) useHomeAsStart();
   if (state.provider === 'ors') recalc();
+
+  const changed = home && (!before || round1(before.lat) !== round1(home.lat) || round1(before.lon) !== round1(home.lon));
+  if (changed) {
+    const data = await sendHomeToServer(home, { force: true });
+    if (data && !state.route) flashStatus(warmMessage(data));
+  }
 });
 
 syncUi();
@@ -664,4 +733,6 @@ if (home) {
   ui.startInput.value = home.label;
   map.flyTo(home);
   updateMarkers();
+  // z. B. wenn die Heimat gespeichert wurde, bevor der Server-Cache existierte – höchstens wöchentlich
+  sendHomeToServer(home);
 }

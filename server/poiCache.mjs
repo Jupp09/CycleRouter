@@ -1,10 +1,10 @@
 // Datei-Cache für Verpflegungsstellen je Kachel (Supermärkte, Tankstellen, Trinkwasser inkl. Öffnungszeiten).
 // Die Daten ändern sich selten, Overpass ist dagegen oft langsam – deshalb lange Gültigkeit und
 // „stale-while-revalidate“: Abgelaufene Kacheln werden sofort ausgeliefert und im Hintergrund erneuert.
-import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchTilesFromOverpass } from '../js/poiSource.js';
+import { fetchTilesFromOverpass, TILE, tileKey } from '../js/poiSource.js';
 
 const DIR = fileURLToPath(new URL('../cache/pois/', import.meta.url));
 const DAY = 24 * 3600 * 1000;
@@ -32,13 +32,25 @@ async function writeTile(key, pois) {
   await rename(tmp, file(key)); // atomar, damit parallele Leser keine halbe Datei sehen
 }
 
+// Overpass erlaubt je Absender nur wenige gleichzeitige Abfragen – mehr führt zu Ablehnungen (429)
+const MAX_PARALLEL = 2;
+let running = 0;
+const waiting = [];
+async function limited(fn) {
+  if (running >= MAX_PARALLEL) await new Promise(r => waiting.push(r));
+  running++;
+  try { return await fn(); } finally { running--; waiting.shift()?.(); }
+}
+
 /** Startet Overpass-Abfragen für Kacheln, die nicht schon geladen werden. */
 function startFetch(keys, log) {
   const todo = keys.filter(k => !inflight.has(k));
   for (let i = 0; i < todo.length; i += CHUNK) {
     const chunk = todo.slice(i, i + CHUNK);
-    const t0 = Date.now();
-    const p = fetchTilesFromOverpass(chunk, { headers: HEADERS }).then(async tiles => {
+    const p = limited(async () => {
+      const t0 = Date.now();
+      return [await fetchTilesFromOverpass(chunk, { headers: HEADERS }), t0];
+    }).then(async ([tiles, t0]) => {
       await Promise.all([...tiles].map(([k, pois]) => writeTile(k, pois)));
       log?.(`Overpass: ${chunk.length} Kacheln in ${((Date.now() - t0) / 1000).toFixed(1)} s geladen`);
       return tiles;
@@ -50,6 +62,36 @@ function startFetch(keys, log) {
     }
   }
   return keys.map(k => inflight.get(k));
+}
+
+/** Laufen gerade Overpass-Abfragen (z. B. für Routen von Nutzern)? */
+export const isBusy = () => inflight.size > 0;
+
+/** Lädt Kacheln von Overpass in den Cache und wartet darauf. */
+export const fetchTiles = (keys, log) => Promise.all(startFetch(keys, log));
+
+/** Kacheln im Umkreis, sortiert nach Entfernung vom Mittelpunkt (nahe zuerst). */
+export function tilesAround(lat, lon, radiusKm) {
+  const cos = Math.cos(lat * Math.PI / 180);
+  const dLat = radiusKm / 111 + TILE, dLon = radiusKm / (111 * cos) + TILE;
+  const dist = new Map();
+  for (let a = lat - dLat; a <= lat + dLat; a += TILE / 2) {
+    for (let o = lon - dLon; o <= lon + dLon; o += TILE / 2) {
+      const km = Math.hypot((a - lat) * 111, (o - lon) * 111 * cos);
+      const k = tileKey(a, o);
+      if (km <= radiusKm + 8 && !(dist.get(k) <= km)) dist.set(k, km);
+    }
+  }
+  return [...dist].sort((x, y) => x[1] - y[1]).map(([k]) => k);
+}
+
+/** Kacheln, die fehlen oder abgelaufen sind (nur Dateizeitstempel – schnell auch für tausende Kacheln). */
+export async function tilesNeedingFetch(keys) {
+  const now = Date.now();
+  const need = await Promise.all(keys.map(async k => {
+    try { return now - (await stat(file(k))).mtimeMs >= TTL; } catch { return true; }
+  }));
+  return keys.filter((_, i) => need[i]);
 }
 
 /**

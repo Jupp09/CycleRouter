@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getTiles } from './server/poiCache.mjs';
+import { initWarmQueue, requestWarm, warmStatus, RADIUS_KM } from './server/warmQueue.mjs';
 import { isTileKey } from './js/poiSource.js';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
@@ -56,9 +57,35 @@ async function handlePois(req, res) {
   }
 }
 
+const validPoint = (lat, lon) => Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 85 && Math.abs(lon) <= 180;
+
+/**
+ * Vorrat für die Heimatregion (Umkreis RADIUS_KM).
+ * POST {lat, lon} merkt die Region vor, GET ?lat=&lon= liefert den Fortschritt.
+ * Der Client schickt nur gerundete Koordinaten; geloggt wird nichts Genaueres als der Kachelmittelpunkt.
+ */
+async function handleWarm(req, res, url) {
+  try {
+    if (req.method === 'GET') {
+      const lat = Number(url.searchParams.get('lat')), lon = Number(url.searchParams.get('lon'));
+      if (!validPoint(lat, lon)) return json(res, 400, { error: 'Ungültige Koordinaten' });
+      return json(res, 200, { radiusKm: RADIUS_KM, ...await warmStatus(lat, lon) });
+    }
+    if (req.method !== 'POST') return json(res, 405, { error: 'Nur GET oder POST' });
+    const { lat, lon } = JSON.parse(await readBody(req, 1024));
+    if (!validPoint(lat, lon)) return json(res, 400, { error: 'Ungültige Koordinaten' });
+    const client = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
+    json(res, 200, { radiusKm: RADIUS_KM, ...await requestWarm(lat, lon, client) });
+  } catch (e) {
+    json(res, 400, { error: e.message });
+  }
+}
+
 createServer(async (req, res) => {
-  let path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+  const url = new URL(req.url, 'http://localhost');
+  let path = decodeURIComponent(url.pathname);
   if (path === '/api/pois') return handlePois(req, res);
+  if (path === '/api/warm') return handleWarm(req, res, url);
   if (path.endsWith('/')) path += 'index.html';
   const file = normalize(join(ROOT, path));
   if (!file.startsWith(ROOT.endsWith(sep) ? ROOT : ROOT + sep) || file.startsWith(join(ROOT, 'cache'))) {
@@ -72,4 +99,7 @@ createServer(async (req, res) => {
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Nicht gefunden');
   }
-}).listen(PORT, () => console.log(`CycleRouter läuft auf http://localhost:${PORT}`));
+}).listen(PORT, () => {
+  console.log(`CycleRouter läuft auf http://localhost:${PORT}`);
+  initWarmQueue(msg => console.log(msg));
+});
