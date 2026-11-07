@@ -16,7 +16,8 @@ Routenplaner für **Rennrad** und **Gravelbike** auf Basis von OpenStreetMap.
 Reine statische Seite ohne Build-Schritt. Sie muss über einen lokalen Webserver laufen (ES-Module funktionieren nicht über `file://`):
 
 ```sh
-cd C:\Users\Fischbach\Documents\Coding\CycleRouter
+git clone https://github.com/Jupp09/CycleRouter.git
+cd CycleRouter
 npm start
 ```
 
