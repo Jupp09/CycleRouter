@@ -1,7 +1,7 @@
 /**
  * Kleiner Parser für das OSM-Tag `opening_hours`.
  * Unterstützt die häufigen Formen („24/7“, „Mo-Fr 08:00-20:00; Sa 08:00-14:00; Su off“,
- * mehrere Zeitspannen, Spannen über Mitternacht). Feiertagsregeln (PH/SH) werden ignoriert.
+ * mehrere Zeitspannen, Spannen über Mitternacht, Feiertagsregeln „PH“). Schulferien (SH) werden ignoriert.
  * Alles andere (Monate, Wochen, sunrise, Kommentare …) ergibt `null` = unbekannt.
  */
 
@@ -24,7 +24,7 @@ export function parseOpeningHours(value) {
 function parse(value) {
   const src = value.trim().replace(/\s*([-,])\s*/g, '$1');
   if (!src) return null;
-  const week = Array.from({ length: 7 }, () => null);
+  const week = Array.from({ length: 8 }, () => null); // 0–6 = Mo–So, 7 = Feiertag (PH)
   // Regeln: durch ";" oder "||" getrennt; „Mo-Fr 08:00-20:00, Sa 09:00-14:00“ ebenfalls als zwei Regeln
   const rules = src.split(/;|\|\|/).flatMap(r => r.split(new RegExp(`(?<=\\d|off|closed),(?=${DAY}\\b)`)));
   let any = false;
@@ -37,7 +37,7 @@ function parse(value) {
     if (m) {
       days = expandDays(m[1]);
       rule = rule.slice(m[0].length).trim();
-      if (!days.length) continue; // reine Feiertagsregel
+      if (!days.length) continue; // reine Schulferienregel (SH)
     }
     const ranges = parseTimes(rule);
     if (ranges === undefined) return null;
@@ -45,15 +45,16 @@ function parse(value) {
     any = true;
   }
   if (!any) return null;
-  // Tage ohne Regel sind geschlossen, sofern überhaupt Tage genannt wurden
-  return week.map(r => r || []);
+  // Wochentage ohne Regel sind geschlossen; ohne PH-Regel bleibt der Feiertag offen (null)
+  return week.map((r, i) => (i === 7 ? r : r || []));
 }
 
 function expandDays(spec) {
   const out = new Set();
   for (const part of spec.split(',')) {
     const [a, b] = part.split('-');
-    if (a === 'PH' || a === 'SH') continue;
+    if (a === 'PH') { out.add(7); continue; }
+    if (a === 'SH') continue;
     const i = DAYS.indexOf(a), j = b ? DAYS.indexOf(b) : i;
     if (i < 0 || j < 0) continue;
     for (let k = i; ; k = (k + 1) % 7) { out.add(k); if (k === j) break; }
@@ -77,22 +78,27 @@ function parseTimes(text) {
   return ranges;
 }
 
-function openAt(week, date) {
-  const day = (date.getDay() + 6) % 7;
+/** An Feiertagen gilt die PH-Regel, ohne eine solche die Sonntagsregel (in DE/AT/CH üblich). */
+function openAt(week, date, holiday) {
+  const weekday = (date.getDay() + 6) % 7;
+  const day = holiday ? (week[7] ? 7 : 6) : weekday;
   const min = date.getHours() * 60 + date.getMinutes();
-  const prev = (day + 6) % 7;
+  const prev = (weekday + 6) % 7;
   return week[day].some(([s, e]) => min >= s && min < e)
     || week[prev].some(([, e]) => e > 1440 && min < e - 1440);
 }
+
+/** Enthält der Wert eine eigene Feiertagsregel (PH)? */
+export const hasHolidayRule = value => !!(value && parseOpeningHours(value)?.[7]);
 
 /**
  * Ist am Zeitpunkt `date` für mindestens `stayMin` Minuten geöffnet?
  * → 'open' | 'closed' | 'unknown'
  */
-export function openState(value, date, stayMin = 15) {
+export function openState(value, date, stayMin = 15, holiday = false) {
   if (!value) return 'unknown';
   const week = parseOpeningHours(value);
   if (!week) return 'unknown';
   const leave = new Date(date.getTime() + stayMin * 60000);
-  return openAt(week, date) && openAt(week, leave) ? 'open' : 'closed';
+  return openAt(week, date, holiday) && openAt(week, leave, holiday) ? 'open' : 'closed';
 }

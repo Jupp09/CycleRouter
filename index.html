@@ -114,6 +114,7 @@
           <span>Abfahrt</span>
           <input id="departure" type="datetime-local">
         </label>
+        <p class="hint holiday" id="departure-hint" hidden></p>
         <p class="hint">Bevorzugt kostenlose Trinkwasserstellen. Gibt es keine in der Nähe, werden Supermärkte oder Tankstellen gewählt, die bei der geschätzten Ankunft geöffnet haben.</p>
       </div>
     </section>
@@ -139,6 +140,8 @@
       </div>
       <div class="stops" id="stops" hidden>
         <span class="label">Verpflegungsstopps</span>
+        <p class="hint" id="route-regions" hidden></p>
+        <ul class="holiday-notes" id="holiday-notes" hidden></ul>
         <ol class="stop-list" id="stop-list"></ol>
         <p class="hint warn" id="stop-gaps" hidden></p>
       </div>

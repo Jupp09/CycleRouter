@@ -1,5 +1,7 @@
-import { estimateTime } from './utils.js';
-import { openState } from './openingHours.js';
+import { estimateTime, sampleRoute, indexAtDistance } from './utils.js';
+import { openState, hasHolidayRule } from './openingHours.js';
+import { regionsAlong, regionAtDistance } from './regions.js';
+import { holidayLookup } from './holidays.js';
 import { route } from './routing/index.js';
 
 /**
@@ -31,6 +33,7 @@ export const STATE_LABELS = {
   unknown: 'Öffnungszeiten unbekannt',
   unlikely: 'Öffnungszeiten unbekannt – sonntags/nachts evtl. zu',
   closed: 'bei Ankunft evtl. geschlossen',
+  openHoliday: 'Feiertag – laut Sonntagszeiten geöffnet',
 };
 
 // ---------- Geometrie ----------
@@ -42,28 +45,8 @@ function approxDist(aLat, aLon, bLat, bLon) {
   return Math.hypot(dx, dy);
 }
 
-/** Punkte entlang der Route im Abstand von etwa `step` m: [{lat, lon, along}] */
-function sample(r, step) {
-  const out = [];
-  let next = 0;
-  r.coords.forEach((c, i) => {
-    if (r.cum[i] >= next || i === r.coords.length - 1) {
-      out.push({ lat: c[0], lon: c[1], along: r.cum[i] });
-      next = r.cum[i] + step;
-    }
-  });
-  return out;
-}
-
-/** Index der Koordinate an Position `along` (binäre Suche in r.cum). */
-function indexAt(r, along) {
-  let lo = 0, hi = r.cum.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (r.cum[mid] < along) lo = mid + 1; else hi = mid;
-  }
-  return lo;
-}
+const sample = sampleRoute;
+const indexAt = indexAtDistance;
 
 /**
  * Position (m ab Start) jedes Punkts auf der Route, in Reihenfolge der Punkte.
@@ -293,10 +276,13 @@ function timeline(r, departure, bike) {
   };
 }
 
-/** Bewertung einer Stelle zur Ankunftszeit → {tier, state} oder null (geschlossen). Kleinerer tier = besser. */
-function evaluate(poi, eta) {
+/**
+ * Bewertung einer Stelle zur Ankunftszeit → {tier, state} oder null (geschlossen). Kleinerer tier = besser.
+ * `holiday`: Feiertag am Ort der Stelle zur Ankunftszeit (oder null).
+ */
+function evaluate(poi, eta, holiday) {
   const oh = poi.tags.opening_hours;
-  let st = oh ? openState(oh, eta, DWELL_MIN) : 'unknown';
+  let st = oh ? openState(oh, eta, DWELL_MIN, !!holiday) : 'unknown';
   // Freitext wie „Zur Zeit geschlossen“ / „closed“
   if (st === 'unknown' && oh && /geschlossen|closed|^off$/i.test(oh)) st = 'closed';
   if (st === 'closed') return null;
@@ -308,10 +294,13 @@ function evaluate(poi, eta) {
     return { tier: 0, state: st === 'open' ? 'open' : 'free' };
   }
   const bias = poi.type === 'supermarket' ? 0 : 0.3; // Supermarkt leicht bevorzugt
-  if (st === 'open') return { tier: 1 + bias, state: 'open' };
-  // Läden ohne Angaben haben sonntags und nachts meist geschlossen – nur als letzte Wahl
+  if (st === 'open') {
+    // Feiertag ohne eigene PH-Regel: es wurden die Sonntagszeiten angenommen
+    return holiday && !hasHolidayRule(oh) ? { tier: 1.5 + bias, state: 'openHoliday' } : { tier: 1 + bias, state: 'open' };
+  }
+  // Läden ohne Angaben haben sonn-/feiertags und nachts meist geschlossen – nur als letzte Wahl
   const hour = eta.getHours();
-  if (poi.type !== 'fuel' && (eta.getDay() === 0 || hour < 7 || hour >= 21)) return { tier: 4 + bias, state: 'unlikely' };
+  if (poi.type !== 'fuel' && (holiday || eta.getDay() === 0 || hour < 7 || hour >= 21)) return { tier: 4 + bias, state: 'unlikely' };
   return { tier: 3 + bias, state: 'unknown' };
 }
 
@@ -320,7 +309,7 @@ function evaluate(poi, eta) {
  * Trinkwasser, dann geöffnete Läden/Tankstellen, zuletzt solche mit unbekannten Öffnungszeiten.
  * Innerhalb einer Stufe zählt: möglichst spät im Fenster und nah an der Route.
  */
-function plan(r, candidates, { interval, departure, bike }) {
+function plan(r, candidates, { interval, departure, bike, holidayFor }) {
   const eta = timeline(r, departure, bike);
   const stops = [], gaps = [];
   let pos = 0;
@@ -330,10 +319,11 @@ function plan(r, candidates, { interval, departure, bike }) {
     for (const c of candidates) {
       if (c.along <= lo || c.along > hi) continue;
       const t = eta(c.along, stops.length);
-      const ev = evaluate(c.poi, t);
+      const holiday = holidayFor(c.along, t);
+      const ev = evaluate(c.poi, t, holiday);
       if (!ev) continue;
       const score = ev.tier * 10 - 2 * (c.along - lo) / (hi - lo) + c.offset / MAX_OFFSET[c.poi.type];
-      if (!best || score < best.score) best = { ...c, ...ev, eta: t, score };
+      if (!best || score < best.score) best = { ...c, ...ev, eta: t, holiday, score };
     }
     if (best) { stops.push(best); pos = best.along; }
     else { gaps.push({ from: pos, to: hi }); pos = hi; }
@@ -354,9 +344,28 @@ function shapeAnchors(r) {
  * Ergebnis: neue Route (durch die Stopps) mit `stops`, `gaps` und `base` (Route ohne Stopps).
  */
 export async function addStops(base, { provider, opts, interval, departure, bike, signal }) {
-  const pois = await fetchPois(base, signal);
-  const { stops, gaps } = plan(base, locatePois(base, pois), { interval, departure, bike });
-  if (!stops.length) return { ...base, base, stops: [], gaps };
+  // Stellen, Regionen (Land/Bundesland) und Feiertage parallel laden
+  const [pois, regions] = await Promise.all([
+    fetchPois(base, signal),
+    regionsAlong(base, signal).catch(e => { if (e.name === 'AbortError') throw e; console.warn(e); return null; }),
+  ]);
+  let lookup = null;
+  if (regions) {
+    const arrival = timeline(base, departure, bike)(base.distance, 10);
+    const countries = new Set(regions.map(s => s.country).filter(Boolean));
+    lookup = await holidayLookup(countries, departure, arrival, signal)
+      .catch(e => { if (e.name === 'AbortError') throw e; console.warn(e); return null; });
+  }
+  const regionFor = along => regionAtDistance(regions, along);
+  const holidayFor = (along, date) => lookup?.(regionFor(along), date) ?? null;
+  const info = {
+    regions: regions || [],
+    holidays: lookup ? holidayNotes(base, regions, lookup, departure, bike) : [],
+    holidayCheck: !!lookup, // false = Feiertage konnten nicht geprüft werden
+  };
+
+  const { stops, gaps } = plan(base, locatePois(base, pois), { interval, departure, bike, holidayFor });
+  if (!stops.length) return { ...base, base, stops: [], gaps, ...info };
 
   // Stopps zwischen die vorhandenen Wegpunkte einsortieren
   const anchors = shapeAnchors(base);
@@ -381,12 +390,38 @@ export async function addStops(base, { provider, opts, interval, departure, bike
     if (!p.stop) return;
     const s = stops[points.indexOf(p)];
     const t = eta(along[i], finalStops.length);
-    const ev = evaluate(s.poi, t) || { state: 'closed' };
+    // Region aus der Planung (Position auf der Basisroute), Feiertag zur neuen Ankunftszeit
+    const region = regionFor(s.along);
+    const holiday = lookup?.(region, t) ?? null;
+    const ev = evaluate(s.poi, t, holiday) || { state: 'closed' };
     const type = STOP_TYPES[s.poi.type];
     finalStops.push({
-      ...s, along: along[i], eta: t, state: ev.state, point: p,
+      ...s, along: along[i], eta: t, state: ev.state, point: p, region, holiday,
       icon: type.icon, typeLabel: type.label, gpxSym: type.gpxSym,
     });
   });
-  return { ...routed, base, stops: finalStops, gaps };
+  return { ...routed, base, stops: finalStops, gaps, ...info };
+}
+
+/**
+ * Feiertage, die während der Fahrt in durchfahrenen Regionen gelten:
+ * [{date, name, national, regions: [Abschnitt, …]}]
+ */
+function holidayNotes(r, regions, lookup, departure, bike) {
+  const eta = timeline(r, departure, bike);
+  const notes = new Map();
+  regions.forEach((seg, i) => {
+    if (!seg.country) return;
+    const to = regions[i + 1]?.from ?? r.distance;
+    // Ankunfts- und Abfahrtstag im Abschnitt (bei Touren über Mitternacht zwei Tage)
+    for (const t of [eta(seg.from, 0), eta(to, 0)]) {
+      const h = lookup(seg, t);
+      if (!h) continue;
+      const key = `${h.date}|${h.name}`;
+      const note = notes.get(key) || { ...h, regions: [] };
+      if (!note.regions.some(x => x.country === seg.country && x.region === seg.region)) note.regions.push(seg);
+      notes.set(key, note);
+    }
+  });
+  return [...notes.values()];
 }

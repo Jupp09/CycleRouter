@@ -6,6 +6,8 @@ import { createElevation } from './elevation.js';
 import { downloadGpx } from './gpx.js';
 import { summarize, estimatedShare } from './surfaces.js';
 import { addStops, STATE_LABELS, DWELL_MIN } from './stops.js';
+import { regionAt, regionLabel } from './regions.js';
+import { holidayAt } from './holidays.js';
 import { storage, newSeed, seededRandom, estimateTime, formatKm, formatM, formatDuration } from './utils.js';
 
 const $ = sel => document.querySelector(sel);
@@ -171,6 +173,8 @@ function stopPopup(s) {
     `Ankunft ca. ${formatDay(s.eta)} ${formatClock(s.eta)} – ${STATE_LABELS[s.state]}`,
   ];
   if (s.poi.tags.opening_hours) lines.push(`Öffnungszeiten: ${s.poi.tags.opening_hours}`);
+  if (s.region) lines.push(regionLabel(s.region, homeCountry()));
+  if (s.holiday) lines.push(`🎉 Feiertag: ${s.holiday.name}`);
   el.append(title, ...lines.map(t => { const d = document.createElement('div'); d.textContent = t; return d; }));
   const link = document.createElement('a');
   link.href = `https://www.openstreetmap.org/${s.poi.id}`;
@@ -181,7 +185,58 @@ function stopPopup(s) {
   return el;
 }
 
-const isWarn = s => ['unknown', 'unlikely', 'seasonal', 'closed'].includes(s.state);
+const isWarn = s => ['unknown', 'unlikely', 'seasonal', 'closed', 'openHoliday'].includes(s.state);
+
+/** Land, in dem die Route beginnt – Regionen dort ohne Länderzusatz anzeigen. */
+const homeCountry = () => state.route?.regions?.find(s => s.country)?.country || 'DE';
+
+const formatDate = iso => new Date(iso + 'T12:00').toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+
+function renderRegions(r) {
+  const regionsEl = $('#route-regions');
+  const segs = (r.regions || []).filter(s => s.country);
+  const home = homeCountry();
+  // Grenzübertritte nur anzeigen, wenn es welche gibt
+  regionsEl.hidden = segs.length < 2;
+  regionsEl.textContent = segs.length < 2 ? '' : 'Route durch: ' + segs.map((s, i) =>
+    `${regionLabel(s, home)}${i ? ` (ab km ${Math.round(s.from / 1000)})` : ''}`).join(' → ');
+
+  const notes = $('#holiday-notes');
+  const items = (r.holidays || []).map(h => {
+    const li = document.createElement('li');
+    const where = h.national && new Set(h.regions.map(s => s.country)).size === 1
+      ? h.regions[0].countryName
+      : h.regions.map(s => regionLabel(s, home)).join(', ');
+    li.textContent = `🎉 ${formatDate(h.date)}: ${h.name} – Feiertag in ${where}. Läden haben meist geschlossen; Trinkwasser und Tankstellen werden bevorzugt.`;
+    return li;
+  });
+  if (r.holidayCheck === false) {
+    const li = document.createElement('li');
+    li.textContent = 'Feiertage konnten nicht geprüft werden (Regionen bzw. Feiertagsdaten nicht erreichbar).';
+    items.push(li);
+  }
+  notes.replaceChildren(...items);
+  notes.hidden = !items.length;
+}
+
+/** Hinweis unter der Abfahrtszeit, wenn am Startort an diesem Tag ein Feiertag ist. */
+let hintRequest = 0;
+async function updateDepartureHint() {
+  const el = $('#departure-hint');
+  const id = ++hintRequest;
+  const date = new Date(state.supply.departure);
+  if (!state.supply.enabled || !state.start || isNaN(date)) { el.hidden = true; return; }
+  try {
+    const region = await regionAt(state.start);
+    const h = await holidayAt(region, date);
+    if (id !== hintRequest) return;
+    el.hidden = !h;
+    if (h) el.textContent = `🎉 ${formatDate(h.date)} ist ${h.name} – Feiertag in ${h.national ? region.countryName : regionLabel(region, region.country)}. Läden haben meist geschlossen.`;
+  } catch (e) {
+    console.warn(e);
+    if (id === hintRequest) el.hidden = true;
+  }
+}
 
 function renderStops() {
   const r = state.route;
@@ -193,6 +248,7 @@ function renderStops() {
   const box = $('#stops');
   box.hidden = !r || !r.stops;
   if (box.hidden) return;
+  renderRegions(r);
 
   $('#stop-list').replaceChildren(...stops.map(s => {
     const li = document.createElement('li');
@@ -205,7 +261,7 @@ function renderStops() {
     name.className = 'name';
     name.textContent = s.poi.name || s.typeLabel;
     const detail = document.createElement('small');
-    detail.textContent = `${s.poi.name ? s.typeLabel + ' · ' : ''}${STATE_LABELS[s.state]}`;
+    detail.textContent = `${s.poi.name ? s.typeLabel + ' · ' : ''}${STATE_LABELS[s.state]}${s.holiday ? ` · 🎉 ${s.holiday.name}` : ''}`;
     if (isWarn(s)) detail.className = 'warn';
     main.append(name, detail);
     const when = document.createElement('div');
@@ -342,6 +398,7 @@ async function setPoint(which, point, { label, silent = false } = {}) {
   const input = which === 'start' ? ui.startInput : ui.endInput;
   const p = { lat: point.lat, lon: point.lon, label: label || '' };
   state[which] = p;
+  if (which === 'start') updateDepartureHint();
   input.value = label || 'Ort wird ermittelt …';
   if (!label) reverse(p).then(l => { if (state[which] === p) { p.label = l; input.value = l; } });
   if (silent) return;
@@ -450,6 +507,7 @@ $('#supply-enabled').addEventListener('change', e => {
   state.supply.enabled = e.target.checked;
   storage.set('supplyEnabled', state.supply.enabled);
   syncUi();
+  updateDepartureHint();
   replanStops();
 });
 $('#supply-interval').addEventListener('change', e => {
@@ -462,6 +520,7 @@ $('#supply-interval').addEventListener('change', e => {
 $('#departure').addEventListener('change', e => {
   state.supply.departure = e.target.value || defaultDeparture();
   syncUi();
+  updateDepartureHint();
   if (state.supply.enabled) replanStops();
 });
 
@@ -479,6 +538,7 @@ $('#btn-reroll').addEventListener('click', () => { state.seed = newSeed(); gener
 
 $('#btn-swap').addEventListener('click', () => {
   [state.start, state.end] = [state.end, state.start];
+  updateDepartureHint();
   ui.startInput.value = state.start?.label || '';
   ui.endInput.value = state.end?.label || '';
   calcAB();
@@ -568,6 +628,7 @@ syncHomeButton();
 const home = getHome();
 if (home) {
   state.start = { lat: home.lat, lon: home.lon, label: home.label };
+  updateDepartureHint();
   ui.startInput.value = home.label;
   map.flyTo(home);
   updateMarkers();

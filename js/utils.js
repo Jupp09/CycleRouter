@@ -54,6 +54,29 @@ export function computeStats(coords) {
   return { cum, distance: cum[cum.length - 1] || 0, ascent: Math.round(ascent), descent: Math.round(descent) };
 }
 
+/** Punkte entlang einer Route im Abstand von etwa `step` m (inkl. Endpunkt): [{lat, lon, along}] */
+export function sampleRoute(r, step) {
+  const out = [];
+  let next = 0;
+  r.coords.forEach((c, i) => {
+    if (r.cum[i] >= next || i === r.coords.length - 1) {
+      out.push({ lat: c[0], lon: c[1], along: r.cum[i] });
+      next = r.cum[i] + step;
+    }
+  });
+  return out;
+}
+
+/** Index der Routenkoordinate an Position `along` (m ab Start, binäre Suche in r.cum). */
+export function indexAtDistance(r, along) {
+  let lo = 0, hi = r.cum.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (r.cum[mid] < along) lo = mid + 1; else hi = mid;
+  }
+  return lo;
+}
+
 /** Geschätzte Fahrzeit in Sekunden. */
 export function estimateTime(distance, ascent, bike) {
   const speed = bike === 'gravel' ? 20 : 27;     // km/h in der Ebene
