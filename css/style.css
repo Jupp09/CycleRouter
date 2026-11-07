@@ -103,6 +103,7 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px v
 .suggestions li { padding: 7px 8px; border-radius: 6px; cursor: pointer; }
 .suggestions li small { display: block; color: var(--muted); font-size: 12px; }
 .suggestions li:hover, .suggestions li.active { background: var(--accent-soft); }
+.suggestions li.notice { color: var(--muted); font-size: 12px; }
 
 button {
   padding: 8px 12px;
