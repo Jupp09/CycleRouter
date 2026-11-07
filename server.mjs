@@ -1,5 +1,6 @@
-// Minimaler Server für CycleRouter – liefert immer diesen Ordner aus, egal von wo gestartet.
-// Zusätzlich: POST /api/pois – Verpflegungsstellen je Kachel aus dem Datei-Cache (server/poiCache.mjs).
+// Server für CycleRouter – liefert die App aus (nur öffentliche Dateien, siehe PUBLIC), egal von wo gestartet.
+// Zusätzlich: POST /api/pois – Verpflegungsstellen je Kachel aus dem Datei-Cache (server/poiCache.mjs),
+// /api/warm – Vorrat für Heimatregionen, /api/account|settings|routes|shared – Konten (server/accountApi.mjs).
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
@@ -7,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { getTiles } from './server/poiCache.mjs';
 import { initWarmQueue, requestWarm, warmStatus, RADIUS_KM } from './server/warmQueue.mjs';
 import { isTileKey, isLayer } from './js/poiSource.js';
+import { initDb } from './server/db.mjs';
+import { handleAccountApi } from './server/accountApi.mjs';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 8000;
@@ -86,15 +89,23 @@ async function handleWarm(req, res, url) {
   }
 }
 
+/**
+ * Nur diese Dateien/Ordner werden ausgeliefert – alles andere im Projektordner (.env mit Zugangsdaten,
+ * server/, node_modules/, cache/, package.json …) bleibt privat.
+ */
+const PUBLIC = [/^\/index\.html$/, /^\/(js|css|profiles)\/[\w./-]+$/];
+
 createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  let path = decodeURIComponent(url.pathname);
+  let path;
+  try { path = decodeURIComponent(url.pathname); } catch { res.writeHead(400).end(); return; }
   if (path === '/api/pois') return handlePois(req, res);
   if (path === '/api/warm') return handleWarm(req, res, url);
-  if (path.endsWith('/')) path += 'index.html';
+  if (await handleAccountApi(req, res, url)) return;
+  if (path === '/') path = '/index.html';
   const file = normalize(join(ROOT, path));
-  if (!file.startsWith(ROOT.endsWith(sep) ? ROOT : ROOT + sep) || file.startsWith(join(ROOT, 'cache'))) {
-    res.writeHead(403).end();
+  if (!PUBLIC.some(re => re.test(path)) || path.includes('..') || !file.startsWith(ROOT.endsWith(sep) ? ROOT : ROOT + sep)) {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Nicht gefunden');
     return;
   }
   try {
@@ -107,4 +118,5 @@ createServer(async (req, res) => {
 }).listen(PORT, () => {
   console.log(`CycleRouter läuft auf http://localhost:${PORT}`);
   initWarmQueue(msg => console.log(msg));
+  initDb(msg => console.log(msg));
 });

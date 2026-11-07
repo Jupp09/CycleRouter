@@ -2,10 +2,13 @@
   "name": "cyclerouter",
   "version": "1.0.0",
   "private": true,
-  "description": "Routenplaner für Rennrad und Gravelbike",
+  "description": "Routenplaner für Rennrad, Gravelbike und Fahrrad",
   "type": "module",
   "scripts": {
-    "start": "node server.mjs",
-    "warm": "node server/warm.mjs"
+    "start": "node --env-file-if-exists=.env server.mjs",
+    "warm": "node --env-file-if-exists=.env server/warm.mjs"
+  },
+  "dependencies": {
+    "mariadb": "3.5.4"
   }
 }

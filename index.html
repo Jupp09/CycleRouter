@@ -173,8 +173,19 @@
         <button id="btn-clear">Löschen</button>
       </div>
       <p class="hint" id="gpx-hint" hidden></p>
+      <div class="actions" id="save-actions" hidden>
+        <button id="btn-save-route" title="In „Meine Routen“ speichern – auf allen deinen Geräten verfügbar">Route speichern</button>
+        <button id="btn-share-link" title="Link erzeugen, über den andere (oder dein Handy) die Route öffnen können">Link teilen</button>
+      </div>
+      <p class="hint" id="save-hint" hidden></p>
       <p class="hint">Marker auf der Karte lassen sich verschieben – die Route wird dann neu berechnet.</p>
     </section>
+
+    <details class="group my-routes" id="my-routes" hidden>
+      <summary>Meine Routen <span class="count" id="my-routes-count"></span></summary>
+      <ul class="route-list" id="my-routes-list"></ul>
+      <p class="hint" id="my-routes-empty" hidden>Noch keine Routen gespeichert – nach dem Berechnen „Route speichern“ wählen.</p>
+    </details>
 
     <footer class="panel-footer">
       <label class="field inline">
@@ -197,6 +208,31 @@
   <dialog id="settings-dialog">
     <form method="dialog">
       <h2>Einstellungen</h2>
+      <section class="account" id="account-box" hidden>
+        <span class="label">Konto</span>
+        <div id="account-out" class="account-form">
+          <input id="account-user" type="text" placeholder="Benutzername" autocomplete="username" autocapitalize="none" spellcheck="false">
+          <input id="account-pass" type="password" placeholder="Passwort (mind. 8 Zeichen)" autocomplete="current-password">
+          <div class="actions">
+            <button type="button" id="btn-login" class="primary">Anmelden</button>
+            <button type="button" id="btn-register">Registrieren</button>
+          </div>
+        </div>
+        <div id="account-in" class="account-in" hidden>
+          <span>Angemeldet als <b id="account-name"></b></span>
+          <button type="button" id="btn-logout">Abmelden</button>
+        </div>
+        <p class="hint" id="account-msg"></p>
+        <p class="hint" id="account-info">Mit Konto werden Einstellungen und gespeicherte Routen zwischen deinen Geräten abgeglichen. Der ORS-API-Key bleibt nur auf diesem Gerät.</p>
+        <button type="button" class="link-btn" id="btn-delete-account" hidden>Konto und alle gespeicherten Routen löschen …</button>
+        <div id="account-delete" class="account-form" hidden>
+          <input id="account-delete-pass" type="password" placeholder="Passwort zur Bestätigung" autocomplete="current-password">
+          <div class="actions">
+            <button type="button" id="btn-delete-confirm" class="danger">Endgültig löschen</button>
+            <button type="button" id="btn-delete-cancel">Abbrechen</button>
+          </div>
+        </div>
+      </section>
       <div class="field">
         <span class="label">Heimatadresse</span>
         <div class="search">

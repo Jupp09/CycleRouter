@@ -219,6 +219,30 @@ input[type="datetime-local"] {
 .along-list .km { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
 .along-list .add { width: 30px; height: 30px; padding: 0; font-weight: 700; }
 
+/* Konto */
+.account { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.account > .label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.account-form { display: flex; flex-direction: column; gap: 6px; }
+.account-in { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.account .hint.error { color: var(--error-text); }
+button.danger { background: var(--error-bg); color: var(--error-text); border-color: var(--error-text); font-weight: 600; }
+
+/* Meine Routen */
+.my-routes summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.my-routes .count { color: var(--muted); font-weight: 400; }
+.route-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+.route-list li {
+  display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center;
+  padding: 6px 6px 6px 10px; border-radius: 8px; background: var(--surface); cursor: pointer; font-size: 13px;
+}
+.route-list li:hover { background: var(--accent-soft); }
+.route-list li.current { outline: 2px solid var(--accent); outline-offset: -2px; }
+.route-list .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.route-list small { display: block; color: var(--muted); font-size: 12px; }
+.route-list .tools { display: flex; gap: 2px; }
+.route-list .tools button { width: 30px; height: 30px; padding: 0; background: transparent; border-color: transparent; font-size: 14px; }
+.route-list .tools button:hover { border-color: var(--border); background: var(--panel); }
+
 .panel-footer { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); }
 
 /* ---------- Map ---------- */

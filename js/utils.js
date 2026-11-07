@@ -119,5 +119,10 @@ export const storage = {
   },
   set(key, value) {
     try { localStorage.setItem('cyclerouter.' + key, JSON.stringify(value)); } catch { /* z. B. privater Modus */ }
+    for (const fn of storageListeners) fn(key, value);
   },
 };
+
+const storageListeners = [];
+/** Benachrichtigung bei jeder gespeicherten Einstellung (z. B. für den Abgleich mit dem Konto). */
+export const onStorageSet = fn => storageListeners.push(fn);

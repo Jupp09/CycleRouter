@@ -39,6 +39,26 @@ npm run warm -- 53.07 8.80 60
 
 Ohne diesen Server (statisch gehostet) fragt der Browser direkt bei Overpass an.
 
+### Konten, gespeicherte Routen und Teilen-Links (optional, MariaDB)
+
+Mit einer MariaDB-Datenbank bietet der Server Benutzerkonten (Benutzername + Passwort). Damit lassen sich:
+
+- **Routen speichern** („Meine Routen“) und auf jedem Gerät exakt so wieder öffnen, wie sie gespeichert wurden,
+- **Teilen-Links** erzeugen – wer den Link öffnet, sieht die Route auch ohne Konto; Links lassen sich zurückziehen,
+- **Einstellungen** (Heimatadresse, Fahrradtyp, Geschwindigkeit, Verpflegung …) zwischen Geräten abgleichen. Der ORS-API-Key bleibt nur auf dem jeweiligen Gerät.
+
+Einrichtung:
+
+```sql
+CREATE DATABASE cyclerouter CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'cyclerouter'@'localhost' IDENTIFIED BY 'ein-sicheres-passwort';
+GRANT ALL ON cyclerouter.* TO 'cyclerouter'@'localhost';
+```
+
+Dann `.env.example` nach `.env` kopieren, die Zugangsdaten eintragen und `npm install` sowie `npm start` ausführen. Die Tabellen legt der Server beim Start selbst an ([server/db.mjs](server/db.mjs)). Ohne `DB_HOST` läuft CycleRouter wie gewohnt ohne Konten.
+
+Sicherheit: Passwörter werden mit scrypt gehasht, Sitzungen laufen über ein HttpOnly-Cookie (in der Datenbank nur als Hash), ändernde Anfragen müssen JSON sein und von derselben Seite kommen, fehlgeschlagene Anmeldungen werden je IP begrenzt. Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Proxy wie Caddy oder nginx) – dann wird das Cookie automatisch als `Secure` gesetzt.
+
 ## Routing
 
 | Dienst | Rennrad | Gravel | Fahrrad (Trekking/Alltag) | Hinweise |
