@@ -270,22 +270,24 @@ async function run(task, { loadingText = 'Route wird berechnet …', fit = true 
   const ctrl = controller = new AbortController();
   setStatus(loadingText, 'loading');
   try {
-    let r = await task(ctrl.signal);
+    const r = await task(ctrl.signal);
     if (ctrl.signal.aborted) return;
-    let warning = null;
-    if (state.supply.enabled) {
-      setStatus('Verpflegungsstopps werden gesucht …', 'loading');
-      try {
-        r = await withSupply(r, ctrl.signal);
-      } catch (e) {
-        if (e.name === 'AbortError') throw e;
-        console.error(e);
-        warning = e.message;
-      }
-      if (ctrl.signal.aborted) return;
-    }
-    setStatus(warning, warning ? 'error' : null);
+    setStatus(null);
     showRoute(r, { fit });
+    if (!state.supply.enabled) return;
+
+    // Route steht schon auf der Karte; Stopps werden nachgeladen und die Route dann durch sie geführt
+    setStatus('Verpflegungsstopps werden gesucht … (die Route ist bereits nutzbar)', 'loading');
+    try {
+      const withStops = await withSupply(r, ctrl.signal);
+      if (ctrl.signal.aborted) return;
+      setStatus(null);
+      showRoute(withStops, { fit: false });
+    } catch (e) {
+      if (e.name === 'AbortError' || ctrl.signal.aborted) return;
+      console.error(e);
+      setStatus(e.message, 'error');
+    }
   } catch (e) {
     if (e.name === 'AbortError') return;
     console.error(e);

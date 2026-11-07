@@ -86,8 +86,6 @@ function locateSequential(r, points) {
 
 // ---------- Overpass ----------
 
-const poiCache = new WeakMap(); // je Routengeometrie
-
 function classify(tags) {
   if (tags.drinking_water === 'no' || ['private', 'no'].includes(tags.access)) return null;
   if (tags.amenity === 'drinking_water' || tags.amenity === 'water_point') return 'water';
@@ -98,25 +96,75 @@ function classify(tags) {
   return null;
 }
 
-/**
- * Rechtecke entlang der Route (je ~10 km Strecke, plus Rand) – für Overpass deutlich günstiger
- * als ein `around` mit langem Polygonzug. Die genaue Entfernung zur Route wird danach lokal geprüft.
- */
-function corridorBoxes(r) {
-  const margin = 0.012; // ≈ 1 km
-  const boxes = [];
-  let box = null, startAlong = 0;
+// ---------- Kachel-Cache ----------
+// Die öffentlichen Overpass-Server haben oft lange Warteschlangen (auch kleine Abfragen dauern dann
+// 30 s). Deshalb werden Stellen pro Kachel (0,1° ≈ 11 × 7 km) dauerhaft im Browser gespeichert und
+// nur fehlende Kacheln abgefragt.
+
+const TILE = 0.1;
+const TILE_TTL = 7 * 24 * 3600 * 1000;
+const memTiles = new Map(); // key → {t, pois}
+
+const tileKey = (lat, lon) => `${Math.floor(lat / TILE)}_${Math.floor(lon / TILE)}`;
+function tileBox(key) {
+  const [i, j] = key.split('_').map(Number);
+  return [i * TILE, j * TILE, (i + 1) * TILE, (j + 1) * TILE].map(v => v.toFixed(4)).join(',');
+}
+
+/** Alle Kacheln, die die Route samt ~1 km Rand berührt. */
+function routeTiles(r) {
+  const m = 0.012;
+  const keys = new Set();
   for (const p of sample(r, 250)) {
-    if (!box || p.along - startAlong > 10000) {
-      if (box) boxes.push(box);
-      box = [p.lat, p.lon, p.lat, p.lon];
-      startAlong = p.along;
-    }
-    box[0] = Math.min(box[0], p.lat); box[1] = Math.min(box[1], p.lon);
-    box[2] = Math.max(box[2], p.lat); box[3] = Math.max(box[3], p.lon);
+    for (const dLat of [-m, m]) for (const dLon of [-m, m]) keys.add(tileKey(p.lat + dLat, p.lon + dLon));
   }
-  if (box) boxes.push(box);
-  return boxes.map(([s, w, n, e]) => [s - margin, w - margin, n + margin, e + margin].map(v => v.toFixed(4)).join(','));
+  return [...keys];
+}
+
+let dbPromise = null;
+function db() {
+  dbPromise ??= new Promise((resolve, reject) => {
+    const req = indexedDB.open('cyclerouter', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('poiTiles');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  }).catch(() => null); // z. B. privater Modus → nur Speicher-Cache
+  return dbPromise;
+}
+
+async function loadTiles(keys) {
+  const now = Date.now();
+  const out = new Map();
+  const fresh = e => e && now - e.t < TILE_TTL;
+  const missing = keys.filter(k => { const e = memTiles.get(k); if (fresh(e)) out.set(k, e.pois); return !fresh(e); });
+  const d = await db();
+  if (!d || !missing.length) return out;
+  await new Promise(resolve => {
+    try {
+      const store = d.transaction('poiTiles').objectStore('poiTiles');
+      let pending = missing.length;
+      for (const k of missing) {
+        const req = store.get(k);
+        req.onsuccess = () => {
+          if (fresh(req.result)) { memTiles.set(k, req.result); out.set(k, req.result.pois); }
+          if (--pending === 0) resolve();
+        };
+        req.onerror = () => { if (--pending === 0) resolve(); };
+      }
+    } catch { resolve(); }
+  });
+  return out;
+}
+
+async function saveTiles(entries) {
+  const t = Date.now();
+  for (const [k, pois] of entries) memTiles.set(k, { t, pois });
+  const d = await db();
+  if (!d) return;
+  try {
+    const store = d.transaction('poiTiles', 'readwrite').objectStore('poiTiles');
+    for (const [k, pois] of entries) store.put({ t, pois }, k);
+  } catch { /* Cache ist optional */ }
 }
 
 const sleep = (ms, signal) => new Promise((resolve, reject) => {
@@ -124,16 +172,24 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
   signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Abgebrochen', 'AbortError')); }, { once: true });
 });
 
+/** Abbruch durch den Aufrufer oder nach `ms` (dann TimeoutError). */
+function withTimeout(signal, ms) {
+  if (!AbortSignal.any || !AbortSignal.timeout) return signal;
+  return signal ? AbortSignal.any([signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms);
+}
+
 async function overpass(query, signal) {
   let lastError;
-  for (const endpoint of OVERPASS) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+  for (const [n, endpoint] of OVERPASS.entries()) {
+    // Hauptserver lehnt bei Überlast sofort ab → mehrfach mit kurzer Pause versuchen
+    const main = n === 0;
+    for (let attempt = 0; attempt < (main ? 5 : 1); attempt++) {
       try {
         const res = await fetch(endpoint, {
           method: 'POST',
           body: 'data=' + encodeURIComponent(query),
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          signal,
+          signal: withTimeout(signal, main ? 90000 : 45000),
         });
         const busy = [429, 502, 503, 504].includes(res.status);
         if (!res.ok) throw Object.assign(new Error(busy ? 'Overpass ist ausgelastet' : `Overpass-Fehler ${res.status}`), { busy });
@@ -144,40 +200,53 @@ async function overpass(query, signal) {
         }
         return json;
       } catch (e) {
-        if (e.name === 'AbortError') throw e;
-        lastError = e;
-        if (!e.busy) break; // anderer Fehler → nächster Server
-        await sleep(2000 * (attempt + 1), signal);
+        if (e.name === 'AbortError' || signal?.aborted) throw e;
+        lastError = e.name === 'TimeoutError' ? new Error('Zeitüberschreitung') : e;
+        if (!e.busy) break; // anderer Fehler oder Timeout → nächster Server
+        await sleep(Math.min(1500 * 2 ** attempt, 6000), signal);
       }
     }
   }
   throw new Error(`Verpflegungsstellen konnten nicht geladen werden (${lastError?.message || 'Netzwerkfehler'}).`);
 }
 
-async function fetchPois(r, signal) {
-  if (poiCache.has(r.coords)) return poiCache.get(r.coords);
+/** Nur die Tags, die für Auswahl, Anzeige und GPX gebraucht werden (hält den Cache klein). */
+const KEEP_TAGS = ['opening_hours', 'seasonal', 'fee'];
 
-  const statements = corridorBoxes(r).map(b => `
+async function fetchPois(r, signal) {
+  const keys = routeTiles(r);
+  const cached = await loadTiles(keys);
+  const missing = keys.filter(k => !cached.has(k));
+  const extra = []; // Flächen, deren Mittelpunkt außerhalb der abgefragten Kacheln liegt
+
+  if (missing.length) {
+    const statements = missing.map(tileBox).map(b => `
   nwr["amenity"~"^(drinking_water|water_point|fuel)$"](${b});
-  nwr["man_made"="water_tap"]["drinking_water"="yes"](${b});
+  node["man_made"="water_tap"]["drinking_water"="yes"](${b});
   nwr["shop"~"^(supermarket|convenience)$"](${b});`).join('');
-  const json = await overpass(`[out:json][timeout:90];(${statements}
+    const json = await overpass(`[out:json][timeout:90];(${statements}
 );
 out center tags;`, signal);
 
+    const fetched = new Map(missing.map(k => [k, []]));
+    const seen = new Set();
+    for (const el of json.elements) {
+      const id = `${el.type}/${el.id}`;
+      const tags = el.tags || {};
+      const type = classify(tags);
+      const lat = el.lat ?? el.center?.lat, lon = el.lon ?? el.center?.lon;
+      if (!type || lat == null || seen.has(id)) continue;
+      seen.add(id);
+      const keep = Object.fromEntries(KEEP_TAGS.filter(t => tags[t]).map(t => [t, tags[t]]));
+      const poi = { id, type, lat, lon, tags: keep, name: tags.name || tags.brand || '' };
+      (fetched.get(tileKey(lat, lon)) || extra).push(poi);
+    }
+    await saveTiles(fetched);
+    for (const [k, pois] of fetched) cached.set(k, pois);
+  }
+
   const seen = new Set();
-  const pois = json.elements.map(el => {
-    const id = `${el.type}/${el.id}`;
-    if (seen.has(id)) return null; // überlappende Rechtecke
-    seen.add(id);
-    const tags = el.tags || {};
-    const type = classify(tags);
-    const lat = el.lat ?? el.center?.lat, lon = el.lon ?? el.center?.lon;
-    if (!type || lat == null) return null;
-    return { id, type, lat, lon, tags, name: tags.name || tags.brand || '' };
-  }).filter(Boolean);
-  poiCache.set(r.coords, pois);
-  return pois;
+  return [...cached.values(), extra].flat().filter(p => !seen.has(p.id) && seen.add(p.id));
 }
 
 /** Jede Stelle wird an jeder Passage der Route (z. B. Hin- und Rückweg) einmal Kandidat. */
