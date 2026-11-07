@@ -6,9 +6,10 @@ import { createElevation } from './elevation.js';
 import { downloadGpx } from './gpx.js';
 import { summarize, estimatedShare, longDistanceShare } from './surfaces.js';
 import { addStops, STATE_LABELS, DWELL_MIN } from './stops.js';
+import { PLACE_CATEGORIES, searchAlongRoute } from './placeSearch.js';
 import { regionAt, regionLabel } from './regions.js';
 import { holidayAt } from './holidays.js';
-import { storage, newSeed, seededRandom, estimateTime, formatKm, formatM, formatDuration } from './utils.js';
+import { storage, newSeed, seededRandom, estimateTime, formatKm, formatM, formatDuration, haversine, debounce } from './utils.js';
 
 const $ = sel => document.querySelector(sel);
 const MODE_LABELS = { ab: 'Route', distance: 'Strecke', loop: 'Rundkurs' };
@@ -30,6 +31,7 @@ const state = {
   },
   start: null, // {lat, lon, label}
   end: null,
+  vias: [], // A→B-Zwischenstopps: {lat, lon, label, manual: true, icon?} – lat null = noch nicht gewählt
   seed: newSeed(),
   route: null,
 };
@@ -112,16 +114,25 @@ function updateMarkers() {
     const wps = isLoop(r) ? r.waypoints.slice(0, -1) : r.waypoints;
     const last = r.waypoints.length - 1;
     // Verpflegungsstopps bekommen eigene Marker (nicht verschiebbar), `index` bleibt der Wegpunkt-Index
-    map.setMarkers(wps.map((point, index) => ({
-      point, index, kind: index === 0 ? 'start' : !isLoop(r) && index === last ? 'end' : 'via',
-    })).filter(m => !m.point.stop));
+    let n = 0;
+    map.setMarkers(wps.map((point, index) => {
+      const kind = index === 0 ? 'start' : !isLoop(r) && index === last ? 'end' : point.manual ? 'manual' : 'via';
+      return { point, index, kind, ...(kind === 'manual' && manualMarker(point, ++n)) };
+    }).filter(m => !m.point.stop));
     return;
   }
   const markers = [];
   if (state.start) markers.push({ point: state.start, kind: 'start', index: 0 });
-  if (state.end && state.mode === 'ab') markers.push({ point: state.end, kind: 'end', index: 1 });
+  if (state.mode === 'ab') {
+    // Ohne Route (z. B. Ziel fehlt) Zwischenstopps trotzdem zeigen; verschieben ersetzt sie
+    activeVias().forEach((v, i) => markers.push({ point: v, kind: 'manual', index: `via${i}`, ...manualMarker(v, i + 1) }));
+    if (state.end) markers.push({ point: state.end, kind: 'end', index: 1 });
+  }
   map.setMarkers(markers);
 }
+
+const manualMarker = (p, n) => ({ text: p.icon || String(n), title: p.label || `Zwischenstopp ${n}` });
+const activeVias = () => state.vias.filter(v => v.lat != null);
 
 function defaultName(r) {
   const from = state.start?.label?.split(',')[0];
@@ -306,6 +317,7 @@ function showRoute(r, { fit = true } = {}) {
   drawRouteLine();
   updateMarkers();
   renderStops();
+  refreshAlong();
   elevation.show(r, state.breakdown);
   renderBreakdown();
   relayout();
@@ -336,6 +348,7 @@ function clearRoute() {
   state.route = null;
   map.setRoute(null);
   renderStops();
+  searchAlong(null);
   elevation.hide();
   ui.results.hidden = true;
   setStatus(null);
@@ -395,8 +408,207 @@ function replanStops() {
 
 function calcAB() {
   if (!state.start || !state.end) { updateMarkers(); return; }
-  run(signal => route(provider(), [state.start, state.end], routeOpts(), signal));
+  run(signal => route(provider(), [state.start, ...activeVias(), state.end], routeOpts(), signal));
 }
+
+// ---------- Zwischenstopps ----------
+
+/** Einfügeposition in `points`, an der der Umweg (Luftlinie) am kleinsten ist (nie vor Start/nach Ziel). */
+function bestInsertIndex(points, p) {
+  let best = 1, bestCost = Infinity;
+  for (let i = 1; i < points.length; i++) {
+    const cost = haversine(points[i - 1], p) + haversine(p, points[i]) - haversine(points[i - 1], points[i]);
+    if (cost < bestCost) { bestCost = cost; best = i; }
+  }
+  return best;
+}
+
+/** Zwischenstopp hinzufügen – an der günstigsten Stelle der Route. */
+function addVia(point, { label = '', icon = null } = {}) {
+  const via = { lat: point.lat, lon: point.lon, label, icon, manual: true };
+  if (!label) {
+    reverse(via).then(l => { via.label = l; renderVias(); updateMarkers(); });
+  }
+
+  if (state.mode === 'ab') {
+    state.vias = activeVias();
+    if (state.start && state.end) {
+      state.vias.splice(bestInsertIndex([state.start, ...state.vias, state.end], via) - 1, 0, via);
+    } else {
+      state.vias.push(via);
+    }
+    renderVias();
+    calcAB();
+    return;
+  }
+
+  // Distanz/Rundkurs: in die Wegpunkte der vorhandenen Route einfügen und neu berechnen
+  const base = state.route?.base || state.route;
+  if (!base || base.waypoints.length < 2) {
+    setStatus('Bei diesem Rundkurs (OpenRouteService) lassen sich keine Zwischenstopps einfügen – bitte BRouter wählen.', 'error');
+    return;
+  }
+  const wps = base.waypoints.filter(p => !p.stop);
+  wps.splice(bestInsertIndex(wps, via), 0, via);
+  run(signal => route(provider(), wps, routeOpts(), signal), { fit: false });
+}
+
+function removeVia(i) {
+  state.vias.splice(i, 1);
+  renderVias();
+  calcAB();
+}
+
+function renderVias() {
+  const list = $('#via-list');
+  list.replaceChildren(...state.vias.map((via, i) => {
+    const row = document.createElement('div');
+    row.className = 'field via-row';
+    const label = document.createElement('span');
+    label.className = 'label';
+    const num = document.createElement('i');
+    num.className = 'num';
+    num.textContent = via.icon || String(i + 1);
+    label.append(num, ' Zwischenstopp');
+
+    const search = document.createElement('div');
+    search.className = 'search';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Ort, Café, Bäckerei … suchen';
+    input.autocomplete = 'off';
+    input.value = via.label || '';
+    const remove = document.createElement('button');
+    remove.className = 'icon-btn';
+    remove.title = remove.ariaLabel = 'Zwischenstopp entfernen';
+    remove.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+    remove.addEventListener('click', () => removeVia(i));
+    const suggestions = document.createElement('ul');
+    suggestions.className = 'suggestions';
+    suggestions.hidden = true;
+    search.append(input, remove, suggestions);
+    row.append(label, search);
+
+    attachSearch(input, {
+      getBias: () => (via.lat != null ? via : state.start || map.center()),
+      onSelect: place => {
+        // Auswahl ersetzt den Stopp und sortiert ihn neu ein
+        state.vias.splice(i, 1);
+        addVia(place, { label: place.label });
+      },
+    });
+    if (via.lat == null) requestAnimationFrame(() => input.focus());
+    return row;
+  }));
+}
+
+$('#btn-add-via').addEventListener('click', () => {
+  if (state.vias.some(v => v.lat == null)) return; // erst den offenen Stopp ausfüllen
+  state.vias.push({ lat: null, lon: null, label: '', manual: true });
+  renderVias();
+});
+
+// ---------- Entlang der Route finden ----------
+
+let alongCategory = null;
+let alongController = null;
+let alongResults = [];
+
+function renderAlongChips() {
+  $('#along-chips').replaceChildren(...Object.entries(PLACE_CATEGORIES).map(([key, c]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = `${c.icon} ${c.label}`;
+    b.setAttribute('aria-pressed', String(key === alongCategory));
+    b.addEventListener('click', () => searchAlong(key === alongCategory ? null : key));
+    return b;
+  }));
+}
+
+function alongPopup(res) {
+  const el = document.createElement('div');
+  el.className = 'stop-popup';
+  const title = document.createElement('b');
+  title.textContent = `${PLACE_CATEGORIES[res.category].icon} ${res.name}`;
+  const info = document.createElement('div');
+  info.textContent = `km ${(res.along / 1000).toFixed(1)} · ${Math.round(res.offset / 50) * 50} m neben der Route`;
+  el.append(title);
+  if (res.detail) { const d = document.createElement('div'); d.className = 'muted'; d.textContent = res.detail; el.append(d); }
+  const add = document.createElement('button');
+  add.className = 'primary';
+  add.textContent = 'Als Zwischenstopp hinzufügen';
+  add.addEventListener('click', () => addAlongResult(res));
+  el.append(info, add);
+  return el;
+}
+
+function addAlongResult(res) {
+  map.closePopup();
+  alongResults = alongResults.filter(r => r.id !== res.id);
+  renderAlongResults();
+  addVia(res, { label: res.name, icon: PLACE_CATEGORIES[res.category].icon });
+}
+
+function renderAlongResults() {
+  map.setSearchResults(alongResults.map(r => ({
+    id: r.id, lat: r.lat, lon: r.lon, icon: PLACE_CATEGORIES[r.category].icon, popup: alongPopup(r),
+  })));
+  $('#along-list').replaceChildren(...alongResults.map(r => {
+    const li = document.createElement('li');
+    const main = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = r.name;
+    const detail = document.createElement('small');
+    detail.textContent = [r.detail, `${Math.round(r.offset / 50) * 50} m neben der Route`].filter(Boolean).join(' · ');
+    main.append(name, detail);
+    const km = document.createElement('span');
+    km.className = 'km';
+    km.textContent = `km ${(r.along / 1000).toFixed(1)}`;
+    const add = document.createElement('button');
+    add.className = 'add';
+    add.textContent = '+';
+    add.title = 'Als Zwischenstopp hinzufügen';
+    add.addEventListener('click', e => { e.stopPropagation(); addAlongResult(r); });
+    li.append(main, km, add);
+    li.addEventListener('click', () => map.openSearchResult(r.id));
+    return li;
+  }));
+}
+
+async function searchAlong(category) {
+  alongController?.abort();
+  alongCategory = category;
+  alongResults = [];
+  renderAlongChips();
+  renderAlongResults();
+  const hint = $('#along-hint');
+  hint.hidden = !category;
+  if (!category || !state.route) return;
+
+  const ctrl = alongController = new AbortController();
+  const c = PLACE_CATEGORIES[category];
+  hint.textContent = `${c.label} entlang der Route werden gesucht …`;
+  try {
+    const found = await searchAlongRoute(state.route, category, { signal: ctrl.signal });
+    if (ctrl.signal.aborted) return;
+    // Bereits übernommene Zwischenstopps nicht erneut anbieten
+    const added = state.route.waypoints.filter(p => p.manual);
+    alongResults = found.filter(r => !added.some(p => haversine(p, r) < 50));
+    hint.textContent = (alongResults.length
+      ? `${alongResults.length} × ${c.label} bis 1 km neben der Route – mit „+“ als Zwischenstopp übernehmen.`
+      : `Kein ${c.label} bis 1 km neben der Route gefunden.`)
+      + (found.partial ? ' Einzelne Abschnitte konnten nicht durchsucht werden (Ortssuche antwortet nicht) – ggf. erneut versuchen.' : '');
+    renderAlongResults();
+  } catch (e) {
+    if (e.name !== 'AbortError') hint.textContent = e.message;
+  }
+}
+
+renderAlongChips();
+
+/** Nach einer Routenänderung die aktive Suche aktualisieren (km-Angaben, neue Abschnitte). */
+const refreshAlong = debounce(() => { if (alongCategory && state.route) searchAlong(alongCategory); }, 500);
 
 function generate() {
   if (!state.start) { setStatus('Bitte zuerst einen Startort wählen.', 'error'); return; }
@@ -438,16 +650,36 @@ async function setPoint(which, point, { label, silent = false } = {}) {
 }
 
 function handleMapClick(point) {
-  if (state.mode === 'ab') setPoint(state.start ? 'end' : 'start', point);
-  else setPoint('start', point);
+  if (state.mode === 'ab') {
+    // Start und Ziel stehen → Klick fügt einen Zwischenstopp ein (Ziel lässt sich per Marker verschieben)
+    if (state.start && state.end) addVia(point);
+    else setPoint(state.start ? 'end' : 'start', point);
+  } else {
+    setPoint('start', point);
+  }
 }
 
 function handleMarkerDrag(index, point) {
+  // Zwischenstopp ohne berechnete Route (Ziel fehlt noch)
+  if (typeof index === 'string' && index.startsWith('via')) {
+    const via = activeVias()[Number(index.slice(3))];
+    Object.assign(via, point, { label: '' });
+    reverse(via).then(l => { via.label = l; renderVias(); });
+    renderVias();
+    updateMarkers();
+    return;
+  }
   const r = state.route;
   if (r && r.waypoints.length >= 2) {
     const loop = isLoop(r);
     const wps = r.waypoints.slice();
-    wps[index] = point;
+    const old = wps[index];
+    // Verschobener Zwischenstopp bleibt Zwischenstopp, bekommt aber eine neue Bezeichnung
+    wps[index] = old?.manual ? { ...old, ...point, label: '', icon: null } : point;
+    if (old?.manual) {
+      const moved = wps[index];
+      reverse(moved).then(l => { moved.label = l; renderVias(); updateMarkers(); });
+    }
     if (loop && index === 0) wps[wps.length - 1] = point;
     if (index === 0) setPoint('start', point, { silent: true });
     if (!loop && index === wps.length - 1) setPoint('end', point, { silent: true });
@@ -455,6 +687,12 @@ function handleMarkerDrag(index, point) {
     if (loop && index === 0) wps[0] = wps[wps.length - 1] = state.start;
     // Verpflegungsstopps werden für die geänderte Route neu gewählt
     const base = wps.filter(p => !p.stop);
+    if (state.mode === 'ab' && !loop) {
+      base[0] = state.start;
+      base[base.length - 1] = state.end;
+      state.vias = base.slice(1, -1);
+      renderVias();
+    }
     run(signal => route(provider(), base, routeOpts(), signal), { fit: false });
     return;
   }
@@ -570,6 +808,8 @@ $('#btn-reroll').addEventListener('click', () => { state.seed = newSeed(); gener
 
 $('#btn-swap').addEventListener('click', () => {
   [state.start, state.end] = [state.end, state.start];
+  state.vias.reverse();
+  renderVias();
   updateDepartureHint();
   ui.startInput.value = state.start?.label || '';
   ui.endInput.value = state.end?.label || '';
@@ -596,7 +836,7 @@ $('#btn-gpx').addEventListener('click', () => {
 });
 
 $('#btn-clear').addEventListener('click', () => {
-  if (state.mode === 'ab') { state.end = null; ui.endInput.value = ''; }
+  if (state.mode === 'ab') { state.end = null; ui.endInput.value = ''; state.vias = []; renderVias(); }
   clearRoute();
 });
 

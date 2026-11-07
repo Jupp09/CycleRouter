@@ -8,7 +8,13 @@ export function toGpx(route, name) {
   const points = route.coords.map(([lat, lon, ele]) =>
     `      <trkpt lat="${lat.toFixed(6)}" lon="${lon.toFixed(6)}">${ele != null ? `<ele>${ele.toFixed(1)}</ele>` : ''}</trkpt>`,
   ).join('\n');
-  const wpts = (route.stops || []).map(s => {
+  const vias = route.waypoints.filter(p => p.manual).map((p, i) =>
+    `  <wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}">
+    <name>${escapeXml(p.label || `Zwischenstopp ${i + 1}`)}</name>
+    <sym>Flag, Blue</sym>
+  </wpt>
+`).join('');
+  const wpts = vias + (route.stops || []).map(s => {
     const name = `${s.typeLabel}${s.poi.name ? ': ' + s.poi.name : ''}`;
     return `  <wpt lat="${s.poi.lat.toFixed(6)}" lon="${s.poi.lon.toFixed(6)}">
     <name>${escapeXml(name)}</name>${hours(s) ? `

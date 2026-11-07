@@ -31,6 +31,12 @@ const ROUTE_COLOR = '#e6007e';
 
 const icon = cls => L.divIcon({ className: '', html: `<div class="marker-pin ${cls}"></div>`, iconSize: [22, 22], iconAnchor: [11, 11] });
 const viaIcon = L.divIcon({ className: '', html: '<div class="marker-pin via"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+/** Manuell hinzugefügter Zwischenstopp: Nummer oder Kategorie-Symbol. */
+const manualIcon = text => L.divIcon({
+  className: '', iconSize: [26, 26], iconAnchor: [13, 13],
+  html: `<div class="via-pin">${text}</div>`,
+});
+const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export function createMap(el, { onClick, onMarkerDrag }) {
   const view = storage.get('view', { center: [51.1657, 10.4515], zoom: 6 });
@@ -52,20 +58,25 @@ export function createMap(el, { onClick, onMarkerDrag }) {
   const routeLayer = L.layerGroup().addTo(map);
   const stopLayer = L.layerGroup().addTo(map);
   const stopMarkers = new Map();
+  const searchLayer = L.layerGroup().addTo(map);
+  const searchMarkers = new Map();
   const hoverMarker = L.circleMarker([0, 0], { radius: 7, color: '#111827', weight: 3, fillColor: ROUTE_COLOR, fillOpacity: 1 });
 
   return {
     /**
-     * markers: [{point, kind: 'start'|'end'|'via', index}] – `index` wird beim Verschieben zurückgegeben.
+     * markers: [{point, kind: 'start'|'end'|'via'|'manual', index, text?, title?}]
+     * – `index` wird beim Verschieben zurückgegeben; 'manual' = vom Nutzer gesetzter Zwischenstopp.
      */
     setMarkers(markers) {
       markerLayer.clearLayers();
       for (const m of markers) {
-        L.marker([m.point.lat, m.point.lon], {
-          icon: m.kind === 'via' ? viaIcon : icon(m.kind),
+        const marker = L.marker([m.point.lat, m.point.lon], {
+          icon: m.kind === 'via' ? viaIcon : m.kind === 'manual' ? manualIcon(escapeHtml(m.text)) : icon(m.kind),
           draggable: true,
-          zIndexOffset: m.kind === 'via' ? 0 : 1000,
-        })
+          zIndexOffset: m.kind === 'via' ? 0 : m.kind === 'manual' ? 600 : 1000,
+          title: m.title || '',
+        });
+        marker
           .on('dragend', e => {
             const ll = e.target.getLatLng();
             onMarkerDrag(m.index, { lat: ll.lat, lon: ll.lng });
@@ -114,6 +125,31 @@ export function createMap(el, { onClick, onMarkerDrag }) {
         stopMarkers.set(s.id, marker);
       }
     },
+
+    /** Suchtreffer entlang der Route: [{id, lat, lon, icon, popup: HTMLElement}] */
+    setSearchResults(results = []) {
+      searchLayer.clearLayers();
+      searchMarkers.clear();
+      for (const s of results) {
+        const marker = L.marker([s.lat, s.lon], {
+          icon: L.divIcon({
+            className: '', iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -12],
+            html: `<div class="search-pin">${s.icon}</div>`,
+          }),
+          zIndexOffset: 400,
+        }).bindPopup(s.popup).addTo(searchLayer);
+        searchMarkers.set(s.id, marker);
+      }
+    },
+
+    openSearchResult(id) {
+      const m = searchMarkers.get(id);
+      if (!m) return;
+      map.setView(m.getLatLng(), Math.max(map.getZoom(), 15));
+      m.openPopup();
+    },
+
+    closePopup() { map.closePopup(); },
 
     openStop(id) {
       const m = stopMarkers.get(id);

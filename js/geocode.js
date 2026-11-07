@@ -28,7 +28,9 @@ export async function search(query, bias) {
 export async function reverse(point) {
   const fallback = `${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}`;
   try {
-    const res = await fetch(`${PHOTON}/reverse?lat=${point.lat}&lon=${point.lon}&lang=de&limit=1`);
+    // Zeitlimit: hängt Photon, sollen die Felder nicht endlos „Ort wird ermittelt …“ zeigen
+    const signal = AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined;
+    const res = await fetch(`${PHOTON}/reverse?lat=${point.lat}&lon=${point.lon}&lang=de&limit=1`, { signal });
     const f = (await res.json()).features?.[0];
     if (!f) return fallback;
     const { title, detail } = describe(f.properties);
