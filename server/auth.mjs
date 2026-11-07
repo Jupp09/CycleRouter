@@ -57,7 +57,24 @@ function parseCookies(req) {
   return out;
 }
 
-const isHttps = req => req.socket.encrypted || req.headers['x-forwarded-proto'] === 'https';
+/**
+ * Läuft die Anfrage über HTTPS? Hinter einem Proxy (nginx/Passenger) kommt sie unverschlüsselt an –
+ * dann zählen die Proxy-Header oder der Origin, den der Browser bei Anmeldung/Registrierung mitschickt.
+ */
+const isHttps = req => !!req.socket.encrypted
+  || req.headers['x-forwarded-proto'] === 'https'
+  || req.headers['x-forwarded-ssl'] === 'on'
+  || String(req.headers.origin || '').startsWith('https://')
+  || /^https:/i.test(process.env.PUBLIC_URL || '');
+
+/**
+ * IP des Nutzers. Hinter einem Proxy hängt dieser die tatsächliche Adresse an X-Forwarded-For an –
+ * verlässlich ist daher der LETZTE Eintrag (die vorderen kann der Client selbst vorgeben).
+ */
+export function clientIp(req) {
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
+  return forwarded.at(-1) || req.headers['x-real-ip'] || req.socket.remoteAddress;
+}
 
 function cookieHeader(req, value, maxAge) {
   return [

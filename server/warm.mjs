@@ -3,6 +3,7 @@
 // siehe server/warmQueue.mjs – dieses Skript ist für manuelles Vorladen beliebiger Regionen.)
 //
 //   npm run warm -- <lat> <lon> [radius-km]      z. B.  npm run warm -- 53.07 8.80 60
+import './env.mjs';
 import { getTiles, tilesAround, TTL, ALL_LAYERS } from './poiCache.mjs';
 
 const [lat, lon, radiusKm = 50] = process.argv.slice(2).map(Number);

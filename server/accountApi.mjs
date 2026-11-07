@@ -19,7 +19,7 @@ import { randomBytes } from 'node:crypto';
 import { query, dbEnabled } from './db.mjs';
 import {
   hashPassword, verifyPassword, burnPasswordCheck, validateCredentials,
-  createSession, destroySession, currentUser, limitReached, countAttempt,
+  createSession, destroySession, currentUser, limitReached, countAttempt, clientIp,
 } from './auth.mjs';
 
 const json = (res, status, data) =>
@@ -44,8 +44,6 @@ async function readJson(req, limit) {
 
 /** JSON-Spalten: Der MariaDB-Treiber liefert sie je nach Version/Server als Text oder schon als Objekt. */
 const fromJson = v => (typeof v === 'string' ? JSON.parse(v) : v);
-
-const clientIp = req => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
 
 /**
  * Schutz vor Anfragen fremder Webseiten (CSRF): Ändernde Anfragen müssen JSON sein (geht von fremden

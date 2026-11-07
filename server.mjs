@@ -1,6 +1,7 @@
 // Server für CycleRouter – liefert die App aus (nur öffentliche Dateien, siehe PUBLIC), egal von wo gestartet.
 // Zusätzlich: POST /api/pois – Verpflegungsstellen je Kachel aus dem Datei-Cache (server/poiCache.mjs),
 // /api/warm – Vorrat für Heimatregionen, /api/account|settings|routes|shared – Konten (server/accountApi.mjs).
+import './server/env.mjs'; // muss der erste Import bleiben (.env laden, bevor andere Module Werte lesen)
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
@@ -10,6 +11,7 @@ import { initWarmQueue, requestWarm, warmStatus, RADIUS_KM } from './server/warm
 import { isTileKey, isLayer } from './js/poiSource.js';
 import { initDb } from './server/db.mjs';
 import { handleAccountApi } from './server/accountApi.mjs';
+import { clientIp } from './server/auth.mjs';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 8000;
@@ -82,8 +84,7 @@ async function handleWarm(req, res, url) {
     if (req.method !== 'POST') return json(res, 405, { error: 'Nur GET oder POST' });
     const { lat, lon } = JSON.parse(await readBody(req, 1024));
     if (!validPoint(lat, lon)) return json(res, 400, { error: 'Ungültige Koordinaten' });
-    const client = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
-    json(res, 200, { radiusKm: RADIUS_KM, ...await requestWarm(lat, lon, client) });
+    json(res, 200, { radiusKm: RADIUS_KM, ...await requestWarm(lat, lon, clientIp(req)) });
   } catch (e) {
     json(res, 400, { error: e.message });
   }
