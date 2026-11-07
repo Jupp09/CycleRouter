@@ -27,6 +27,12 @@ function translateError(text) {
 
 /** Aufschlag für Wege abseits von EuroVelo-Routen. Gemessen Köln→Koblenz: 1,5 → 80 %, 3 → 98 % auf EuroVelo. */
 export const EUROVELO_PENALTY = { prefer: 1.5, strong: 3 };
+/**
+ * Nationale Radfernwege (`ncn`) bekommen nur einen kleinen Teil des Aufschlags: In Deutschland ist EuroVelo
+ * oft nur als Super-Relation über D-Routen erfasst (z. B. EV3 = D7 zwischen Bremen und Hamburg). BRouter
+ * überträgt Super-Relationen nicht auf die Wege – diese Abschnitte sind für BRouter nur „national“.
+ */
+const NCN_SHARE = 0.15;
 const PROFILE_TTL = 6 * 3600 * 1000; // hochgeladene Profile werden serverseitig irgendwann gelöscht
 
 const sources = new Map();
@@ -44,8 +50,12 @@ function loadSource(name) {
   return sources.get(name);
 }
 
-/** Benennt `costfactor` um und multipliziert ihn abseits internationaler Radrouten mit `penalty`. */
+/**
+ * Benennt `costfactor` um und multipliziert ihn abseits internationaler Radrouten mit `penalty`,
+ * auf nationalen Radfernwegen nur mit einem kleinen Teil davon.
+ */
 export function patchProfile(src, penalty) {
+  const ncn = (1 + (penalty - 1) * NCN_SHARE).toFixed(3);
   const start = src.search(/^assign costfactor\b/m);
   if (start < 0) throw new Error('Profil lässt sich nicht anpassen');
   const offset = src.slice(start + 1).search(/^(assign |---context)/m);
@@ -53,7 +63,7 @@ export function patchProfile(src, penalty) {
   return src.slice(0, start)
     + src.slice(start, end).replace(/^assign costfactor\b/m, 'assign costfactor_base')
     + `# CycleRouter: EuroVelo (internationale Radrouten) bevorzugen\n`
-    + `assign costfactor = multiply costfactor_base switch route_bicycle_icn=yes 1 ${penalty}\n\n`
+    + `assign costfactor = multiply costfactor_base switch route_bicycle_icn=yes 1 switch route_bicycle_ncn=yes ${ncn} ${penalty}\n\n`
     + src.slice(end);
 }
 

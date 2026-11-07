@@ -4,7 +4,7 @@ import { createMap } from './map.js';
 import { attachSearch, reverse } from './geocode.js';
 import { createElevation } from './elevation.js';
 import { downloadGpx } from './gpx.js';
-import { summarize, estimatedShare, euroveloDistance } from './surfaces.js';
+import { summarize, estimatedShare, longDistanceShare } from './surfaces.js';
 import { addStops, STATE_LABELS, DWELL_MIN } from './stops.js';
 import { regionAt, regionLabel } from './regions.js';
 import { holidayAt } from './holidays.js';
@@ -305,11 +305,17 @@ function showRoute(r, { fit = true } = {}) {
   $('#stat-up').textContent = formatM(r.ascent);
   $('#stat-down').textContent = formatM(r.descent);
   $('#stat-time').textContent = formatDuration(estimateTime(r.distance, r.ascent, state.bike));
-  const ev = euroveloDistance(r);
+  const ld = longDistanceShare(r);
   const evEl = $('#eurovelo-share');
-  // Anzeigen, wenn bevorzugt wurde oder die Route ohnehin nennenswert auf EuroVelo verläuft
-  evEl.hidden = ev == null || (state.eurovelo === 'off' && ev / r.distance < 0.05);
-  evEl.textContent = ev == null ? '' : `Auf EuroVelo-Radfernwegen: ${formatKm(ev)} (${Math.round(ev / r.distance * 100)} %)`;
+  // Anzeigen, wenn bevorzugt wurde oder die Route ohnehin nennenswert auf Radfernwegen verläuft
+  evEl.hidden = ld == null || (state.eurovelo === 'off' && ld.longDistance / r.distance < 0.05);
+  if (ld) {
+    const pct = d => Math.round(d / r.distance * 100);
+    evEl.textContent = `Auf Radfernwegen (EuroVelo/national): ${formatKm(ld.longDistance)} (${pct(ld.longDistance)} %)`
+      + (ld.eurovelo ? `, davon direkt als EuroVelo erfasst: ${pct(ld.eurovelo)} %` : '');
+    evEl.title = 'In Deutschland verläuft EuroVelo meist über nationale D-Routen und ist in OpenStreetMap oft nur über diese erfasst – '
+      + 'deshalb werden beide zusammen gezählt.';
+  }
   ui.routeName.value = defaultName(r);
   ui.results.hidden = false;
 

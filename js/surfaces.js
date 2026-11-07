@@ -81,6 +81,7 @@ export function classifyOsmTags(tagString) {
     ...classifySurface(tags, highway),
     waytype: classifyWaytype(tags, highway),
     icn: tags.route_bicycle_icn === 'yes', // Teil einer internationalen Radroute (EuroVelo)
+    ncn: tags.route_bicycle_ncn === 'yes', // Teil eines nationalen Radfernwegs (z. B. D-Route)
   };
 }
 
@@ -101,7 +102,7 @@ export function mergeSegments(segments) {
   for (const s of segments) {
     const prev = out[out.length - 1];
     if (prev && prev.to === s.from && prev.surface === s.surface && prev.waytype === s.waytype
-      && prev.estimated === s.estimated && prev.icn === s.icn) {
+      && prev.estimated === s.estimated && prev.icn === s.icn && prev.ncn === s.ncn) {
       prev.to = s.to;
     } else {
       out.push({ ...s });
@@ -125,12 +126,19 @@ export function summarize(route, kind) {
     .sort((a, b) => b.distance - a.distance);
 }
 
-/** Strecke auf internationalen Radrouten (EuroVelo) in m – null, wenn der Provider das nicht liefert. */
-export function euroveloDistance(route) {
+/**
+ * Strecke auf Radfernwegen in m: {eurovelo, longDistance} – longDistance umfasst EuroVelo und nationale
+ * Radfernwege. null, wenn der Provider das nicht liefert.
+ */
+export function longDistanceShare(route) {
   if (!route.segments?.length || route.segments[0].icn === undefined) return null;
-  let d = 0;
-  for (const s of route.segments) if (s.icn) d += route.cum[s.to] - route.cum[s.from];
-  return d;
+  let eurovelo = 0, longDistance = 0;
+  for (const s of route.segments) {
+    const d = route.cum[s.to] - route.cum[s.from];
+    if (s.icn) eurovelo += d;
+    if (s.icn || s.ncn) longDistance += d;
+  }
+  return { eurovelo, longDistance };
 }
 
 /** Anteil der Strecke, deren Untergrund nur abgeleitet (nicht explizit getaggt) ist. */
