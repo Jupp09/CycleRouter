@@ -35,6 +35,14 @@
           <option value="verylow">Sehr stark</option>
         </select>
       </label>
+      <label class="field inline" id="eurovelo-field" title="Bevorzugt die europäischen Radfernwege (EuroVelo, in OSM als internationale Radrouten erfasst). Die Strecke wird dadurch etwas länger.">
+        <span>EuroVelo-Radfernwege</span>
+        <select id="eurovelo">
+          <option value="off">Normal</option>
+          <option value="prefer">Bevorzugen</option>
+          <option value="strong">Stark bevorzugen</option>
+        </select>
+      </label>
       <p class="hint" id="provider-hint" hidden></p>
     </section>
 
@@ -128,6 +136,7 @@
         <div><span class="k">Abstieg</span><span class="v" id="stat-down"></span></div>
         <div><span class="k">Fahrzeit ca.</span><span class="v" id="stat-time"></span></div>
       </div>
+      <p class="hint" id="eurovelo-share" hidden></p>
       <div class="breakdown" id="breakdown">
         <div class="segmented small" id="breakdown-switch" role="radiogroup" aria-label="Aufschlüsselung">
           <button role="radio" data-value="surface">Untergrund</button>

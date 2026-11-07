@@ -4,7 +4,7 @@ import { createMap } from './map.js';
 import { attachSearch, reverse } from './geocode.js';
 import { createElevation } from './elevation.js';
 import { downloadGpx } from './gpx.js';
-import { summarize, estimatedShare } from './surfaces.js';
+import { summarize, estimatedShare, euroveloDistance } from './surfaces.js';
 import { addStops, STATE_LABELS, DWELL_MIN } from './stops.js';
 import { regionAt, regionLabel } from './regions.js';
 import { holidayAt } from './holidays.js';
@@ -16,6 +16,7 @@ const MODE_LABELS = { ab: 'Route', distance: 'Strecke', loop: 'Rundkurs' };
 const state = {
   bike: storage.get('bike', 'road'),
   traffic: storage.get('traffic', 'normal'),
+  eurovelo: storage.get('eurovelo', 'off'), // 'off' | 'prefer' | 'strong'
   provider: storage.get('provider', 'brouter'),
   mode: storage.get('mode', 'ab'),
   distanceKm: storage.get('distanceKm', 60),
@@ -55,7 +56,10 @@ const formatClock = d => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute
 const formatDay = d => d.toLocaleDateString('de-DE', { weekday: 'short' });
 
 const provider = () => providers[state.provider];
-const routeOpts = () => ({ bike: state.bike, traffic: state.traffic });
+const routeOpts = () => ({
+  bike: state.bike, traffic: state.traffic,
+  eurovelo: provider().supportsEurovelo ? state.eurovelo : 'off',
+});
 
 // ---------- Karte & Höhenprofil ----------
 
@@ -87,6 +91,8 @@ function syncUi() {
 
   $('#traffic-field').hidden = state.bike !== 'road' || !provider().supportsTraffic;
   $('#traffic').value = state.traffic;
+  $('#eurovelo-field').hidden = !provider().supportsEurovelo;
+  $('#eurovelo').value = state.eurovelo;
   $('#provider').value = state.provider;
   $('#direction').value = state.direction;
   ui.range.value = state.distanceKm;
@@ -299,6 +305,11 @@ function showRoute(r, { fit = true } = {}) {
   $('#stat-up').textContent = formatM(r.ascent);
   $('#stat-down').textContent = formatM(r.descent);
   $('#stat-time').textContent = formatDuration(estimateTime(r.distance, r.ascent, state.bike));
+  const ev = euroveloDistance(r);
+  const evEl = $('#eurovelo-share');
+  // Anzeigen, wenn bevorzugt wurde oder die Route ohnehin nennenswert auf EuroVelo verläuft
+  evEl.hidden = ev == null || (state.eurovelo === 'off' && ev / r.distance < 0.05);
+  evEl.textContent = ev == null ? '' : `Auf EuroVelo-Radfernwegen: ${formatKm(ev)} (${Math.round(ev / r.distance * 100)} %)`;
   ui.routeName.value = defaultName(r);
   ui.results.hidden = false;
 
@@ -474,6 +485,12 @@ $('#mode-tabs').addEventListener('click', e => {
 $('#traffic').addEventListener('change', e => {
   state.traffic = e.target.value;
   storage.set('traffic', state.traffic);
+  recalc();
+});
+
+$('#eurovelo').addEventListener('change', e => {
+  state.eurovelo = e.target.value;
+  storage.set('eurovelo', state.eurovelo);
   recalc();
 });
 

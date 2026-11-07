@@ -18,26 +18,89 @@ function translateError(text) {
   return 'BRouter-Fehler: ' + text.slice(0, 200);
 }
 
+// ---------- EuroVelo-Bevorzugung über ein eigenes Profil ----------
+// BRouter-Profile werten Radrouten-Relationen aus (`route_bicycle_icn` = international, d. h. EuroVelo).
+// Die Standardprofile behandeln alle Radrouten gleich; für die Bevorzugung wird das Standardprofil
+// angepasst – Wege abseits internationaler Radrouten werden um den Faktor teurer – und bei BRouter
+// hochgeladen. Die Profil-Quelltexte liegen im Ordner /profiles, da brouter.de sie nicht per CORS ausliefert.
+
+/** Aufschlag für Wege abseits von EuroVelo-Routen. Gemessen Köln→Koblenz: 1,5 → 80 %, 3 → 98 % auf EuroVelo. */
+export const EUROVELO_PENALTY = { prefer: 1.5, strong: 3 };
+const PROFILE_TTL = 6 * 3600 * 1000; // hochgeladene Profile werden serverseitig irgendwann gelöscht
+
+const sources = new Map();
+const uploaded = new Map(); // `${profil}|${faktor}` → {id, t}
+
+function loadSource(name) {
+  if (!sources.has(name)) {
+    const p = fetch(new URL(`../../profiles/${name}.brf`, import.meta.url)).then(res => {
+      if (!res.ok) throw new Error(`Profil ${name} nicht gefunden`);
+      return res.text();
+    });
+    sources.set(name, p);
+    p.catch(() => sources.delete(name));
+  }
+  return sources.get(name);
+}
+
+/** Benennt `costfactor` um und multipliziert ihn abseits internationaler Radrouten mit `penalty`. */
+export function patchProfile(src, penalty) {
+  const start = src.search(/^assign costfactor\b/m);
+  if (start < 0) throw new Error('Profil lässt sich nicht anpassen');
+  const offset = src.slice(start + 1).search(/^(assign |---context)/m);
+  const end = offset < 0 ? src.length : start + 1 + offset;
+  return src.slice(0, start)
+    + src.slice(start, end).replace(/^assign costfactor\b/m, 'assign costfactor_base')
+    + `# CycleRouter: EuroVelo (internationale Radrouten) bevorzugen\n`
+    + `assign costfactor = multiply costfactor_base switch route_bicycle_icn=yes 1 ${penalty}\n\n`
+    + src.slice(end);
+}
+
+async function customProfile(name, penalty, signal, force = false) {
+  const key = `${name}|${penalty}`;
+  const hit = uploaded.get(key);
+  if (!force && hit && Date.now() - hit.t < PROFILE_TTL) return hit.id;
+
+  const text = patchProfile(await loadSource(name), penalty);
+  const res = await fetch(`${ENDPOINT}/profile`, { method: 'POST', body: text, signal });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.profileid) throw new Error('BRouter: EuroVelo-Profil konnte nicht hochgeladen werden' + (data.error ? ` (${data.error})` : ''));
+  uploaded.set(key, { id: data.profileid, t: Date.now() });
+  return data.profileid;
+}
+
+async function request(points, profile, signal) {
+  const lonlats = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join('|');
+  const url = `${ENDPOINT}?lonlats=${encodeURIComponent(lonlats)}&profile=${profile}&alternativeidx=0&format=geojson`;
+  let res;
+  try {
+    res = await fetch(url, { signal });
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    throw new Error('BRouter ist nicht erreichbar. Internetverbindung prüfen.');
+  }
+  const text = await res.text();
+  return { ok: res.ok && text.trimStart().startsWith('{'), text };
+}
+
 export const brouter = {
   id: 'brouter',
   name: 'BRouter',
   supportsTraffic: true,
+  supportsEurovelo: true,
 
   /** points: [{lat, lon}, ...] → {coords: [[lat, lon, ele], ...]} */
-  async route(points, { bike, traffic }, signal) {
-    const lonlats = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join('|');
-    const profile = PROFILES[bike][traffic] || PROFILES[bike].normal;
-    const url = `${ENDPOINT}?lonlats=${encodeURIComponent(lonlats)}&profile=${profile}&alternativeidx=0&format=geojson`;
-
-    let res;
-    try {
-      res = await fetch(url, { signal });
-    } catch (e) {
-      if (e.name === 'AbortError') throw e;
-      throw new Error('BRouter ist nicht erreichbar. Internetverbindung prüfen.');
+  async route(points, { bike, traffic, eurovelo = 'off' }, signal) {
+    const base = PROFILES[bike][traffic] || PROFILES[bike].normal;
+    const penalty = EUROVELO_PENALTY[eurovelo];
+    let profile = penalty ? await customProfile(base, penalty, signal) : base;
+    let { ok, text } = await request(points, profile, signal);
+    // Abgelaufenes eigenes Profil → einmal neu hochladen
+    if (!ok && penalty && /profile/i.test(text)) {
+      profile = await customProfile(base, penalty, signal, true);
+      ({ ok, text } = await request(points, profile, signal));
     }
-    const text = await res.text();
-    if (!res.ok || !text.trimStart().startsWith('{')) throw new Error(translateError(text));
+    if (!ok) throw new Error(translateError(text));
 
     const feature = JSON.parse(text).features[0];
     const coords = feature.geometry.coordinates.map(([lon, lat, ele]) => [lat, lon, ele ?? null]);
