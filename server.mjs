@@ -12,6 +12,7 @@ import { isTileKey, isLayer } from './js/poiSource.js';
 import { initDb } from './server/db.mjs';
 import { handleAccountApi } from './server/accountApi.mjs';
 import { clientIp } from './server/auth.mjs';
+import { sendJson as json, readBody } from './server/http.mjs';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 8000;
@@ -29,18 +30,10 @@ const TYPES = {
   '.brf': 'text/plain; charset=utf-8',
 };
 
-const json = (res, status, data) =>
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }).end(JSON.stringify(data));
-
-async function readBody(req, limit = 64 * 1024) {
-  let body = '';
-  for await (const chunk of req) {
-    body += chunk;
-    if (body.length > limit) throw new Error('Anfrage zu groß');
-  }
-  return body;
-}
-
+/**
+ * Verpflegungsstellen je Kachel und Datenebene: POST {tiles: [Kachelschlüssel], layers?, cacheOnly?}
+ * → {tiles, missing}. `cacheOnly`: nur Vorhandenes liefern, fehlende Kacheln im Hintergrund laden.
+ */
 async function handlePois(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Nur POST' });
   let keys, layers, cacheOnly;

@@ -1,13 +1,30 @@
+/**
+ * Kleine, zustandsarme Helfer für die ganze App: Geometrie, Routenkennzahlen, Fahrzeit, Formatierung
+ * (immer de-DE) und der Zugriff auf den Browser-Speicher.
+ */
+
+// ---------- Geometrie ----------
+
 const R = 6371008.8; // mittlerer Erdradius in m
 const rad = d => d * Math.PI / 180;
 const deg = r => r * 180 / Math.PI;
 
-/** Luftlinie in Metern zwischen zwei {lat, lon}. */
+/** Luftlinie in Metern zwischen zwei {lat, lon} (genau, auch für große Entfernungen). */
 export function haversine(a, b) {
   const dLat = rad(b.lat - a.lat);
   const dLon = rad(b.lon - a.lon);
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * Schnelle Näherung der Entfernung in m (ebene Projektion). Für kurze Strecken – Abstand eines Orts zur Route –
+ * ausreichend genau und deutlich schneller als haversine, wenn tausende Punkte verglichen werden.
+ */
+export function approxDist(aLat, aLon, bLat, bLon) {
+  const dy = (bLat - aLat) * 110540;
+  const dx = (bLon - aLon) * 111320 * Math.cos((aLat + bLat) * Math.PI / 360);
+  return Math.hypot(dx, dy);
 }
 
 /** Punkt in `dist` Metern Entfernung in Richtung `bearing` (Grad, 0 = Nord). */
@@ -18,7 +35,9 @@ export function destination(p, bearing, dist) {
   return { lat: deg(lat2), lon: ((deg(lon2) + 540) % 360) - 180 };
 }
 
-/** Deterministischer Zufallsgenerator (mulberry32). */
+// ---------- Zufall ----------
+
+/** Deterministischer Zufallsgenerator (mulberry32) – gleiche Saat ergibt gleiche Rundkurs-Variante. */
 export function seededRandom(seed) {
   let s = seed >>> 0;
   return () => {
@@ -32,25 +51,41 @@ export function seededRandom(seed) {
 
 export const newSeed = () => Math.floor(Math.random() * 2 ** 31);
 
+// ---------- Routenkennzahlen ----------
+
+/** Höhenänderungen unter dieser Schwelle (m) gelten als Messrauschen und werden nicht aufsummiert. */
+const ELEVATION_THRESHOLD = 4;
+
 /**
- * Kumulierte Distanzen sowie Anstieg/Abstieg aus [[lat, lon, ele], ...].
- * Höhenmeter mit Hysterese, damit Messrauschen nicht aufsummiert wird.
+ * Höhenmeter mit Hysterese über [[lat, lon, ele], …] → {ascent, descent, cumAscent}.
+ * `cumAscent[i]` ist der bis zur Koordinate i aufsummierte Anstieg (für Etappen- und Ankunftszeiten).
  */
+function elevationProfile(coords) {
+  let ascent = 0, descent = 0;
+  let ref = coords.find(c => c[2] != null)?.[2];
+  const cumAscent = [];
+  for (const c of coords) {
+    const e = c[2];
+    if (e != null && ref != null) {
+      if (e - ref >= ELEVATION_THRESHOLD) { ascent += e - ref; ref = e; }
+      else if (ref - e >= ELEVATION_THRESHOLD) { descent += ref - e; ref = e; }
+    }
+    cumAscent.push(ascent);
+  }
+  return { ascent, descent, cumAscent };
+}
+
+/** Kumulierter Anstieg (m) je Routenkoordinate. */
+export const cumulativeAscent = coords => elevationProfile(coords).cumAscent;
+
+/** Kumulierte Distanzen (`cum`, m) sowie Gesamtlänge, Anstieg und Abstieg aus [[lat, lon, ele], …]. */
 export function computeStats(coords) {
   const cum = [0];
   for (let i = 1; i < coords.length; i++) {
     const [la1, lo1] = coords[i - 1], [la2, lo2] = coords[i];
     cum.push(cum[i - 1] + haversine({ lat: la1, lon: lo1 }, { lat: la2, lon: lo2 }));
   }
-  let ascent = 0, descent = 0;
-  const THRESHOLD = 4;
-  let ref = coords.find(c => c[2] != null)?.[2];
-  for (const c of coords) {
-    const e = c[2];
-    if (e == null || ref == null) continue;
-    if (e - ref >= THRESHOLD) { ascent += e - ref; ref = e; }
-    else if (ref - e >= THRESHOLD) { descent += ref - e; ref = e; }
-  }
+  const { ascent, descent } = elevationProfile(coords);
   return { cum, distance: cum[cum.length - 1] || 0, ascent: Math.round(ascent), descent: Math.round(descent) };
 }
 
@@ -77,10 +112,13 @@ export function indexAtDistance(r, along) {
   return lo;
 }
 
-/** Geschätzte Fahrzeit in Sekunden. */
+// ---------- Fahrzeit ----------
+
 /** Standard-Durchschnittsgeschwindigkeit in der Ebene (km/h) je Fahrradtyp. */
 export const DEFAULT_SPEED = { road: 27, gravel: 20, trekking: 18 };
 export const SPEED_MIN = 10, SPEED_MAX = 35;
+/** Höhenmeter, die etwa eine Stunde Zusatzzeit kosten, je Fahrradtyp. */
+const CLIMB_RATE = { road: 1200, gravel: 1000, trekking: 800 };
 
 let speedSetting = null; // vom Nutzer eingestellt (km/h) oder null = Standard je Fahrradtyp
 
@@ -92,23 +130,47 @@ export function setAverageSpeed(kmh) {
 /** Durchschnittsgeschwindigkeit in der Ebene, die der Fahrzeit zugrunde liegt. */
 export const averageSpeed = bike => speedSetting ?? DEFAULT_SPEED[bike] ?? 20;
 
+/** Geschätzte Fahrzeit in Sekunden: Strecke mit Durchschnittstempo, Anstiege als Zuschlag. */
 export function estimateTime(distance, ascent, bike) {
-  const speed = averageSpeed(bike);                                             // km/h in der Ebene
-  const climbRate = { road: 1200, gravel: 1000, trekking: 800 }[bike] ?? 1000; // Höhenmeter, die ~1 h Zusatzzeit kosten
-  return (distance / 1000 / speed + ascent / climbRate) * 3600;
+  return (distance / 1000 / averageSpeed(bike) + ascent / (CLIMB_RATE[bike] ?? 1000)) * 3600;
 }
+
+// ---------- Formatierung (de-DE) ----------
 
 export const formatKm = m => (m / 1000).toLocaleString('de-DE', { maximumFractionDigits: m < 100000 ? 1 : 0 }) + ' km';
 export const formatM = m => Math.round(m).toLocaleString('de-DE') + ' m';
+export const formatInt = n => n.toLocaleString('de-DE');
 export function formatDuration(s) {
   const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
   return h ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`;
 }
+/** „14:20“ */
+export const formatClock = d => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+/** „Sa.“ */
+export const formatWeekday = d => d.toLocaleDateString('de-DE', { weekday: 'short' });
+/** „Sa., 08.11.“ */
+export const formatDayDate = d => d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+/** „08.11.2026“ */
+export const formatDate = d => d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+/** Wert für <input type="datetime-local"> (Ortszeit, Minutengenau). */
+export function toDateTimeLocal(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ---------- Sonstiges ----------
 
 export function debounce(fn, ms) {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
 }
+
+// ---------- Browser-Speicher ----------
+// Alle Einstellungen laufen über `storage`: Präfix „cyclerouter.“, JSON, privater Modus wird abgefangen.
+// Der Präfix bleibt trotz Umbenennung in „CycloRouter“, sonst gingen gespeicherte Einstellungen verloren.
+
+const storageListeners = [];
 
 export const storage = {
   get(key, fallback) {
@@ -123,6 +185,5 @@ export const storage = {
   },
 };
 
-const storageListeners = [];
 /** Benachrichtigung bei jeder gespeicherten Einstellung (z. B. für den Abgleich mit dem Konto). */
 export const onStorageSet = fn => storageListeners.push(fn);

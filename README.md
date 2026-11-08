@@ -76,13 +76,47 @@ Rundkurse und Distanz-Routen mit BRouter werden in [js/generators.js](js/generat
 ```
 index.html             Oberfläche
 css/style.css          Layout (hell/dunkel, mobil)
-js/main.js             App-Zustand und Ereignisse
+js/main.js             Einstieg: lädt und startet die Module in js/app/
+
+js/app/                Oberfläche und Ablauf
+  state.js             App-Zustand, abgeleitete Werte, Ereignisse ('route', 'start', 'stages')
+  dom.js               Elementzugriff, Statuszeile, Rückfrage-Dialog
+  mapView.js           Karte, Höhenprofil, Routenlinie, Marker
+  pipeline.js          Berechnung: Grundroute → Mehrtagestour → Verpflegungsstopps
+  controls.js          Fahrrad, Modus, Dienst, Richtung, Distanz
+  waypoints.js         Start/Ziel, Zwischenstopps, Kartenklick, Marker verschieben
+  resultsView.js       Kennzahlen, Untergrund/Wegtyp, Routenname
+  supplyView.js        Verpflegungsstopps, Regionen, Feiertage
+  alongView.js         „Entlang der Route finden“
+  stagesView.js        Mehrtagestouren und ihre Einstellungen
+  exportView.js        GPX teilen/herunterladen
+  accountView.js       Konto, gespeicherte Routen, Teilen-Links, Einstellungs-Abgleich
+  homeView.js          Heimatadresse, Vorrat der Heimatregion auf dem Server
+  settingsDialog.js    Einstellungsdialog
+
 js/map.js              Leaflet-Karte, Layer, Marker
-js/geocode.js          Ortssuche (Photon)
+js/geocode.js          Ortssuche (Photon, Nominatim als Ausweich)
 js/routing/            BRouter- und ORS-Anbindung
 js/generators.js       Rundkurs- und Distanz-Generator
 js/elevation.js        Höhenprofil (SVG)
-js/gpx.js              GPX-Erzeugung
+js/gpx.js              GPX-Erzeugung und Teilen
+js/surfaces.js         Untergrund- und Wegtyp-Kategorien
+js/stops.js            Verpflegungsstopps planen
+js/stays.js            Etappen und Unterkünfte für Mehrtagestouren
+js/placeSearch.js      Orte entlang der Route (Kachel-Cache, sonst Photon)
+js/poiTiles.js         Kachel-Cache im Browser (Speicher, IndexedDB, Server, Overpass)
+js/poiSource.js        Overpass-Abfragen und Datenebenen (auch vom Server genutzt)
+js/chainHours.js       Typische Öffnungszeiten von Ketten
+js/timeline.js         Ankunftszeiten und Tagesetappen
+js/routeGeometry.js    Positionen auf/neben der Route, Wegpunkte einfügen
+js/openingHours.js     opening_hours-Auswertung
+js/holidays.js         Feiertage (date.nager.at)
+js/regions.js          Land/Bundesland entlang der Route (Nominatim)
+js/account.js          Konto-Schnittstelle (Client)
+js/shared.js           Gemeinsame Konstanten für Browser und Server
+
+server.mjs             Server: App ausliefern, /api/pois, /api/warm, Konten
+server/                POI-Cache, Vorrat-Warteschlange, Datenbank, Anmeldung, HTTP-Helfer
 ```
 
 ## Datenquellen

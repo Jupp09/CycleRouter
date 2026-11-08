@@ -22,24 +22,17 @@ import {
   createSession, destroySession, currentUser, limitReached, countAttempt, clientIp,
 } from './auth.mjs';
 import { SYNC_KEYS, MODES, BIKES } from '../js/shared.js';
+import { HttpError, sendJson, readBody } from './http.mjs';
 
-const json = (res, status, data) =>
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
-    .end(JSON.stringify(data));
+// Konto-Antworten nie zwischenspeichern (enthalten persönliche Daten)
+const json = (res, status, data) => sendJson(res, status, data, { 'Cache-Control': 'no-store' });
 
-class HttpError extends Error {
-  constructor(status, message) { super(message); this.status = status; }
-}
-
+/** JSON-Körper lesen; nur mit Content-Type application/json (Teil des CSRF-Schutzes, siehe checkOrigin). */
 async function readJson(req, limit) {
   if (!String(req.headers['content-type'] || '').startsWith('application/json')) {
     throw new HttpError(415, 'Erwartet JSON');
   }
-  let body = '';
-  for await (const chunk of req) {
-    body += chunk;
-    if (body.length > limit) throw new HttpError(413, 'Anfrage zu groß');
-  }
+  const body = await readBody(req, limit);
   try { return body ? JSON.parse(body) : {}; } catch { throw new HttpError(400, 'Ungültiges JSON'); }
 }
 

@@ -20,7 +20,7 @@ npm run warm -- <lat> <lon> [radius-km]   # preload the POI cache for a region, 
 - **German everywhere:** UI text, error messages shown to users, code comments, JSDoc and log output. Numbers and dates use `de-DE` formatting (`formatKm`, `formatM`, `toLocaleDateString('de-DE', …)`). New code should follow this. Identifiers are in English.
 - Plain ES modules (`"type": "module"`), modern syntax (`??=`, `Object.hasOwn`, `AbortSignal.any`), no framework. The DOM is accessed with `$ = document.querySelector` and built by hand with `createElement`/`replaceChildren`/`textContent`. `innerHTML` is used only for static markup skeletons, never for OSM, user or server data (POI names, labels).
 - Leaflet 1.9.4 is a **global** (`window.L`) loaded from cdnjs in [index.html](index.html); it is not imported.
-- Every network call takes an `AbortSignal`. `run()` in [js/main.js](js/main.js) aborts the previous calculation when a new one starts. `AbortError` is always swallowed silently, so keep that pattern when adding async work.
+- Every network call takes an `AbortSignal`. `run()` in [js/app/pipeline.js](js/app/pipeline.js) aborts the previous calculation when a new one starts. `AbortError` is always swallowed silently, so keep that pattern when adding async work.
 - Persist settings in the browser only through `storage.get/set` in [js/utils.js](js/utils.js). It adds the `cyclerouter.` prefix, handles JSON and private mode, and notifies `onStorageSet` listeners, which drive account settings sync.
 - Comments explain the *why*: rate limits, data quirks, privacy decisions. Keep them up to date when you change behaviour.
 
@@ -28,13 +28,37 @@ npm run warm -- <lat> <lon> [radius-km]   # preload the POI cache for a region, 
 
 ### Frontend (`js/`, loaded by `index.html` → `js/main.js`)
 
+`js/main.js` is only the entry point: it imports the UI modules in [js/app/](js/app/) and starts them (`syncUi()`, `initHome()`, `initAccount()`). The modules outside `app/` hold the domain logic and don't touch app state.
+
+#### UI layer (`js/app/`)
+
 | Module | Role |
 | --- | --- |
-| [main.js](js/main.js) | All app state (`state` object), UI wiring and the calculation pipeline (~1800 lines, split into sections by `// ---------- … ----------` comments) |
+| [state.js](js/app/state.js) | The `state` object (settings are read from storage at startup), derived values (`provider()`, `routeOpts()`, `departureDate()`, `isLoop()`, `originRoute()` …) and a small event bus `on()`/`emit()` |
+| [dom.js](js/app/dom.js) | `$`, frequently used elements (`ui`), status line (`setStatus`, `flashStatus`), element helpers, the in-app `ask()` dialog (instead of `confirm`/`prompt`, which look foreign in iOS standalone mode) |
+| [mapView.js](js/app/mapView.js) | Creates the map and the elevation chart; route line and draggable markers. Click/drag handlers are registered later by `waypoints.js` via `setMapHandlers()` |
+| [pipeline.js](js/app/pipeline.js) | The calculation pipeline (`run`, `showRoute`, `clearRoute`, `replanStops`, `calcAB`, `generate`, `recalc`) |
+| [controls.js](js/app/controls.js) | `syncUi()` (state → all switches and fields) and the routing controls (bike, mode, traffic, EuroVelo, provider, direction, distance) |
+| [waypoints.js](js/app/waypoints.js) | Start/end (search, map click, locate, swap, clear), manual intermediate stops (`state.vias`), marker dragging |
+| [resultsView.js](js/app/resultsView.js), [supplyView.js](js/app/supplyView.js), [alongView.js](js/app/alongView.js), [stagesView.js](js/app/stagesView.js) | Result panel (stats, surface/way-type breakdown, elevation); supply stops, regions and holiday hints; "find along the route"; multi-day stages and stay settings |
+| [exportView.js](js/app/exportView.js), [accountView.js](js/app/accountView.js), [homeView.js](js/app/homeView.js), [settingsDialog.js](js/app/settingsDialog.js) | GPX share/download; login, saved routes, share links and settings sync; home address and server warm-up; the settings dialog (speed, and deciding what to recalculate on save) |
+
+Views don't call each other to refresh. `showRoute()`/`clearRoute()` emit `'route'` (route or `null`), and each view renders its own part. Other events: `'start'` (start point changed, e.g. holiday hint for the departure) and `'stages'` (multi-day state changed while no new route is shown). Direct imports between views exist only for actions (e.g. `alongView` → `addVia`).
+
+**Import cycles are intended** (e.g. `pipeline` ↔ `waypoints`, `controls` → `pipeline` → …). They are safe because cross-module exports are **function declarations** (hoisted), and modules only attach DOM listeners and `on()` handlers while loading. Calls to other `app/` modules happen inside handlers, never at module top level. The only exceptions are `state.js`, `dom.js` and `mapView.js`, which are not part of any cycle and can be used at top level. Keep it that way when adding a module, and don't export `const` arrow functions that other modules in a cycle call.
+
+#### Domain modules
+
+| Module | Role |
+| --- | --- |
 | [routing/](js/routing/) | Provider adapters. `index.js` exports `providers` and `route()` / `withStats()` |
 | [generators.js](js/generators.js) | Loop and distance routes: places waypoints on a circle (or a target at a matching straight-line distance), then rescales up to 5× until the length is within 6 % of the target |
-| [stops.js](js/stops.js) | Supply stops (water, supermarket, bakery, café, fuel) and the client-side POI tile cache. Also `insertWaypoints` / `locateOnRoute`, which `stays.js` reuses |
-| [stays.js](js/stays.js) | Multi-day trips: splits the route into stages, scores overnight stays per night (budget, stage length, detour) and estimates prices |
+| [stops.js](js/stops.js) | Supply stops (water, supermarket, bakery, café, fuel): choose one stop per interval by opening hours at the ETA, holidays and detour, then re-route through them (`addStops`); `openingAt()` |
+| [stays.js](js/stays.js) | Multi-day trips: splits the route into stages, scores overnight stays per night (budget, stage length, detour) and estimates prices; links (price check, OSM note) |
+| [poiTiles.js](js/poiTiles.js) | Client side of the POI tile cache (memory → IndexedDB → server → Overpass): `fetchPois(route, …)`, `fetchPoisNear(points, …)`, `sessionPois()` |
+| [chainHours.js](js/chainHours.js) | Typical opening hours of a chain (from its other branches in the loaded tiles) for POIs without `opening_hours` |
+| [timeline.js](js/timeline.js) | ETAs along the route (`timeline`, `arrivalAt`; each new day starts at the departure time) and per-day stats (`stageStats`) |
+| [routeGeometry.js](js/routeGeometry.js) | Positions on/near the route (`locateOnRoute`, `nearestSample`, `locateNearRoute`) and `insertWaypoints` |
 | [poiSource.js](js/poiSource.js) | Overpass queries, tiling (`TILE = 0.1°`) and data layers. **Shared with the Node server**, so it must not use browser APIs |
 | [placeSearch.js](js/placeSearch.js) | "Find along the route": café, restaurant, etc. from the tile cache, falling back to Photon category search |
 | [openingHours.js](js/openingHours.js), [holidays.js](js/holidays.js), [regions.js](js/regions.js) | Small `opening_hours` parser; public holidays from date.nager.at; country/state lookup along the route via Nominatim |
@@ -45,7 +69,7 @@ npm run warm -- <lat> <lon> [radius-km]   # preload the POI cache for a region, 
 
 **Route object** (shared by all providers): `{coords: [[lat, lon, ele]], cum: [m], distance, ascent, descent, waypoints, segments}`. Waypoints are `{lat, lon, label?, manual?, icon?, stop?, stay?}`.
 
-**Calculation pipeline** (`run()` in main.js): base route → optional multi-day step (`withStays`: plan stays, re-route through them) → optional supply step (`withSupply` / `addStops`: re-route through stops). Each step returns a *new* route that keeps the previous one:
+**Calculation pipeline** (`run()` in [js/app/pipeline.js](js/app/pipeline.js)): base route → optional multi-day step (`withStays`: plan stays, re-route through them) → optional supply step (`withSupply` / `addStops`: re-route through stops). Each step returns a *new* route that keeps the previous one:
 
 - `route.origin`: the route without stays or stops
 - `route.base`: the route before stops were added
@@ -68,7 +92,7 @@ A provider is `{id, name, supportsTraffic, supportsEurovelo?, route(points, opts
 
 The POI layers in `LAYERS` ([poiSource.js](js/poiSource.js)) are `supply`, `food` and `stay`. Each POI type belongs to exactly one layer (`layerOfType`). Each layer is fetched and cached per tile on its own. When looking up a tile, the client tries these sources in order:
 
-1. Memory and IndexedDB (`cyclerouter` db, `poiTiles` store, 7 days): [stops.js](js/stops.js)
+1. Memory and IndexedDB (`cyclerouter` db, `poiTiles` store, 7 days): [poiTiles.js](js/poiTiles.js)
 2. The server, `POST /api/pois`: a file cache at `cache/pois/<layer>/<tile>.json` with 30-day TTL (`POI_TTL_DAYS`), stale-while-revalidate, and up to 365 days stale ([server/poiCache.mjs](server/poiCache.mjs))
 3. Overpass directly, in chunks of 40 tiles
 
@@ -83,6 +107,7 @@ Be gentle with the public services. The server sends at most 2 parallel Overpass
 - Endpoints: `/api/pois`, `/api/warm` (home-region preloading; the client sends coordinates rounded to ~10 km, the server snaps them to the tile centre), and the account API in [server/accountApi.mjs](server/accountApi.mjs) (route table in its header comment).
 - [server/db.mjs](server/db.mjs): tables are created at startup with `CREATE TABLE IF NOT EXISTS` from `SCHEMA`. **There are no migrations.** New tables work automatically, but a new column on an existing table needs explicit `ALTER` handling. Always use parameterized `query(sql, params)`.
 - [server/auth.mjs](server/auth.mjs): scrypt password hashes, a session token in the HttpOnly `cr_session` cookie (stored only as a SHA-256 hash), per-IP limits on failed logins and registrations, and `Secure` set automatically behind HTTPS/proxy headers.
+- [server/http.mjs](server/http.mjs): shared helpers `HttpError`, `sendJson`, `readBody` (with size limit).
 - Account API rules: mutating requests must be `application/json` and same-origin (`checkOrigin`, CSRF protection). Throw `HttpError(status, germanMessage)` for client errors.
 
 ## Things to keep in sync

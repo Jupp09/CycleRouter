@@ -1,12 +1,14 @@
-import { sampleRoute } from './utils.js';
-import { fetchPois, withTypicalHours } from './stops.js';
-import { layerOfType } from './poiSource.js';
-
 /**
- * Orte einer Kategorie (Café, Restaurant, Bäckerei, Supermarkt, Tankstelle) entlang einer Route finden.
- * Quelle: der Kachel-Cache (mit Öffnungszeiten), sonst die Photon-Kategoriesuche (`include=osm.<key>.<value>`,
- * ohne Suchbegriff) – abschnittsweise in Rechtecken entlang der Route, danach lokal nach Entfernung gefiltert.
+ * „Entlang der Route finden“: Orte einer Kategorie (Café, Restaurant, Bäckerei, Supermarkt, Tankstelle)
+ * bis 1 km neben der Route. Quelle ist der Kachel-Cache (mit Öffnungszeiten); ist er für die Route noch
+ * unvollständig, die Photon-Kategoriesuche (`include=osm.<key>.<value>`, ohne Suchbegriff) – abschnittsweise
+ * in Rechtecken entlang der Route, danach lokal nach Entfernung gefiltert.
  */
+import { sampleRoute } from './utils.js';
+import { fetchPois } from './poiTiles.js';
+import { withTypicalHours } from './chainHours.js';
+import { nearestSample } from './routeGeometry.js';
+import { layerOfType } from './poiSource.js';
 
 const PHOTON = 'https://photon.komoot.io/api/';
 
@@ -23,11 +25,8 @@ const MARGIN = 0.012;   // Rand um den Abschnitt (≈ 1 km)
 const PARALLEL = 2;     // gleichzeitige Abfragen (Rücksicht auf den öffentlichen Server)
 const TIMEOUT = 10000;  // je Abfrage
 
-function approxDist(aLat, aLon, bLat, bLon) {
-  const dy = (bLat - aLat) * 110540;
-  const dx = (bLon - aLon) * 111320 * Math.cos((aLat + bLat) * Math.PI / 360);
-  return Math.hypot(dx, dy);
-}
+/** Nächster Routenpunkt; Orte mehr als ~2 km (0,02° Breite) daneben werden gar nicht erst verglichen. */
+const nearest = (samples, lat, lon) => nearestSample(samples, lat, lon, 0.02);
 
 /** Rechtecke (W,S,O,N) für je ~10 km Route. */
 function windows(samples) {
@@ -96,16 +95,7 @@ export async function searchAlongRoute(r, category, { maxOffset = 1000, signal }
   }
 }
 
-function nearest(samples, lat, lon) {
-  let offset = Infinity, along = 0;
-  for (const s of samples) {
-    if (Math.abs(s.lat - lat) > 0.02) continue;
-    const d = approxDist(s.lat, s.lon, lat, lon);
-    if (d < offset) { offset = d; along = s.along; }
-  }
-  return { along, offset };
-}
-
+/** Photon-Kategoriesuche abschnittsweise entlang der Route; `known`: Cache-Daten je OSM-Kennung (Öffnungszeiten). */
 async function searchPhoton(r, category, samples, known, { maxOffset, signal }) {
   const cat = PLACE_CATEGORIES[category];
   const boxes = windows(samples);
