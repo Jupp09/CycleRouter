@@ -108,7 +108,8 @@ async function handleWarmRoute(req, res) {
  * Nur diese Dateien/Ordner werden ausgeliefert – alles andere im Projektordner (.env mit Zugangsdaten,
  * server/, node_modules/, cache/, package.json …) bleibt privat.
  */
-const PUBLIC = [/^\/index\.html$/, /^\/manifest\.webmanifest$/, /^\/(js|css|profiles|icons)\/[\w./-]+$/];
+// Bilder liegen unter assets/ statt icons/: Apache leitet /icons/ auf seine eigenen Symbole um (z. B. bei Plesk)
+const PUBLIC = [/^\/index\.html$/, /^\/manifest\.webmanifest$/, /^\/(js|css|profiles|assets)\/[\w./-]+$/];
 
 createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');

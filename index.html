@@ -10,7 +10,8 @@
 
   <!-- Installierbare WebApp („Zum Home-Bildschirm“) -->
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <!-- Nicht unter /icons/: Apache (z. B. bei Plesk) leitet diesen Pfad auf seine eigenen Symbole um → 404 -->
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="CycloRouter">
