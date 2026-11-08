@@ -172,6 +172,24 @@ export function debounce(fn, ms) {
 
 const storageListeners = [];
 
+// ---------- OpenStreetMap-Links ----------
+// `id` wie in poiSource.js/placeSearch.js: 'node/123', 'way/45', 'relation/6'.
+
+/** Objekt auf openstreetmap.org ansehen. */
+export const osmUrl = id => `https://www.openstreetmap.org/${id}`;
+
+/** Objekt im Editor auf openstreetmap.org öffnen (z. B. Öffnungszeiten nachtragen) – braucht ein OSM-Konto. */
+export function osmEditUrl(id) {
+  const [type, num] = id.split('/');
+  return `https://www.openstreetmap.org/edit?${new URLSearchParams({ [type]: num })}`;
+}
+
+/** Hinweis („Note“) an dieser Stelle melden – ohne OSM-Konto; Mapper vor Ort korrigieren ihn. */
+export function osmNoteUrl({ lat, lon }) {
+  const la = lat.toFixed(5), lo = lon.toFixed(5);
+  return `https://www.openstreetmap.org/note/new?lat=${la}&lon=${lo}#map=18/${la}/${lo}`;
+}
+
 export const storage = {
   get(key, fallback) {
     try {

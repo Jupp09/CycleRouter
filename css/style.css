@@ -373,6 +373,9 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
 .stop-popup b { font-size: 0.875rem; }
 .stop-popup .muted { color: #6b6878; }
 .stop-popup a { color: #6d28d9; }
+/* Link-Zeile im Popup: In OSM ansehen · Bearbeiten · Fehler melden (dom.js osmLinks) */
+.stop-popup .links { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 6px; }
+.stop-popup .links a { white-space: nowrap; }
 
 /* ---------- Elevation ---------- */
 .elevation { height: 160px; flex: none; background: var(--panel); border-top: 1px solid var(--border); padding: 8px 12px 4px; }

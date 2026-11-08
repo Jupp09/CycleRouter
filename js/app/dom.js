@@ -4,6 +4,7 @@
  * Daten aus OSM, vom Nutzer oder vom Server.
  */
 import { announce } from '../announce.js';
+import { osmUrl, osmEditUrl, osmNoteUrl } from '../utils.js';
 
 export const $ = sel => document.querySelector(sel);
 
@@ -74,6 +75,30 @@ export function externalLink(text, href) {
   a.rel = 'noopener';
   a.textContent = text;
   return a;
+}
+
+/**
+ * Link-Zeile für ein OSM-Objekt im Popup: ansehen, bearbeiten (OSM-Konto nötig) und Fehler melden (ohne Konto).
+ * `extra`: weitere Links davor (z. B. Preis prüfen, Webseite).
+ */
+export function osmLinks(poi, extra = []) {
+  const box = document.createElement('div');
+  box.className = 'links';
+  box.append(...extra,
+    externalLink('In OSM ansehen', osmUrl(poi.id)),
+    externalLink('Bearbeiten', osmEditUrl(poi.id)),
+    externalLink('Fehler melden', osmNoteUrl(poi)));
+  box.lastChild.title = 'Hinweis für Mapper vor Ort – ohne OpenStreetMap-Konto';
+  box.children[box.children.length - 2].title = 'Im Editor von OpenStreetMap öffnen, z. B. um Öffnungszeiten nachzutragen (OSM-Konto nötig)';
+  return box;
+}
+
+/** Hinweiszeile, wenn ein Laden/Café in OSM keine eigenen Öffnungszeiten hat. */
+export function missingHoursLine() {
+  const d = document.createElement('div');
+  d.className = 'muted';
+  d.textContent = 'Öffnungszeiten fehlen in OpenStreetMap – über „Bearbeiten“ nachtragen.';
+  return d;
 }
 
 /** Knopf im Link-Stil (für Nebenaktionen in Hinweiszeilen). */

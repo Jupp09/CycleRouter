@@ -85,12 +85,6 @@ export function priceLink(poi, night) {
 
 export const websiteOf = poi => poi.tags.website || poi.tags['contact:website'] || null;
 
-/** Link, um einen Fehler an dieser Stelle in OpenStreetMap zu melden (Hinweis/„Note“ für Mapper vor Ort). */
-export function osmNoteLink({ lat, lon }) {
-  const la = lat.toFixed(5), lo = lon.toFixed(5);
-  return `https://www.openstreetmap.org/note/new?lat=${la}&lon=${lo}#map=18/${la}/${lo}`;
-}
-
 // ---------- Verfügbarkeit und Aktualität ----------
 
 /**

@@ -7,7 +7,7 @@ import { regionAt, regionLabel } from '../regions.js';
 import { holidayAt } from '../holidays.js';
 import { storage, formatKm, formatM, formatClock, formatWeekday, formatDayDate } from '../utils.js';
 import { state, on, defaultDeparture } from './state.js';
-import { $, textLines, externalLink, rowButton, span, popupButton, listAction } from './dom.js';
+import { $, textLines, rowButton, span, popupButton, listAction, osmLinks, missingHoursLine } from './dom.js';
 import { addVia } from './waypoints.js';
 import { map } from './mapView.js';
 import { syncUi } from './controls.js';
@@ -45,7 +45,9 @@ function stopPopup(s) {
   if (hours) lines.push(hours);
   if (s.region) lines.push(regionLabel(s.region, homeCountry()));
   if (s.holiday) lines.push(`🎉 Feiertag: ${s.holiday.name}`);
-  el.append(title, ...textLines(lines), externalLink('In OpenStreetMap ansehen', `https://www.openstreetmap.org/${s.poi.id}`),
+  el.append(title, ...textLines(lines));
+  if (!s.poi.tags.opening_hours) el.append(missingHoursLine()); // auch bei typischen Zeiten der Kette
+  el.append(osmLinks(s.poi),
     popupButton('Als festen Zwischenstopp übernehmen', () => fixStop(s)));
   return el;
 }
@@ -78,7 +80,7 @@ function waterPopup(w) {
     `Ankunft ca. ${formatWeekday(w.eta)} ${formatClock(w.eta)} – ${STATE_LABELS[w.state]}`,
   ];
   if (w.poi.tags.opening_hours) lines.push(`Öffnungszeiten: ${w.poi.tags.opening_hours}`);
-  el.append(title, ...textLines(lines), externalLink('In OpenStreetMap ansehen', `https://www.openstreetmap.org/${w.poi.id}`),
+  el.append(title, ...textLines(lines), osmLinks(w.poi),
     popupButton('Als Zwischenstopp hinzufügen', () => addWater(w)));
   return el;
 }

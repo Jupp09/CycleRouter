@@ -8,7 +8,7 @@ import { arrivalAt } from '../timeline.js';
 import { haversine, debounce, formatClock } from '../utils.js';
 import { announce } from '../announce.js';
 import { state, on, departureDate } from './state.js';
-import { $, rowButton, span, popupButton, listAction } from './dom.js';
+import { $, rowButton, span, popupButton, listAction, osmLinks, missingHoursLine } from './dom.js';
 import { map } from './mapView.js';
 import { addVia } from './waypoints.js';
 
@@ -55,8 +55,10 @@ function alongPopup(res) {
   if (res.detail) line(res.detail, 'muted');
   line(openingText(res).text);
   if (res.opening.hours) line(`Öffnungszeiten${res.opening.typical ? ' (typisch)' : ''}: ${res.opening.hours}`, 'muted');
+  // Nur wenn der OSM-Eintrag bekannt ist (Cache) – ein Photon-Treffer allein sagt nichts über Öffnungszeiten
+  if (res.poi && !res.poi.tags.opening_hours) el.append(missingHoursLine());
   line(`km ${(res.along / 1000).toFixed(1)} · ${offsetText(res)}`);
-  el.append(popupButton('Als Zwischenstopp hinzufügen', () => addAlongResult(res)));
+  el.append(osmLinks(res), popupButton('Als Zwischenstopp hinzufügen', () => addAlongResult(res)));
   return el;
 }
 

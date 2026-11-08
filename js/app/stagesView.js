@@ -5,13 +5,13 @@
  * (km pro Tag, Budget, Unterkunftsarten, Übernachtung am Ziel).
  */
 import {
-  STAY_TYPES, STAY_GROUPS, isMultiDayCandidate, priceLabel, priceLink, websiteOf, osmNoteLink,
+  STAY_TYPES, STAY_GROUPS, isMultiDayCandidate, priceLabel, priceLink, websiteOf,
   AVAILABILITY_LABEL, lastConfirmed,
 } from '../stays.js';
 import { stageStats } from '../timeline.js';
-import { storage, formatKm, formatM, formatDuration, formatDayDate } from '../utils.js';
+import { storage, formatKm, formatM, formatDuration, formatDayDate, osmNoteUrl } from '../utils.js';
 import { state, on, departureDate, originRoute } from './state.js';
-import { $, textLines, externalLink, linkButton, flashStatus } from './dom.js';
+import { $, textLines, externalLink, linkButton, flashStatus, osmLinks } from './dom.js';
 import { map } from './mapView.js';
 import { replanStops } from './pipeline.js';
 import { setDeparture } from './supplyView.js';
@@ -141,19 +141,26 @@ function stayPopup(night) {
     `${night.end ? 'Übernachtung am Ziel' : `Nacht ${night.index + 1}`} · ${formatDayDate(night.date)}`,
     `${STAY_TYPES[poi.type].label}${poi.tags.stars ? ` · ${poi.tags.stars}★` : ''} · ${(offset / 1000).toFixed(1)} km neben der Route`,
     `${priceLabel(price)} – ${FIT_LABEL[fit]}`,
-  ]), stayLinks(night));
+    // Bei Unterkünften meist die Rezeptionszeiten – nur zeigen; fehlende sind keinen Hinweis wert
+    ...(poi.tags.opening_hours ? [`Öffnungszeiten: ${poi.tags.opening_hours}`] : []),
+  ]), osmLinks(poi, bookingLinks(night))); // Preis/Webseite + In OSM ansehen, Bearbeiten, Fehler melden
   return el;
 }
 
-/** Preis prüfen, Webseite und „Fehler melden“ (Hinweis in OpenStreetMap – Mapper vor Ort korrigieren ihn). */
-function stayLinks(night) {
+/** Preis prüfen und Webseite der gewählten Unterkunft → [Link]. */
+function bookingLinks(night) {
   const { poi } = night.chosen;
+  const links = [externalLink('Preis prüfen', priceLink(poi, night))];
+  const web = websiteOf(poi);
+  if (web && /^https?:\/\//i.test(web)) links.push(externalLink('Webseite', web));
+  return links;
+}
+
+/** Links in der Etappenliste: Preis, Webseite und „Fehler melden“ (Hinweis in OpenStreetMap – Mapper vor Ort korrigieren ihn). */
+function stayLinks(night) {
   const box = document.createElement('div');
   box.className = 'links';
-  box.append(externalLink('Preis prüfen', priceLink(poi, night)));
-  const web = websiteOf(poi);
-  if (web && /^https?:\/\//i.test(web)) box.append(externalLink('Webseite', web));
-  box.append(externalLink('Fehler melden', osmNoteLink(poi)));
+  box.append(...bookingLinks(night), externalLink('Fehler melden', osmNoteUrl(night.chosen.poi)));
   return box;
 }
 

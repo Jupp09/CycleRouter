@@ -48,7 +48,7 @@ npm run extract:build    # build the extract locally (Linux/macOS with curl + os
 | Module | Role |
 | --- | --- |
 | [state.js](js/app/state.js) | The `state` object (settings are read from storage at startup), derived values (`provider()`, `routeOpts()`, `departureDate()`, `isLoop()`, `originRoute()` …) and a small event bus `on()`/`emit()` |
-| [dom.js](js/app/dom.js) | `$`, frequently used elements (`ui`), status line (`setStatus`, `flashStatus`), element helpers, the in-app `ask()` dialog (instead of `confirm`/`prompt`, which look foreign in iOS standalone mode) |
+| [dom.js](js/app/dom.js) | `$`, frequently used elements (`ui`), status line (`setStatus`, `flashStatus`), element helpers (incl. `osmLinks(poi)`, the view/edit/report link row every POI popup uses; URLs from `osmUrl`/`osmEditUrl`/`osmNoteUrl` in utils.js), the in-app `ask()` dialog (instead of `confirm`/`prompt`, which look foreign in iOS standalone mode) |
 | [mapView.js](js/app/mapView.js) | Creates the map and the elevation chart; route line and draggable markers. Click/drag handlers are registered later by `waypoints.js` via `setMapHandlers()` |
 | [pipeline.js](js/app/pipeline.js) | The calculation pipeline (`run`, `showRoute`, `clearRoute`, `replanStops`, `calcAB`, `generate`, `recalc`) |
 | [controls.js](js/app/controls.js) | `syncUi()` (state → all switches and fields) and the routing controls (bike, mode, traffic, EuroVelo, provider, direction, distance) |
