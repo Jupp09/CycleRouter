@@ -79,6 +79,8 @@ Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Pr
 | **BRouter** (Standard) | `fastbike`, `fastbike-lowtraffic`, `fastbike-verylowtraffic` | `gravel` | `trekking` | kein Key nötig |
 | **OpenRouteService** | `cycling-road` | `cycling-regular` | `cycling-regular` | kostenloser API-Key ([Registrierung](https://openrouteservice.org/dev/#/signup)), Eingabe über das Zahnrad; Rundkurse nativ über `round_trip` |
 
+**Wenn BRouter ausgelastet ist:** Die App versucht es nach 2 und 5 Sekunden erneut und zeigt das in der Statuszeile. Klappt es dann noch nicht, rechnet sie mit [Valhalla](https://valhalla1.openstreetmap.de) (öffentlicher Server der FOSSGIS, ohne Key) und weist im Ergebnis darauf hin – Valhalla bewertet Wege etwas anders und kennt keine EuroVelo-Bevorzugung. Routen werden Teilstück für Teilstück (zwischen zwei Wegpunkten) berechnet und für die Sitzung gemerkt; kommen Verpflegungsstopps oder Übernachtungen hinzu, werden nur die geänderten Teilstücke neu angefragt.
+
 Rundkurse und Distanz-Routen mit BRouter werden in [js/generators.js](js/generators.js) erzeugt: Wegpunkte auf einem Kreis bzw. ein Ziel in passender Luftlinie. Danach wird iterativ skaliert, bis die Länge höchstens 6 % von der Wunschdistanz abweicht.
 
 ## Aufbau
@@ -107,7 +109,7 @@ js/app/                Oberfläche und Ablauf
 
 js/map.js              Leaflet-Karte, Layer, Marker
 js/geocode.js          Ortssuche (Photon, Nominatim als Ausweich)
-js/routing/            BRouter- und ORS-Anbindung
+js/routing/            BRouter-, ORS- und Valhalla-Anbindung (Valhalla als Ausweich), Teilstück-Cache
 js/generators.js       Rundkurs- und Distanz-Generator
 js/elevation.js        Höhenprofil (SVG)
 js/gpx.js              GPX-Erzeugung und Teilen

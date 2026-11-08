@@ -36,6 +36,13 @@ export function routeSummary(r) {
 }
 
 function renderStats(r) {
+  // Teilstücke vom Ausweichdienst (routing/index.js): offen sagen, dass die Route anders bewertet wurde
+  const fb = $('#routing-fallback');
+  fb.hidden = !r.fallback;
+  if (r.fallback) {
+    fb.textContent = `BRouter war ausgelastet – die Route wurde ganz oder teilweise mit ${r.fallback} berechnet. `
+      + 'Valhalla bewertet Wege etwas anders, eine EuroVelo-Bevorzugung gibt es dort nicht. Spätere Berechnungen versuchen es wieder mit BRouter.';
+  }
   $('#stat-dist').textContent = formatKm(r.distance);
   $('#stat-up').textContent = formatM(r.ascent);
   $('#stat-down').textContent = formatM(r.descent);

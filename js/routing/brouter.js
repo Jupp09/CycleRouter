@@ -1,5 +1,6 @@
 import { classifyOsmTags, mergeSegments } from '../surfaces.js';
 import { haversine } from '../utils.js';
+import { routingNotice, sleep } from './notice.js';
 
 const ENDPOINT = 'https://brouter.de/brouter';
 
@@ -9,11 +10,18 @@ const PROFILES = {
   trekking: { normal: 'trekking', low: 'trekking', verylow: 'trekking' }, // Trekking-/Alltagsrad
 };
 
+/** Antwort, die nur „zu viel los“ bedeutet – ein neuer Versuch oder ein anderer Dienst kann helfen. */
+const BUSY_TEXT = /retry later|watchdog|timeout|timed out|too many|busy|overload/i;
+const BUSY_STATUS = new Set([429, 502, 503, 504]);
+
+/** Wartezeiten vor dem 2. und 3. Versuch, wenn BRouter ausgelastet ist */
+const RETRY_DELAYS = [2000, 5000];
+
 function translateError(text) {
   if (/not mapped|no track found|position not/i.test(text)) {
     return 'Ein Punkt liegt zu weit von einem befahrbaren Weg entfernt.';
   }
-  if (/retry later|watchdog|timeout/i.test(text)) {
+  if (BUSY_TEXT.test(text)) {
     return 'BRouter ist gerade ausgelastet – bitte gleich noch einmal versuchen.';
   }
   return 'BRouter-Fehler: ' + text.slice(0, 200);
@@ -67,20 +75,40 @@ export function patchProfile(src, penalty) {
     + src.slice(end);
 }
 
+const uploading = new Map(); // `${profil}|${faktor}` → laufender Upload (Teilstücke fragen gleichzeitig an)
+
 async function customProfile(name, penalty, signal, force = false) {
   const key = `${name}|${penalty}`;
   const hit = uploaded.get(key);
   if (!force && hit && Date.now() - hit.t < PROFILE_TTL) return hit.id;
-
-  const text = patchProfile(await loadSource(name), penalty);
-  const res = await fetch(`${ENDPOINT}/profile`, { method: 'POST', body: text, signal });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.profileid) throw new Error('BRouter: EuroVelo-Profil konnte nicht hochgeladen werden' + (data.error ? ` (${data.error})` : ''));
-  uploaded.set(key, { id: data.profileid, t: Date.now() });
-  return data.profileid;
+  if (!uploading.has(key)) {
+    // Ohne signal: Der Upload gehört allen wartenden Teilstücken, nicht nur dem ersten
+    const p = (async () => {
+      const text = patchProfile(await loadSource(name), penalty);
+      let res;
+      try {
+        res = await fetch(`${ENDPOINT}/profile`, { method: 'POST', body: text });
+      } catch {
+        throw Object.assign(new Error('BRouter ist nicht erreichbar (Internetverbindung oder Server überlastet).'), { busy: true });
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.profileid) {
+        throw Object.assign(new Error('BRouter: EuroVelo-Profil konnte nicht hochgeladen werden' + (data.error ? ` (${data.error})` : '')),
+          { busy: BUSY_STATUS.has(res.status) || BUSY_TEXT.test(String(data.error || '')) });
+      }
+      uploaded.set(key, { id: data.profileid, t: Date.now() });
+      return data.profileid;
+    })();
+    uploading.set(key, p);
+    p.catch(() => {}).finally(() => uploading.delete(key));
+  }
+  const id = await uploading.get(key);
+  if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError');
+  return id;
 }
 
-async function request(points, profile, signal) {
+/** Eine Anfrage → {ok, text, busy}. `busy`: ausgelastet bzw. nicht erreichbar (neuer Versuch sinnvoll). */
+async function requestOnce(points, profile, signal) {
   const lonlats = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join('|');
   const url = `${ENDPOINT}?lonlats=${encodeURIComponent(lonlats)}&profile=${profile}&alternativeidx=0&format=geojson`;
   let res;
@@ -88,10 +116,26 @@ async function request(points, profile, signal) {
     res = await fetch(url, { signal });
   } catch (e) {
     if (e.name === 'AbortError') throw e;
-    throw new Error('BRouter ist nicht erreichbar. Internetverbindung prüfen.');
+    // Unter Last bricht brouter.de Verbindungen auch einfach ab – wie „ausgelastet“ behandeln
+    return { ok: false, busy: true, text: 'BRouter ist nicht erreichbar (Internetverbindung oder Server überlastet).' };
   }
   const text = await res.text();
-  return { ok: res.ok && text.trimStart().startsWith('{'), text };
+  const ok = res.ok && text.trimStart().startsWith('{');
+  return { ok, text, busy: !ok && (BUSY_STATUS.has(res.status) || BUSY_TEXT.test(text)) };
+}
+
+/**
+ * Anfrage mit neuen Versuchen: brouter.de antwortet unter Last mit „retry later“ bzw. Timeouts. Nach 2 und
+ * 5 s klappt es meist; erst danach gilt die Anfrage als gescheitert (und index.js weicht auf Valhalla aus).
+ * `retries: false` (BRouter gerade als ausgelastet bekannt): nur ein Versuch.
+ */
+async function request(points, profile, signal, retries = true) {
+  for (let attempt = 0; ; attempt++) {
+    const r = await requestOnce(points, profile, signal);
+    if (r.ok || !r.busy || !retries || attempt >= RETRY_DELAYS.length) return r;
+    routingNotice(`BRouter ist ausgelastet – neuer Versuch in ${RETRY_DELAYS[attempt] / 1000} s …`);
+    await sleep(RETRY_DELAYS[attempt], signal);
+  }
 }
 
 export const brouter = {
@@ -99,19 +143,24 @@ export const brouter = {
   name: 'BRouter',
   supportsTraffic: true,
   supportsEurovelo: true,
+  // index.js rechnet Teilstück für Teilstück und merkt sie sich (BRouter rechnet Wegpunkte ohnehin einzeln)
+  perLeg: true,
 
-  /** points: [{lat, lon}, ...] → {coords: [[lat, lon, ele], ...]} */
-  async route(points, { bike, traffic, eurovelo = 'off' }, signal) {
+  /**
+   * points: [{lat, lon}, ...] → {coords: [[lat, lon, ele], ...], segments}.
+   * Fehler tragen `busy: true`, wenn BRouter ausgelastet bzw. nicht erreichbar war.
+   */
+  async route(points, { bike, traffic, eurovelo = 'off', retries = true }, signal) {
     const base = PROFILES[bike][traffic] || PROFILES[bike].normal;
     const penalty = EUROVELO_PENALTY[eurovelo];
     let profile = penalty ? await customProfile(base, penalty, signal) : base;
-    let { ok, text } = await request(points, profile, signal);
+    let { ok, text, busy } = await request(points, profile, signal, retries);
     // Abgelaufenes eigenes Profil → einmal neu hochladen
-    if (!ok && penalty && /profile/i.test(text)) {
+    if (!ok && !busy && penalty && /profile/i.test(text)) {
       profile = await customProfile(base, penalty, signal, true);
-      ({ ok, text } = await request(points, profile, signal));
+      ({ ok, text, busy } = await request(points, profile, signal, retries));
     }
-    if (!ok) throw new Error(translateError(text));
+    if (!ok) throw Object.assign(new Error(translateError(text)), { busy });
 
     const feature = JSON.parse(text).features[0];
     const coords = feature.geometry.coordinates.map(([lon, lat, ele]) => [lat, lon, ele ?? null]);

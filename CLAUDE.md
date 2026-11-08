@@ -65,7 +65,7 @@ Views don't call each other to refresh. `showRoute()`/`clearRoute()` emit `'rout
 
 | Module | Role |
 | --- | --- |
-| [routing/](js/routing/) | Provider adapters. `index.js` exports `providers` and `route()` / `withStats()` |
+| [routing/](js/routing/) | Provider adapters. `index.js` exports `providers`, `route()` / `withStats()` and `onRoutingNotice()`; it also holds the per-leg cache and the fallback to Valhalla |
 | [generators.js](js/generators.js) | Loop and distance routes: places waypoints on a circle (or a target at a matching straight-line distance), then rescales up to 5× until the length is within 6 % of the target |
 | [stops.js](js/stops.js) | Supply stops (water, supermarket, bakery, café, fuel): choose one stop per interval by opening hours at the ETA, holidays and detour, then re-route through them (`addStops`); `openingAt()` |
 | [stays.js](js/stays.js) | Multi-day trips: splits the route into stages, scores overnight stays per night (budget, stage length, detour) and estimates prices; links (price check, OSM note) |
@@ -97,7 +97,11 @@ The route is shown after each step, so it is usable before the stop search finis
 
 ### Routing providers
 
-A provider is `{id, name, supportsTraffic, supportsEurovelo?, route(points, opts, signal), roundTrip?(...)}` and returns `{coords, segments}`.
+A provider is `{id, name, supportsTraffic, supportsEurovelo?, perLeg?, route(points, opts, signal), roundTrip?(...)}` and returns `{coords, segments}`.
+
+`route()` in [routing/index.js](js/routing/index.js) is the only entry point; don't call `provider.route` directly (except `roundTrip`). For providers with `perLeg` (BRouter, Valhalla) it requests each pair of consecutive waypoints separately, at most 2 at a time, and keeps each leg for 1 h (LRU, 400 legs). Adding a stop or stay, a re-plan or toggling an option back therefore only requests the changed legs. Identical legs requested at the same time share one request (`shared()`), which is aborted only when every waiter has aborted. Cached legs are shared between routes, so never mutate a route's `coords`. ORS is not split, because each request counts against the user's daily quota.
+
+**Busy handling:** BRouter retries after 2 s and 5 s when brouter.de answers "retry later"/timeouts/5xx or drops the connection. The status line shows this via `onRoutingNotice` (set in pipeline.js). If it still fails, the error has `busy: true` and `route()` computes that leg with **Valhalla** (FOSSGIS server, [routing/valhalla.js](js/routing/valhalla.js)); for the next 60 s further legs skip the retries. Fallback legs are cached for only 5 min. The route then has `fallback: 'Valhalla'`, and resultsView shows a hint. Errors that are not about load (point not routable) never fall back. Valhalla is not selectable in the settings: it rates ways differently and has no EuroVelo preference, and its usage policy allows only moderate use. Its surface/way type come from a second `trace_attributes` call, mapped onto the coordinates by edge length.
 
 - **BRouter** (default, no key): profiles per bike/traffic in `PROFILES`. For the EuroVelo preference, the client loads the `.brf` from [profiles/](profiles/), rewrites `costfactor` in `patchProfile()`, uploads it to brouter.de and caches the profile id for 6 h. If BRouter later rejects the id, the client uploads it again. The `.brf` files live in this repo because brouter.de doesn't serve them with CORS headers. Don't reformat them, since `patchProfile` matches `^assign costfactor`.
 - **OpenRouteService**: needs an API key that the user enters in settings. The key is stored in `localStorage` only and **never synced to the server**. ORS also has a native `roundTrip`.

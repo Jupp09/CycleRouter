@@ -9,7 +9,7 @@
  * route.base – siehe CLAUDE.md). Eine neue Berechnung bricht die laufende ab; AbortError wird still
  * verschluckt.
  */
-import { route } from '../routing/index.js';
+import { route, onRoutingNotice } from '../routing/index.js';
 import { generateLoop, generateOneWay } from '../generators.js';
 import { addStops, holidayContext, applyHolidays } from '../stops.js';
 import { warmRoute } from '../poiTiles.js';
@@ -23,6 +23,9 @@ import { setPoint } from './waypoints.js';
 import { routeSummary } from './resultsView.js';
 
 let controller = null;
+
+// Hinweise der Routing-Schicht (z. B. „BRouter ist ausgelastet – neuer Versuch in 2 s …“) während einer Berechnung zeigen
+onRoutingNotice(text => { if (controller && !controller.signal.aborted) setStatus(text, 'loading'); });
 
 /** Laufende Berechnung (inkl. Unterkunfts- und Stoppsuche) abbrechen. */
 export function abortCalculation() {
