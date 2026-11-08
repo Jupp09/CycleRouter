@@ -231,6 +231,13 @@ input[type="datetime-local"] {
 
 .stops { display: flex; flex-direction: column; gap: 6px; }
 .stops > .label { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+/* Trinkwasser: einklappbar, Überschrift wie .label */
+.water summary { cursor: pointer; padding: 2px 0; font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+.water summary h2 { display: inline; margin: 0; font-size: inherit; font-weight: inherit; }
+.water .count { font-weight: 400; }
+.water[open] summary { margin-bottom: 6px; }
+.water .hint { margin: 0 0 6px; }
+.water .stop-list { max-height: 320px; overflow-y: auto; }
 .stop-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .stop-list li { border-radius: 8px; background: var(--surface); font-size: 0.8125rem; }
 .stop-list .row { grid-template-columns: 26px 1fr auto; gap: 8px; padding: 6px 8px; }
@@ -344,6 +351,11 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
   background: #fff; border: 2px solid #111827; box-shadow: 0 1px 4px rgba(0, 0, 0, .45); font-size: 15px; line-height: 1;
 }
 .stop-pin.warn { border-color: #d97706; }
+.water-pin {
+  width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  background: #fff; border: 2px solid #0072b2; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); font-size: 12px; line-height: 1;
+}
+.water-pin.warn { border-color: #d97706; border-style: dashed; }
 .via-pin {
   width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
   background: var(--route); color: #fff; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .45);
@@ -437,7 +449,7 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
   .route-list li.current { outline-color: Highlight; }
   .bar > span, .elevation-chart rect { forced-color-adjust: none; }
   /* Marker: Start grün, Ziel rot usw. – auf der (ohnehin farbigen) Karte unverändert lassen */
-  .marker-pin, .via-pin, .stop-pin, .stay-pin, .search-pin { forced-color-adjust: none; }
+  .marker-pin, .via-pin, .stop-pin, .water-pin, .stay-pin, .search-pin { forced-color-adjust: none; }
   .elevation-chart .line { stroke: CanvasText; }
   .elevation-chart .area { fill: Canvas; }
   .elevation-chart .axis { fill: CanvasText; }

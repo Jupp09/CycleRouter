@@ -35,6 +35,7 @@ export const state = {
   supply: {
     enabled: storage.get('supplyEnabled', false),
     intervalKm: storage.get('supplyInterval', 30),
+    style: storage.get('supplyStyle', 'fast'),    // Pausenstil: 'fast' | 'relaxed' (STYLES in stops.js)
     departure: defaultDeparture(),                // Wert eines datetime-local-Felds; auch Start der Mehrtagestour
   },
 

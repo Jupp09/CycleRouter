@@ -23,7 +23,14 @@ export function toGpx(route, name) {
   </wpt>
 `;
   }).join('');
-  const wpts = vias + stays + (route.stops || []).map(s => {
+  // Trinkwasser an der Route (nur angezeigt, nicht angefahren) – auf dem Radcomputer nützlich
+  const water = (route.water || []).map(w => `  <wpt lat="${w.poi.lat.toFixed(6)}" lon="${w.poi.lon.toFixed(6)}">
+    <name>${escapeXml(`Trinkwasser${w.poi.name ? ': ' + w.poi.name : ''}`)}</name>${w.poi.tags.opening_hours ? `
+    <desc>${escapeXml(w.poi.tags.opening_hours)}</desc>` : ''}
+    <sym>Drinking Water</sym>
+  </wpt>
+`).join('');
+  const wpts = vias + stays + water + (route.stops || []).map(s => {
     const name = `${s.typeLabel}${s.poi.name ? ': ' + s.poi.name : ''}`;
     return `  <wpt lat="${s.poi.lat.toFixed(6)}" lon="${s.poi.lon.toFixed(6)}">
     <name>${escapeXml(name)}</name>${hours(s) ? `

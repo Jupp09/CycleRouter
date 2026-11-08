@@ -67,7 +67,7 @@ Views don't call each other to refresh. `showRoute()`/`clearRoute()` emit `'rout
 | --- | --- |
 | [routing/](js/routing/) | Provider adapters. `index.js` exports `providers`, `route()` / `withStats()` and `onRoutingNotice()`; it also holds the per-leg cache and the fallback to Valhalla |
 | [generators.js](js/generators.js) | Loop and distance routes: places waypoints on a circle (or a target at a matching straight-line distance), then rescales up to 5× until the length is within 6 % of the target |
-| [stops.js](js/stops.js) | Supply stops (water, supermarket, bakery, café, fuel): choose one stop per interval by opening hours at the ETA, holidays and detour, then re-route through them (`addStops`); `openingAt()` |
+| [stops.js](js/stops.js) | Supply stops with food (supermarket, convenience, bakery, café, restaurant, fuel): choose one stop per interval by opening hours at the ETA, holidays and detour, then re-route through them (`addStops`). The pause style (`STYLES`: `fast`/`relaxed`, setting `supplyStyle`) sets type preference, whether fuel stations count, and the dwell time. Free public drinking water within 400 m is only shown (`route.water`, gaps > 50 km in `route.waterGaps`), never routed through; `openingAt()` |
 | [stays.js](js/stays.js) | Multi-day trips: splits the route into stages, scores overnight stays per night (budget, stage length, detour) and estimates prices; links (price check, OSM note) |
 | [poiTiles.js](js/poiTiles.js) | Client side of the POI tile cache (memory → IndexedDB → server → Overpass): `fetchPois(route, …)`, `fetchPoisNear(points, …)`, `sessionPois()` |
 | [chainHours.js](js/chainHours.js) | Typical opening hours of a chain (from its other branches in the loaded tiles) for POIs without `opening_hours` |

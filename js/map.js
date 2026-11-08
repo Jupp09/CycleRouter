@@ -77,6 +77,8 @@ export function createMap(el, { onClick, onMarkerDrag }) {
 
   const markerLayer = L.layerGroup().addTo(map);
   const routeLayer = L.layerGroup().addTo(map);
+  const waterLayer = L.layerGroup().addTo(map);
+  const waterMarkers = new Map();
   const stopLayer = L.layerGroup().addTo(map);
   const stopMarkers = new Map();
   const stayLayer = L.layerGroup().addTo(map);
@@ -155,6 +157,30 @@ export function createMap(el, { onClick, onMarkerDrag }) {
         }), s.title).bindPopup(s.popup).addTo(stopLayer);
         stopMarkers.set(s.id, marker);
       }
+    },
+
+    /** Trinkwasser an der Route (nur angezeigt, kleiner als die Stopps): [{id, lat, lon, warn, title, popup: HTMLElement}] */
+    setWater(points = []) {
+      waterLayer.clearLayers();
+      waterMarkers.clear();
+      for (const w of points) {
+        const marker = named(L.marker([w.lat, w.lon], {
+          icon: L.divIcon({
+            className: '', iconSize: [22, 22], iconAnchor: [11, 11], popupAnchor: [0, -11],
+            html: `<div class="water-pin${w.warn ? ' warn' : ''}">💧</div>`,
+          }),
+          zIndexOffset: 300,
+          title: w.title || '',
+        }), w.title).bindPopup(w.popup).addTo(waterLayer);
+        waterMarkers.set(w.id, marker);
+      }
+    },
+
+    openWater(id) {
+      const m = waterMarkers.get(id);
+      if (!m) return;
+      map.setView(m.getLatLng(), Math.max(map.getZoom(), 15), motion());
+      m.openPopup();
     },
 
     /** Gewählte Unterkünfte einer Mehrtagestour: [{id, lat, lon, icon, title?, popup: HTMLElement}] */

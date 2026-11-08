@@ -1,6 +1,10 @@
 /**
- * Verpflegungsstopps: Trinkwasserstellen, Supermärkte, Bäckereien, Cafés und Tankstellen entlang der Route
- * suchen, etwa alle `interval` Meter einen auswählen und die Route durch sie führen.
+ * Verpflegung entlang der Route:
+ *
+ * - **Verpflegungsstopps** mit Essen (Supermärkte, Läden, Bäckereien, Cafés, Restaurants und – im Stil
+ *   „zügig“ – Tankstellen): etwa alle `interval` Meter einer, die Route wird durch sie geführt.
+ * - **Trinkwasser**: alle öffentlichen, kostenlosen Wasserstellen nahe der Route, nur angezeigt (kein Umweg),
+ *   dazu ein Hinweis auf lange Strecken ohne Wasser.
  *
  * Bei jeder Stelle zählt, ob sie bei der geschätzten Ankunft geöffnet hat – inklusive Feiertagen am Ort
  * (Bundesland bzw. Land) und typischen Öffnungszeiten von Ketten, wenn die Filiale selbst keine Angaben hat.
@@ -14,13 +18,36 @@ import { withTypicalHours } from './chainHours.js';
 import { timeline } from './timeline.js';
 import { locateOnRoute, locateNearRoute, insertWaypoints } from './routeGeometry.js';
 
-/** Maximale Entfernung von der Route (Luftlinie, m) – zugleich die Typen, die als Verpflegungsstopp infrage kommen. */
-const MAX_OFFSET = { water: 400, supermarket: 1000, convenience: 800, fuel: 800, bakery: 600, cafe: 600 };
-/** Vorrang unter geöffneten Läden: Supermarkt vor Bäckerei vor Café vor Laden/Tankstelle. */
-const TYPE_BIAS = { supermarket: 0, bakery: 0.1, cafe: 0.2, convenience: 0.3, fuel: 0.3 };
+/** Maximale Entfernung von der Route (Luftlinie, m) für Verpflegungsstopps. */
+const MAX_OFFSET = { supermarket: 1000, convenience: 800, fuel: 800, bakery: 600, cafe: 600, restaurant: 600 };
+/** Trinkwasser wird ohne Umweg angezeigt – daher nur Stellen nahe an der Route. */
+const WATER_OFFSET = 400;
+/** Wasserstellen, die entlang der Route näher als das beieinander liegen (z. B. mehrere Hähne auf einem Friedhof), zählen als eine. */
+const WATER_MERGE = 150;
+/** Ab so viel Strecke (m) ohne Trinkwasser gibt es einen Hinweis. */
+export const WATER_GAP = 50000;
 const WINTER = [10, 11, 0, 1, 2]; // November bis März
-/** Angenommene Aufenthaltsdauer je Stopp in Minuten (für die Ankunftszeit folgender Stopps). */
-export const DWELL_MIN = 10;
+
+/**
+ * Pausenstil (Einstellung, `state.supply.style`):
+ * - `fast`: Stoppzeiten kurz halten – Supermarkt und Tankstelle, kurze Pause.
+ * - `relaxed`: gemütliche Tour – lieber Café, Bäckerei oder Restaurant, keine Tankstellen, längere Pause.
+ * `bias`: Vorrang innerhalb derselben Stufe (kleiner = lieber); Typen ohne Eintrag kommen nicht infrage.
+ * `dwell`: angenommene Aufenthaltsdauer je Stopp in Minuten (für die Ankunftszeit folgender Stopps).
+ */
+export const STYLES = {
+  fast: {
+    label: 'Zügig', dwell: 10,
+    bias: { supermarket: 0, bakery: 0.1, fuel: 0.2, convenience: 0.25, cafe: 0.3, restaurant: 0.4 },
+  },
+  relaxed: {
+    label: 'Gemütlich', dwell: 30,
+    bias: { cafe: 0, bakery: 0.1, restaurant: 0.2, supermarket: 0.3, convenience: 0.4 },
+  },
+};
+export const styleOf = id => STYLES[id] || STYLES.fast;
+/** Größte Pause aller Stile – für die grobe Abschätzung der Ankunft in holidayContext. */
+const MAX_DWELL = Math.max(...Object.values(STYLES).map(s => s.dwell));
 
 export const STOP_TYPES = {
   water: { label: 'Trinkwasser', icon: '💧', gpxSym: 'Drinking Water' },
@@ -29,9 +56,10 @@ export const STOP_TYPES = {
   fuel: { label: 'Tankstelle', icon: '⛽', gpxSym: 'Gas Station' },
   bakery: { label: 'Bäckerei', icon: '🥐', gpxSym: 'Shopping Center' },
   cafe: { label: 'Café', icon: '☕', gpxSym: 'Restaurant' },
+  restaurant: { label: 'Restaurant', icon: '🍽️', gpxSym: 'Restaurant' },
 };
 
-/** Anzeige des Zustands einer Stelle bei Ankunft (siehe evaluate). */
+/** Anzeige des Zustands einer Stelle bei Ankunft (siehe evaluate bzw. waterState). */
 export const STATE_LABELS = {
   free: 'frei zugänglich',
   open: 'geöffnet',
@@ -53,42 +81,39 @@ export const WARN_STATES = new Set(['unknown', 'unlikely', 'seasonal', 'closed',
  * Öffnungsstatus eines Orts zur Zeit `eta` → {state: 'open' | 'closed' | 'unknown', typical, hours}.
  * `typical`: Es wurden die typischen Zeiten der Kette verwendet (siehe chainHours.js).
  */
-export function openingAt(poi, eta) {
+export function openingAt(poi, eta, dwellMin = STYLES.fast.dwell) {
   const own = poi.tags?.opening_hours;
   const hours = own || poi.typical?.hours;
   if (!hours) return { state: 'unknown', typical: false, hours: '' };
-  let state = openState(hours, eta, DWELL_MIN);
+  let state = openState(hours, eta, dwellMin);
   if (state === 'unknown' && own && /geschlossen|closed/i.test(own)) state = 'closed';
   return { state, typical: !own, hours };
 }
 
+/** Öffnungsstatus nach `opening_hours`, Freitext wie „Zur Zeit geschlossen“ / „closed“ zählt als zu. */
+function ownState(oh, eta, dwellMin, holiday) {
+  const st = oh ? openState(oh, eta, dwellMin, !!holiday) : 'unknown';
+  return st === 'unknown' && oh && /geschlossen|closed|^off$/i.test(oh) ? 'closed' : st;
+}
+
 /**
- * Bewertung einer Stelle zur Ankunftszeit → {tier, state} oder null (geschlossen). Kleinerer tier = besser:
- * 0 Trinkwasser · 1 geöffneter Laden · 2 Wasser mit Einschränkung · 3 Laden ohne Angaben · 4 vermutlich zu.
+ * Bewertung eines Verpflegungsstopps zur Ankunftszeit → {tier, state} oder null (geschlossen bzw. im
+ * Pausenstil nicht vorgesehen). Kleinerer tier = besser: 1 geöffnet · 3 ohne Angaben · 4 vermutlich zu.
  * `holiday`: Feiertag am Ort der Stelle zur Ankunftszeit (oder null).
  */
-function evaluate(poi, eta, holiday) {
+function evaluate(poi, eta, holiday, style) {
+  const bias = style.bias[poi.type];
+  if (bias == null) return null;
   const oh = poi.tags.opening_hours;
-  if (!oh && poi.typical) return evaluateTypical(poi, eta, holiday);
-  let st = oh ? openState(oh, eta, DWELL_MIN, !!holiday) : 'unknown';
-  // Freitext wie „Zur Zeit geschlossen“ / „closed“
-  if (st === 'unknown' && oh && /geschlossen|closed|^off$/i.test(oh)) st = 'closed';
+  if (!oh && poi.typical) return evaluateTypical(poi, eta, holiday, style, bias);
+  const st = ownState(oh, eta, style.dwell, holiday);
   if (st === 'closed') return null;
-
-  if (poi.type === 'water') {
-    if (poi.tags.seasonal && poi.tags.seasonal !== 'no' && WINTER.includes(eta.getMonth())) return { tier: 2, state: 'seasonal' };
-    if (poi.tags.fee === 'yes') return { tier: 1, state: st === 'open' ? 'open' : 'free' };
-    if (oh && st === 'unknown') return { tier: 2, state: 'unknown' };
-    return { tier: 0, state: st === 'open' ? 'open' : 'free' };
-  }
-
-  const bias = TYPE_BIAS[poi.type] ?? 0.3;
   if (st === 'open') {
     // Feiertag ohne eigene PH-Regel: es wurden die Sonntagszeiten angenommen
     return holiday && !hasHolidayRule(oh) ? { tier: 1.5 + bias, state: 'openHoliday' } : { tier: 1 + bias, state: 'open' };
   }
   // Läden ohne Angaben haben sonn-/feiertags und nachts meist geschlossen – nur als letzte Wahl.
-  // Ausnahme: Bäckereien haben sonn- und feiertags vormittags oft geöffnet.
+  // Ausnahmen: Tankstellen; Bäckereien haben sonn- und feiertags vormittags oft geöffnet.
   const hour = eta.getHours();
   const bakeryMorning = poi.type === 'bakery' && hour >= 7 && hour < 12;
   if (poi.type !== 'fuel' && !bakeryMorning && (holiday || eta.getDay() === 0 || hour < 7 || hour >= 21)) {
@@ -102,22 +127,34 @@ function evaluate(poi, eta, holiday) {
  * Angaben, aber deutlich besser als „unbekannt“. Laut typischen Zeiten geschlossen → nur letzte Wahl
  * (die Annahme kann falsch sein).
  */
-function evaluateTypical(poi, eta, holiday) {
-  const bias = TYPE_BIAS[poi.type] ?? 0.3;
-  const st = openState(poi.typical.hours, eta, DWELL_MIN, !!holiday);
+function evaluateTypical(poi, eta, holiday, style, bias) {
+  const st = openState(poi.typical.hours, eta, style.dwell, !!holiday);
   if (st === 'open') return { tier: (holiday && !hasHolidayRule(poi.typical.hours) ? 1.8 : 1.3) + bias, state: 'openTypical' };
   return { tier: 4.5 + bias, state: 'closedTypical' };
 }
 
+/** Zustand einer Wasserstelle bei Ankunft: frei, geöffnet, im Winter evtl. abgestellt oder evtl. zu. */
+function waterState(poi, eta) {
+  const oh = poi.tags.opening_hours;
+  const st = ownState(oh, eta, 0, false);
+  if (st === 'closed') return 'closed';
+  if (poi.tags.seasonal && poi.tags.seasonal !== 'no' && WINTER.includes(eta.getMonth())) return 'seasonal';
+  if (oh && st === 'unknown') return 'unknown';
+  return st === 'open' ? 'open' : 'free';
+}
+
+/** Öffentlich und kostenlos (private Stellen filtert schon poiSource.js aus). */
+const freeWater = poi => poi.type === 'water' && poi.tags.fee !== 'yes';
+
 // ---------- Auswahl ----------
 
 /**
- * Wählt Stopps: im Fenster (50 %–100 % des Intervalls nach dem letzten Stopp) zuerst Trinkwasser, dann
- * geöffnete Läden/Tankstellen, zuletzt solche mit unbekannten Öffnungszeiten. Innerhalb einer Stufe zählt:
+ * Wählt Stopps: im Fenster (50 %–100 % des Intervalls nach dem letzten Stopp) zuerst geöffnete Stellen,
+ * zuletzt solche mit unbekannten Öffnungszeiten; innerhalb einer Stufe nach Pausenstil. Außerdem zählt:
  * möglichst spät im Fenster und nah an der Route. Nach einer Übernachtung wird neu gezählt.
  */
-function plan(r, candidates, { interval, departure, bike, holidayFor }) {
-  const eta = timeline(r, departure, bike, DWELL_MIN);
+function plan(r, candidates, { interval, departure, bike, holidayFor, style }) {
+  const eta = timeline(r, departure, bike, style.dwell);
   const pausesOnDay = (stops, along) => stops.filter(s => eta.dayOf(s.along) === eta.dayOf(along)).length;
   const stops = [], gaps = [];
   const stageStarts = r.stageStarts || [];
@@ -132,7 +169,7 @@ function plan(r, candidates, { interval, departure, bike, holidayFor }) {
       if (c.along <= lo || c.along > hi) continue;
       const t = eta(c.along, pausesOnDay(stops, c.along));
       const holiday = holidayFor(c.along, t);
-      const ev = evaluate(c.poi, t, holiday);
+      const ev = evaluate(c.poi, t, holiday, style);
       if (!ev) continue;
       const score = ev.tier * 10 - 2 * (c.along - lo) / (hi - lo) + c.offset / MAX_OFFSET[c.poi.type];
       if (!best || score < best.score) best = { ...c, ...ev, eta: t, holiday, score };
@@ -141,6 +178,46 @@ function plan(r, candidates, { interval, departure, bike, holidayFor }) {
     else { gaps.push({ from: pos, to: hi }); pos = hi; }
   }
   return { stops, gaps };
+}
+
+/**
+ * Trinkwasser an der (endgültigen) Route: Position, Abstand, Ankunftszeit und Zustand. Dicht beieinander
+ * liegende Stellen werden zusammengefasst (die näher an der Route bleibt).
+ * `pausesBefore(along)`: Stopps desselben Tages vor dieser Position (für die Ankunftszeit).
+ */
+function waterAlong(r, waters, eta, pausesBefore) {
+  const located = locateNearRoute(r, waters, () => WATER_OFFSET).sort((a, b) => a.along - b.along);
+  const out = [];
+  for (const w of located) {
+    const last = out.at(-1);
+    if (last && w.along - last.along < WATER_MERGE) {
+      if (w.offset < last.offset) out[out.length - 1] = w;
+      continue;
+    }
+    out.push(w);
+  }
+  return out.map(w => {
+    const t = eta(w.along, pausesBefore(w.along));
+    return { ...w, eta: t, state: waterState(w.poi, t) };
+  });
+}
+
+/**
+ * Strecken über WATER_GAP ohne nutzbare Wasserstelle → [{from, to}]. Im Winter abgestellte oder bei Ankunft
+ * geschlossene Stellen zählen nicht. An einer Übernachtung wird aufgefüllt, dort beginnt die Zählung neu.
+ */
+function waterGaps(r, water) {
+  const marks = [
+    ...water.filter(w => w.state !== 'seasonal' && w.state !== 'closed').map(w => w.along),
+    ...(r.stageStarts || []),
+  ].sort((a, b) => a - b);
+  const gaps = [];
+  let pos = 0;
+  for (const m of [...marks, r.distance]) {
+    if (m - pos > WATER_GAP) gaps.push({ from: pos, to: m });
+    pos = Math.max(pos, m);
+  }
+  return gaps;
 }
 
 // ---------- Feiertage ----------
@@ -193,7 +270,8 @@ export async function holidayContext(base, departure, bike, signal) {
   const soft = e => { if (e.name === 'AbortError') throw e; console.warn(e); return null; };
   let regions = await regionsAlong(base, signal, { precise: false }).catch(soft);
   if (!regions) return { regions: null, lookup: null, notes: [] };
-  const arrival = timeline(base, departure, bike, DWELL_MIN)(base.distance, 10);
+  // Großzügig geschätzte Ankunft (längste Pause, 10 Stopps) – nur für den Zeitraum der Feiertagsabfrage
+  const arrival = timeline(base, departure, bike, MAX_DWELL)(base.distance, 10);
   const countries = new Set(regions.map(s => s.country).filter(Boolean));
   const lookup = await holidayLookup(countries, departure, arrival, signal).catch(soft);
   if (!lookup) return { regions, lookup: null, notes: [] };
@@ -225,18 +303,22 @@ export function applyHolidays(stopped, ctx) {
 // ---------- Planen ----------
 
 /**
- * Ergänzt eine Route um Verpflegungsstopps.
- * Ergebnis: neue Route (durch die Stopps) mit `stops`, `gaps`, `regions`, `holidays` und `base`
- * (Route ohne Stopps). Bei Mehrtagestouren werden `origin`, `stays` und `stageStarts` weitergegeben.
+ * Ergänzt eine Route um Verpflegungsstopps und Trinkwasser.
+ * Ergebnis: neue Route (durch die Stopps) mit `stops`, `gaps`, `water`, `waterGaps`, `dwellMin`, `regions`,
+ * `holidays` und `base` (Route ohne Stopps). Bei Mehrtagestouren werden `origin`, `stays` und `stageStarts`
+ * weitergegeben.
  *
+ * `style`: Pausenstil (Schlüssel in STYLES).
  * `holidays`: Ergebnis von holidayContext. Fehlt es, wird ohne Feiertage geplant (`holidayCheck: 'pending'`)
  * – die Prüfung folgt dann mit applyHolidays.
  *
- * Trinkwasser, Supermärkte und Tankstellen (Ebene „supply“) werden vollständig geladen. Bäckereien und Cafés
- * (Ebene „food“) nur, soweit sie schon im Cache liegen: Overpass braucht für eine neue Gegend oft eine halbe
- * Minute, und das soll die Planung nicht aufhalten. Fehlendes wird im Hintergrund nachgeladen (`foodPartial`).
+ * Trinkwasser, Supermärkte und Tankstellen (Ebene „supply“) werden vollständig geladen. Bäckereien, Cafés und
+ * Restaurants (Ebene „food“) nur, soweit sie schon im Cache liegen: Overpass braucht für eine neue Gegend oft
+ * eine halbe Minute, und das soll die Planung nicht aufhalten. Fehlendes wird im Hintergrund nachgeladen
+ * (`foodPartial`).
  */
-export async function addStops(base, { provider, opts, interval, departure, bike, signal, holidays = null }) {
+export async function addStops(base, { provider, opts, interval, departure, bike, style: styleId, signal, holidays = null }) {
+  const style = styleOf(styleId);
   const [supply, food] = await Promise.all([
     fetchPois(base, signal, ['supply']),
     fetchPois(base, signal, ['food'], { cacheOnly: true }).catch(e => {
@@ -256,13 +338,22 @@ export async function addStops(base, { provider, opts, interval, departure, bike
     holidays: holidays?.notes || [],
     holidayCheck: holidays ? !!lookup : 'pending', // false = Feiertage konnten nicht geprüft werden
     foodPartial: !food.complete,
+    dwellMin: style.dwell,
+  };
+  const waters = pois.filter(freeWater);
+  /** Trinkwasser auf der endgültigen Route; `stops` bestimmen die Pausen vor jeder Stelle. */
+  const withWater = (r, stops) => {
+    const eta = timeline(r, departure, bike, style.dwell);
+    const water = waterAlong(r, waters, eta,
+      along => stops.filter(s => s.along < along && eta.dayOf(s.along) === eta.dayOf(along)).length);
+    return { water, waterGaps: waterGaps(r, water) };
   };
 
-  // Restaurants gehören nicht zu den Verpflegungsstopps (zu lange Pause) – nur Typen mit MAX_OFFSET
-  const candidates = withTypicalHours(pois).filter(p => MAX_OFFSET[p.type]);
+  // Nur Typen, die der Pausenstil vorsieht (ohne Trinkwasser – das wird nur angezeigt)
+  const candidates = withTypicalHours(pois).filter(p => style.bias[p.type] != null);
   const located = locateNearRoute(base, candidates, poi => MAX_OFFSET[poi.type]);
-  const { stops, gaps } = plan(base, located, { interval, departure, bike, holidayFor });
-  if (!stops.length) return { ...base, base, stops: [], gaps, ...info };
+  const { stops, gaps } = plan(base, located, { interval, departure, bike, holidayFor, style });
+  if (!stops.length) return { ...base, base, stops: [], gaps, ...withWater(base, []), ...info };
 
   // Route durch die Stopps führen
   const points = stops.map(s => ({ lat: s.poi.lat, lon: s.poi.lon, stop: true }));
@@ -272,7 +363,7 @@ export async function addStops(base, { provider, opts, interval, departure, bike
   // Positionen und Ankunftszeiten auf der neuen Route bestimmen (Übernachtungen bleiben Tageswechsel)
   const along = locateOnRoute(routed, wps);
   routed.stageStarts = wps.flatMap((p, i) => (p.stay ? [along[i]] : []));
-  const eta = timeline(routed, departure, bike, DWELL_MIN);
+  const eta = timeline(routed, departure, bike, style.dwell);
   const finalStops = [];
   wps.forEach((p, i) => {
     if (!p.stop) return;
@@ -281,12 +372,15 @@ export async function addStops(base, { provider, opts, interval, departure, bike
     // Region aus der Planung (Position auf der Basisroute), Feiertag zur neuen Ankunftszeit
     const region = regionFor(s.along);
     const holiday = lookup?.(region, t) ?? null;
-    const ev = evaluate(s.poi, t, holiday) || { state: 'closed' };
+    const ev = evaluate(s.poi, t, holiday, style) || { state: 'closed' };
     const type = STOP_TYPES[s.poi.type];
     finalStops.push({
       ...s, planAlong: s.along, along: along[i], eta: t, state: ev.state, point: p, region, holiday,
       icon: type.icon, typeLabel: type.label, gpxSym: type.gpxSym,
     });
   });
-  return { ...routed, base, origin: base.origin, stays: base.stays, stops: finalStops, gaps, ...info };
+  return {
+    ...routed, base, origin: base.origin, stays: base.stays, stops: finalStops, gaps,
+    ...withWater(routed, finalStops), ...info,
+  };
 }

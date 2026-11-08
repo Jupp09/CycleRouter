@@ -10,6 +10,10 @@ Routenplaner für **Rennrad**, **Gravelbike** und **Fahrrad** (Trekking-/Alltags
 - Aufschlüsselung nach **Untergrund** (Asphalt, Pflaster, Schotter …) und **Wegtyp** (Radweg, Hauptstraße, Wirtschaftsweg …) mit km und %, optional als Einfärbung der Route und als Farbband im Höhenprofil ([js/surfaces.js](js/surfaces.js))
 - Marker verschiebbar – die Route wird neu berechnet
 - **Mehrtagestouren** auf Knopfdruck (sobald die Route länger als die eingestellten km pro Tag ist): Tagesetappen, je Nacht wählbare Unterkunft (Hotel, Pension, Hostel, Zeltplatz aus OpenStreetMap) mit geschätztem Preis gegen das Budget pro Nacht und „Preis prüfen“-Link mit Datum ([js/stays.js](js/stays.js))
+- **Verpflegung unterwegs** ([js/stops.js](js/stops.js)):
+  - Alle *x* km ein Stopp mit Essen (Supermarkt, Kiosk, Bäckerei, Café, Restaurant, Tankstelle), der bei der geschätzten Ankunft geöffnet hat – mit Feiertagen am Ort und typischen Öffnungszeiten von Ketten. Die Route führt durch die Stopps.
+  - **Pausenstil** in den Einstellungen: *Zügig* (Supermarkt und Tankstelle, 10 min je Stopp) oder *Gemütlich* (Café, Bäckerei, Restaurant, keine Tankstellen, 30 min je Stopp).
+  - Öffentliche, kostenlose **Trinkwasserstellen** bis 400 m neben der Route werden immer angezeigt (Karte, Liste, GPX), aber nicht angefahren. Strecken über 50 km ohne Wasser werden gemeldet.
 - „Neu würfeln" erzeugt eine andere Variante, optional mit Wunschrichtung
 - **Barrierefrei bedienbar:** komplett per Tastatur (Pfeiltasten in den Umschaltern, Ortssuche mit Vorschlagsliste, alle Listen), Ansagen für Screenreader (Ergebnis, Statusmeldungen, Anzahl der Vorschläge), Höhenprofil mit Textzusammenfassung und per Pfeiltasten abfahrbar, deutlicher Fokusrahmen, ausreichende Kontraste in Hell und Dunkel; Schrift folgt der Grundschriftgröße des Browsers, Farben auch bei Rot-Grün-Schwäche unterscheidbar (unbefestigte Wege zusätzlich gestrichelt), Windows-Kontrastmodus und „Bewegung reduzieren“ werden berücksichtigt; geprüft mit axe-core
 
@@ -35,7 +39,7 @@ Alternativ geht jeder statische Server, er muss aber **im Projektordner** gestar
 
 **Vorrat entlang der Route:** Nach jeder berechneten Route meldet die App deren Kacheln an `POST /api/warm-route`. Der Server lädt dann im Hintergrund alle Datenebenen (Versorgung, Gastronomie, Unterkünfte), die dort noch fehlen. So haben Verpflegungsstopps, „Entlang der Route finden“ und Mehrtagestouren beim nächsten Mal sofort Daten. Routen kommen in der Warteschlange vor Heimatregionen. Mehrere fehlende Ebenen derselben Kacheln fragt der Server mit einer einzigen Overpass-Abfrage ab.
 
-**Schnelle Verpflegungsstopps:** Die Stopps warten nur auf Trinkwasser, Supermärkte und Tankstellen. Bäckereien und Cafés nimmt die App, soweit sie schon im Cache liegen; den Rest lädt der Server nach, und ein Hinweis weist darauf hin. Die Feiertagsprüfung (Länder und Bundesländer über Nominatim, höchstens eine Anfrage pro Sekunde) läuft im Hintergrund. Nur wenn an einem Fahrtag tatsächlich ein Feiertag gilt, werden die Stopps danach angepasst.
+**Schnelle Verpflegungsstopps:** Die Stopps warten nur auf Trinkwasser, Supermärkte und Tankstellen. Bäckereien, Cafés und Restaurants nimmt die App, soweit sie schon im Cache liegen; den Rest lädt der Server nach, und ein Hinweis weist darauf hin. Die Feiertagsprüfung (Länder und Bundesländer über Nominatim, höchstens eine Anfrage pro Sekunde) läuft im Hintergrund. Nur wenn an einem Fahrtag tatsächlich ein Feiertag gilt, werden die Stopps danach angepasst.
 
 **Datenauszug Europa:** Für ganz Europa muss der Server Overpass gar nicht mehr fragen. Ein GitHub-Workflow ([.github/workflows/poi-extract.yml](.github/workflows/poi-extract.yml)) lädt jeden Montag die OpenStreetMap-Auszüge aller europäischen Länder von [Geofabrik](https://download.geofabrik.de/europe.html), insgesamt gut 30 GB. Er filtert mit `osmium` die benötigten Orte heraus (Versorgung, Gastronomie, Unterkünfte) und veröffentlicht das Ergebnis als Release `poi-data`. Der Server lädt dieses Paket kurz nach dem Start und danach alle 12 Stunden, sobald es einen neuen Stand gibt. Er prüft die Prüfsumme und legt es in `cache/extract/` ab. Einstellbar ist das über `POI_EXTRACT_URL` (`off` = abschalten); sofort aktualisieren geht mit `npm run extract:update`. Gegenden außerhalb des Auszugs (z. B. am Rand Europas) lädt der Server weiter bei Overpass. Lokal bauen lässt sich das Paket mit `npm run extract:build` (Linux/macOS mit `curl` und `osmium-tool`).
 
@@ -98,7 +102,7 @@ js/app/                Oberfläche und Ablauf
   controls.js          Fahrrad, Modus, Dienst, Richtung, Distanz
   waypoints.js         Start/Ziel, Zwischenstopps, Kartenklick, Marker verschieben
   resultsView.js       Kennzahlen, Untergrund/Wegtyp, Routenname
-  supplyView.js        Verpflegungsstopps, Regionen, Feiertage
+  supplyView.js        Verpflegungsstopps, Trinkwasser, Regionen, Feiertage
   alongView.js         „Entlang der Route finden“
   stagesView.js        Mehrtagestouren und ihre Einstellungen
   exportView.js        GPX teilen/herunterladen
@@ -114,7 +118,7 @@ js/generators.js       Rundkurs- und Distanz-Generator
 js/elevation.js        Höhenprofil (SVG)
 js/gpx.js              GPX-Erzeugung und Teilen
 js/surfaces.js         Untergrund- und Wegtyp-Kategorien
-js/stops.js            Verpflegungsstopps planen
+js/stops.js            Verpflegungsstopps planen, Trinkwasser an der Route
 js/stays.js            Etappen und Unterkünfte für Mehrtagestouren
 js/placeSearch.js      Orte entlang der Route (Kachel-Cache, sonst Photon)
 js/poiTiles.js         Kachel-Cache im Browser (Speicher, IndexedDB, Server, Overpass)

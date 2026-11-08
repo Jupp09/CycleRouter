@@ -147,7 +147,7 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
 function withSupply(base, signal, holidays = null) {
   return addStops(base, {
     provider: provider(), opts: routeOpts(), bike: state.bike, signal, holidays,
-    interval: state.supply.intervalKm * 1000,
+    interval: state.supply.intervalKm * 1000, style: state.supply.style,
     departure: departureDate(),
   });
 }

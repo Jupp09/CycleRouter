@@ -8,7 +8,7 @@
  * Der ORS-API-Key gehört bewusst nicht dazu – er bleibt nur im Browser.
  */
 export const SYNC_KEYS = ['home', 'bike', 'traffic', 'eurovelo', 'provider', 'breakdown', 'colorRoute',
-  'supplyEnabled', 'supplyInterval', 'avgSpeed', 'mode', 'distanceKm',
+  'supplyEnabled', 'supplyInterval', 'supplyStyle', 'avgSpeed', 'mode', 'distanceKm',
   'stageMaxKm', 'nightBudget', 'stayTypes', 'endStay', 'hiddenStays'];
 
 /** Routenarten: A → B, Start + Distanz, Rundkurs. */
