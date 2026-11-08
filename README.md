@@ -33,6 +33,12 @@ Danach <http://localhost:8000> öffnen. Der Server ([server.mjs](server.mjs)) li
 
 Alternativ geht jeder statische Server, er muss aber **im Projektordner** gestartet werden, sonst erscheint nur eine Dateiliste: `py -m http.server 8000`.
 
+### Schneller Start
+
+Der Server liefert die App-Dateien mit `ETag` aus. Ein wiederkehrender Browser fragt nur nach, ob sich etwas geändert hat, und bekommt meist ein leeres `304`; ein Update wirkt trotzdem sofort. In `index.html` setzt er `modulepreload`-Links für alle Module, damit der Browser sie gleichzeitig lädt statt Ebene für Ebene. Mit einem anderen statischen Server läuft die App weiter, nur ohne diese beiden Beschleuniger.
+
+Wie lange die Schritte einer Berechnung dauern, steht nach jeder Route in der Browser-Konsole (`Berechnung: Grundroute … · Orte laden … · … · gesamt …`).
+
 ### Server-Cache für Verpflegungsstellen
 
 Über `npm start` liefert der Server zusätzlich `POST /api/pois`: Supermärkte, Tankstellen und Trinkwasserstellen inkl. Öffnungszeiten werden je Kachel (≈ 11 × 7 km) im Ordner `cache/pois/` gespeichert. Gültigkeit 30 Tage (änderbar mit `POI_TTL_DAYS`). Danach wird der alte Stand sofort ausgeliefert und im Hintergrund erneuert. Overpass wird nur noch für noch nie geladene Gegenden abgefragt.

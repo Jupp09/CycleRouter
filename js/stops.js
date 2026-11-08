@@ -328,7 +328,7 @@ export function applyHolidays(stopped, ctx) {
  * eine halbe Minute, und das soll die Planung nicht aufhalten. Fehlendes wird im Hintergrund nachgeladen
  * (`foodPartial`).
  */
-export async function addStops(base, { provider, opts, interval, departure, bike, style: styleId, signal, holidays = null }) {
+export async function addStops(base, { provider, opts, interval, departure, bike, style: styleId, signal, holidays = null, mark = () => {} }) {
   const style = styleOf(styleId);
   const [supply, food] = await Promise.all([
     fetchPois(base, signal, ['supply']),
@@ -338,6 +338,7 @@ export async function addStops(base, { provider, opts, interval, departure, bike
       return Object.assign([], { complete: false });
     }),
   ]);
+  mark('Orte laden');
   const seen = new Set();
   const pois = [...supply, ...food].filter(p => !seen.has(p.id) && seen.add(p.id));
   const regions = holidays?.regions || null;
@@ -368,13 +369,20 @@ export async function addStops(base, { provider, opts, interval, departure, bike
   // Nur Typen, die der Pausenstil vorsieht (ohne Trinkwasser – das wird nur angezeigt)
   const candidates = withTypicalHours(pois).filter(p => style.bias[p.type] != null);
   const located = locateNearRoute(base, candidates, poi => MAX_OFFSET[poi.type]);
+  mark(`Orte zuordnen (${pois.length} Orte, ${located.length} nahe der Route)`);
   const { stops, gaps } = plan(base, located, { interval, departure, bike, holidayFor, style, fixed: fixedOn(base) });
-  if (!stops.length) return { ...base, base, stops: [], gaps, ...withWater(base, []), ...info };
+  mark('Stopps planen');
+  if (!stops.length) {
+    const water = withWater(base, []);
+    mark('Trinkwasser');
+    return { ...base, base, stops: [], gaps, ...water, ...info };
+  }
 
   // Route durch die Stopps führen
   const points = stops.map(s => ({ lat: s.poi.lat, lon: s.poi.lon, stop: true }));
   const wps = insertWaypoints(base, stops.map((s, i) => ({ along: s.along, point: points[i] })));
   const routed = await route(provider, wps, opts, signal);
+  mark('Route durch Stopps');
 
   // Positionen und Ankunftszeiten auf der neuen Route bestimmen (Übernachtungen bleiben Tageswechsel)
   const along = locateOnRoute(routed, wps);
@@ -396,8 +404,7 @@ export async function addStops(base, { provider, opts, interval, departure, bike
       icon: type.icon, typeLabel: type.label, gpxSym: type.gpxSym,
     });
   });
-  return {
-    ...routed, base, origin: base.origin, stays: base.stays, stops: finalStops, gaps,
-    ...withWater(routed, finalStops), ...info,
-  };
+  const water = withWater(routed, finalStops);
+  mark('Ankunftszeiten, Trinkwasser');
+  return { ...routed, base, origin: base.origin, stays: base.stays, stops: finalStops, gaps, ...water, ...info };
 }

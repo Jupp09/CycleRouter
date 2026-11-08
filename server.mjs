@@ -4,7 +4,6 @@
 // /api/account|settings|routes|shared – Konten (server/accountApi.mjs).
 import './server/env.mjs'; // muss der erste Import bleiben (.env laden, bevor andere Module Werte lesen)
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getTiles } from './server/poiCache.mjs';
@@ -17,6 +16,7 @@ import { sendJson as json, readBody } from './server/http.mjs';
 import { initExtract } from './server/extract.mjs';
 import { setSecurityHeaders, contentSecurityPolicy } from './server/security.mjs';
 import { createLimiter } from './server/rateLimit.mjs';
+import { serveStatic } from './server/static.mjs';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 8000;
@@ -146,10 +146,11 @@ createServer(async (req, res) => {
     return;
   }
   try {
-    const body = await readFile(file);
-    if (extname(file) === '.html') res.setHeader('Content-Security-Policy', contentSecurityPolicy(body.toString('utf8'), req));
-    res.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-    res.end(body);
+    // Mit Zwischenspeicher, ETag/304 und Modul-Vorladen für index.html (server/static.mjs)
+    await serveStatic(req, res, {
+      root: ROOT, file, type: TYPES[extname(file)] || 'application/octet-stream',
+      extraHeaders: html => ({ 'Content-Security-Policy': contentSecurityPolicy(html, req) }),
+    });
   } catch {
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Nicht gefunden');
   }

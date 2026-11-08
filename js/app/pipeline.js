@@ -24,6 +24,25 @@ import { routeSummary } from './resultsView.js';
 
 let controller = null;
 
+/**
+ * Zeitmessung einer Berechnung je Schritt – erscheint in der Browser-Konsole, z. B.
+ * „Berechnung: Grundroute 1,2 s · Orte laden 0,3 s · Stopps planen 0,05 s · Route durch Stopps 0,9 s … · gesamt 2,6 s“.
+ * Grundlage, um zu entscheiden, wo sich Optimierung lohnt. Nur für fertige (nicht abgebrochene) Berechnungen.
+ */
+function stopwatch() {
+  const t0 = performance.now();
+  let last = t0;
+  const parts = [];
+  const sec = ms => `${(ms / 1000).toLocaleString('de-DE', { maximumFractionDigits: ms < 100 ? 2 : 1 })} s`;
+  return {
+    /** Abschnitt seit der letzten Marke abschließen. */
+    mark(label) { const now = performance.now(); parts.push(`${label} ${sec(now - last)}`); last = now; },
+    /** Parallel gelaufener Schritt mit eigener Dauer (z. B. Feiertagsprüfung). */
+    add(label, ms) { parts.push(`${label} ${sec(ms)} (parallel)`); },
+    done() { console.info(`Berechnung: ${[...parts, `gesamt ${sec(performance.now() - t0)}`].join(' · ')}`); },
+  };
+}
+
 // Hinweise der Routing-Schicht (z. B. „BRouter ist ausgelastet – neuer Versuch in 2 s …“) während einer Berechnung zeigen
 onRoutingNotice(text => { if (controller && !controller.signal.aborted) setStatus(text, 'loading'); });
 
@@ -73,11 +92,14 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
   const { signal } = ctrl;
   state.staysLoading = false; // eine abgebrochene Unterkunftssuche darf den Knopf nicht gesperrt lassen
   setStatus(loadingText, 'loading');
+  const watch = stopwatch();
   try {
     let r = await task(signal);
     if (signal.aborted) return;
+    watch.mark('Grundroute');
     setStatus(null);
     showRoute(r, { fit });
+    watch.mark('Anzeige');
     warmRoute(r); // Server lädt Orte entlang der Route vor (für Stopps, Suche, Mehrtagestour)
 
     // Mehrtagestour (nur auf Wunsch): Unterkünfte suchen und die Route durch sie führen
@@ -89,6 +111,7 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
       try {
         r = await withStays(r, signal);
         if (signal.aborted) return;
+        watch.mark('Unterkünfte');
         setStatus(null);
         state.staysLoading = false;
         showRoute(r, { fit: false });
@@ -103,31 +126,39 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
         if (controller === ctrl) state.staysLoading = false;
       }
     }
-    if (!state.supply.enabled) { announce(routeSummary(r)); return; }
+    if (!state.supply.enabled) { announce(routeSummary(r)); watch.done(); return; }
 
     // Route steht schon auf der Karte; Stopps werden nachgeladen und die Route dann durch sie geführt
     setStatus('Verpflegungsstopps werden gesucht … (die Route ist bereits nutzbar)', 'loading');
     // Feiertagsprüfung parallel starten – sie ist langsam (Nominatim, 1 Anfrage/s), die Stopps warten nicht darauf
+    const tHoliday = performance.now();
     const holidays = holidayContext(r, departureDate(), state.bike, signal);
     holidays.catch(() => {}); // ein Abbruch wird unten behandelt
+    let holidayMs = null;
+    holidays.then(() => { holidayMs = performance.now() - tHoliday; }, () => {});
     try {
-      let withStops = await withSupply(r, signal);
+      let withStops = await withSupply(r, signal, null, watch.mark);
       if (signal.aborted) return;
       setStatus(null);
       showRoute(withStops, { fit: false });
+      watch.mark('Anzeige');
       announce(routeSummary(withStops)); // Screenreader: jetzt ist die Route mit Stopps fertig
 
       // Feiertage anwenden: meist ist keiner – dann bleiben die Stopps und bekommen nur ihre Regionen
       const ctx = await holidays;
       if (signal.aborted) return;
+      watch.mark('Warten auf Feiertage');
+      watch.add('Feiertagsprüfung', holidayMs ?? 0);
       const annotated = applyHolidays(withStops, ctx);
-      if (annotated) { showRoute(annotated, { fit: false }); return; }
+      if (annotated) { showRoute(annotated, { fit: false }); watch.done(); return; }
       setStatus('Feiertag auf der Strecke – Verpflegungsstopps werden angepasst …', 'loading');
       withStops = await withSupply(r, signal, ctx);
       if (signal.aborted) return;
+      watch.mark('Neuplanung wegen Feiertag');
       setStatus(null);
       showRoute(withStops, { fit: false });
       announce(`Wegen eines Feiertags angepasst. ${routeSummary(withStops)}`);
+      watch.done();
     } catch (e) {
       if (e.name === 'AbortError' || signal.aborted) return;
       console.error(e);
@@ -143,10 +174,11 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
 /**
  * Route (mit oder ohne Übernachtungen, ohne Stopps) um Verpflegungsstopps ergänzen.
  * `holidays`: Ergebnis der Feiertagsprüfung (holidayContext) – ohne wird zunächst ohne Feiertage geplant.
+ * `mark`: optional, Zeitmarke je Teilschritt (stopwatch).
  */
-function withSupply(base, signal, holidays = null) {
+function withSupply(base, signal, holidays = null, mark = undefined) {
   return addStops(base, {
-    provider: provider(), opts: routeOpts(), bike: state.bike, signal, holidays,
+    provider: provider(), opts: routeOpts(), bike: state.bike, signal, holidays, mark,
     interval: state.supply.intervalKm * 1000, style: state.supply.style,
     departure: departureDate(),
   });

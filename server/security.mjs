@@ -24,10 +24,15 @@ const CDN = 'https://cdnjs.cloudflare.com';
  * SHA-256 jedes Inline-Skripts (in index.html nur das Theme-Skript) – erlaubt genau diese, kein anderes.
  * Wird bei jeder Auslieferung aus der Datei berechnet, passt also nach einem `git pull` ohne Neustart.
  * Der HTML-Parser macht aus CRLF ein LF, bevor der Browser hasht (Windows-Checkout) – daher normalisieren.
+ * Das Ergebnis wird für den zuletzt gesehenen Text gemerkt (index.html ändert sich nur mit einem Update).
  */
+let lastHtml = null, lastHashes = [];
 function inlineScriptHashes(html) {
-  return [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
+  if (html === lastHtml) return lastHashes;
+  lastHashes = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)]
     .map(m => `'sha256-${createHash('sha256').update(m[1].replace(/\r\n?/g, '\n')).digest('base64')}'`);
+  lastHtml = html;
+  return lastHashes;
 }
 
 /**
