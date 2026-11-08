@@ -41,6 +41,7 @@ npm run warm -- <lat> <lon> [radius-km]   # preload the POI cache for a region, 
 | [surfaces.js](js/surfaces.js) | Surface/way-type categories and colours; classifies BRouter tags and ORS codes into segments `{from, to, surface, waytype, estimated}` |
 | [map.js](js/map.js), [elevation.js](js/elevation.js), [gpx.js](js/gpx.js), [geocode.js](js/geocode.js) | Leaflet map; SVG elevation profile; GPX export and the Web Share API; Photon search with Nominatim fallback (search on Enter only, because of Nominatim's terms of use) |
 | [account.js](js/account.js) | Client for the account API; `account.enabled` is false without a server DB |
+| [shared.js](js/shared.js) | Constants shared with the server (`SYNC_KEYS`, `MODES`, `BIKES`). Must not use browser APIs |
 
 **Route object** (shared by all providers): `{coords: [[lat, lon, ele]], cum: [m], distance, ascent, descent, waypoints, segments}`. Waypoints are `{lat, lon, label?, manual?, icon?, stop?, stay?}`.
 
@@ -86,8 +87,8 @@ Be gentle with the public services. The server sends at most 2 parallel Overpass
 
 ## Things to keep in sync
 
-- `SYNC_KEYS` is **duplicated** in [js/account.js](js/account.js) and [server/accountApi.mjs](server/accountApi.mjs). The server drops any key not in its list. When you add a synced setting, add it to both lists.
-- Route `mode` (`ab | distance | loop`) and `bike` (`road | gravel | trekking`) values are validated on the server (`MODES`, `BIKES` in accountApi.mjs) and used as keys in `PROFILES`, `DEFAULT_SPEED`, etc.
+- [js/shared.js](js/shared.js) holds the values that the browser and the server share: `SYNC_KEYS` (synced settings; the server drops any other key), `MODES` (`ab | distance | loop`) and `BIKES` (`road | gravel | trekking`). Like `poiSource.js`, it is loaded by Node, so it must not use browser APIs. Add a new synced setting there and nowhere else.
+- Client code also uses the `mode`/`bike` values as keys in `PROFILES`, `DEFAULT_SPEED`, `MODE_LABELS`, etc. A new mode or bike type needs entries in those maps as well as in `MODES`/`BIKES`.
 - [README.md](README.md) (German) documents features, setup and the module overview. Update it when behaviour that users see changes.
 
 ## Notes

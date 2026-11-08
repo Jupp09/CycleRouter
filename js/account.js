@@ -4,14 +4,12 @@
  * und alle Konto-Funktionen bleiben ausgeblendet.
  */
 
+// Einstellungen, die zwischen Geräten abgeglichen werden – gemeinsam mit dem Server definiert (js/shared.js)
+export { SYNC_KEYS } from './shared.js';
+
 const API = new URL('../api/', import.meta.url);
 
 export const account = { enabled: false, user: null };
-
-/** Einstellungen, die zwischen Geräten abgeglichen werden (wie SYNC_KEYS auf dem Server). Der ORS-Key bleibt lokal. */
-export const SYNC_KEYS = ['home', 'bike', 'traffic', 'eurovelo', 'provider', 'breakdown', 'colorRoute',
-  'supplyEnabled', 'supplyInterval', 'avgSpeed', 'mode', 'distanceKm',
-  'stageMaxKm', 'nightBudget', 'stayTypes', 'endStay'];
 
 async function api(method, path, body) {
   let res;

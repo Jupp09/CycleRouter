@@ -21,6 +21,7 @@ import {
   hashPassword, verifyPassword, burnPasswordCheck, validateCredentials,
   createSession, destroySession, currentUser, limitReached, countAttempt, clientIp,
 } from './auth.mjs';
+import { SYNC_KEYS, MODES, BIKES } from '../js/shared.js';
 
 const json = (res, status, data) =>
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
@@ -61,20 +62,14 @@ function checkOrigin(req) {
 
 // ---------- Einstellungen ----------
 
-/** Nur diese Einstellungen werden abgeglichen – der ORS-API-Key bleibt bewusst nur im Browser. */
-export const SYNC_KEYS = ['home', 'bike', 'traffic', 'eurovelo', 'provider', 'breakdown', 'colorRoute',
-  'supplyEnabled', 'supplyInterval', 'avgSpeed', 'mode', 'distanceKm',
-  'stageMaxKm', 'nightBudget', 'stayTypes', 'endStay'];
-
+// Nur SYNC_KEYS (js/shared.js) werden abgeglichen – der ORS-API-Key bleibt bewusst nur im Browser.
 function cleanSettings(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new HttpError(400, 'Ungültige Einstellungen');
   return Object.fromEntries(SYNC_KEYS.filter(k => k in data).map(k => [k, data[k]]));
 }
 
 // ---------- Routen ----------
-
-const MODES = ['ab', 'distance', 'loop'];
-const BIKES = ['road', 'gravel', 'trekking'];
+// Gültige Werte für mode/bike: MODES, BIKES (js/shared.js)
 
 function cleanRoute(body, partial = false) {
   const out = {};
