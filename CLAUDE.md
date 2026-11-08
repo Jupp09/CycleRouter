@@ -69,7 +69,7 @@ Views don't call each other to refresh. `showRoute()`/`clearRoute()` emit `'rout
 
 **Route object** (shared by all providers): `{coords: [[lat, lon, ele]], cum: [m], distance, ascent, descent, waypoints, segments}`. Waypoints are `{lat, lon, label?, manual?, icon?, stop?, stay?}`.
 
-**Calculation pipeline** (`run()` in [js/app/pipeline.js](js/app/pipeline.js)): base route → optional multi-day step (`withStays`: plan stays, re-route through them) → optional supply step (`withSupply` / `addStops`: re-route through stops). Each step returns a *new* route that keeps the previous one:
+**Calculation pipeline** (`run()` in [js/app/pipeline.js](js/app/pipeline.js)): base route → optional multi-day step (`withStays`: plan stays, re-route through them) → optional supply step (`withSupply` / `addStops`: re-route through stops) → holiday step. The holiday check (`holidayContext`: regions via Nominatim at 1 request/s, then date.nager.at) starts in parallel with the supply step but is not awaited by it. Stops are planned without holidays first (`holidayCheck: 'pending'`). `applyHolidays` then only attaches the regions, unless a holiday actually falls on a riding day, in which case the stops are planned again. Region borders are only located precisely (`regionsAlong(…, {precise})`) when a holiday applies. Each step returns a *new* route that keeps the previous one:
 
 - `route.origin`: the route without stays or stops
 - `route.base`: the route before stops were added
@@ -96,15 +96,19 @@ The POI layers in `LAYERS` ([poiSource.js](js/poiSource.js)) are `supply`, `food
 2. The server, `POST /api/pois`: a file cache at `cache/pois/<layer>/<tile>.json` with 30-day TTL (`POI_TTL_DAYS`), stale-while-revalidate, and up to 365 days stale ([server/poiCache.mjs](server/poiCache.mjs))
 3. Overpass directly, in chunks of 40 tiles
 
+With `cacheOnly` the caller gets only what is cached. Missing tiles are loaded in the background, by the server or, without a server, by the browser itself. Supply stops wait for the `supply` layer but take `food` (bakeries, cafés) as `cacheOnly` (`route.foodPartial`), because a cold Overpass request often takes 30+ s. "Find along the route" works the same way.
+
 To add a layer: add it to `LAYERS`, add its types to `LAYER_OF_TYPE`, add any tags you need to `KEEP_TAGS`, then **restart the server**. An old server rejects an unknown layer, and the client then fetches from Overpass and logs a warning.
 
-Be gentle with the public services. The server sends at most 2 parallel Overpass requests and a descriptive `User-Agent` (Overpass returns 406 without one). The home-region warm queue ([server/warmQueue.mjs](server/warmQueue.mjs)) yields to user requests (`isBusy()`), pauses between chunks and is rate-limited per IP.
+Several layers of the same tiles go into **one** Overpass query (`fetchLayersFromOverpass`), because every query waits in Overpass's queue on its own. The server groups tiles by their combination of missing layers.
+
+Be gentle with the public services. The server sends at most 2 parallel Overpass requests and a descriptive `User-Agent` (Overpass returns 406 without one). Requests a user waits for (`urgent`) go ahead of background work in that queue. The warm queue ([server/warmQueue.mjs](server/warmQueue.mjs)) has two job kinds: home regions (200 km radius) and routes. After every calculated route the client sends the route's tiles to `/api/warm-route` (`warmRoute()` in poiTiles.js, once per tile per session). Route jobs run before region jobs, and a region is interrupted between chunks for them. The queue yields to urgent requests (`isBusy()`), pauses between chunks and is rate-limited per IP and job kind.
 
 ### Server (`server.mjs`, `server/`)
 
 - Plain `node:http`, no framework. **`import './server/env.mjs'` must stay the first import.**
 - Static files are served only from a **whitelist** (`PUBLIC` regex in [server.mjs](server.mjs)): `index.html`, `manifest.webmanifest`, `js/`, `css/`, `profiles/`, `icons/`. A new public top-level file or folder must be added there, or the server returns 404. The whitelist keeps `.env`, `server/` and `cache/` private.
-- Endpoints: `/api/pois`, `/api/warm` (home-region preloading; the client sends coordinates rounded to ~10 km, the server snaps them to the tile centre), and the account API in [server/accountApi.mjs](server/accountApi.mjs) (route table in its header comment).
+- Endpoints: `/api/pois`, `/api/warm` (home-region preloading; the client sends coordinates rounded to ~10 km, the server snaps them to the tile centre), `/api/warm-route` (tiles along a route, the same 0.1° tiles `/api/pois` gets), and the account API in [server/accountApi.mjs](server/accountApi.mjs) (route table in its header comment).
 - [server/db.mjs](server/db.mjs): tables are created at startup with `CREATE TABLE IF NOT EXISTS` from `SCHEMA`. **There are no migrations.** New tables work automatically, but a new column on an existing table needs explicit `ALTER` handling. Always use parameterized `query(sql, params)`.
 - [server/auth.mjs](server/auth.mjs): scrypt password hashes, a session token in the HttpOnly `cr_session` cookie (stored only as a SHA-256 hash), per-IP limits on failed logins and registrations, and `Secure` set automatically behind HTTPS/proxy headers.
 - [server/http.mjs](server/http.mjs): shared helpers `HttpError`, `sendJson`, `readBody` (with size limit).

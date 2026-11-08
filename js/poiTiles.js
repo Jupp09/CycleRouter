@@ -126,23 +126,44 @@ async function fetchTilesFromServer(keys, layer, signal, cacheOnly = false) {
 
 // ---------- Laden ----------
 
+/** Direkt bei Overpass laden – in Paketen, große Abfragen brechen bei Last ab. */
+async function overpassTiles(keys, layer, signal) {
+  const fetched = new Map();
+  for (let i = 0; i < keys.length; i += OVERPASS_CHUNK) {
+    const chunk = keys.slice(i, i + OVERPASS_CHUNK);
+    for (const [k, pois] of await fetchTilesFromOverpass(chunk, { layer, signal })) fetched.set(k, pois);
+  }
+  return fetched;
+}
+
+const backgroundLoads = new Set(); // `${ebene}/${kachel}`, die ohne Server gerade im Hintergrund geladen werden
+
+/**
+ * Ohne Server-Cache (statisches Hosting) fehlende Kacheln im Hintergrund selbst bei Overpass laden – wie es
+ * sonst der Server bei `cacheOnly` tut. Beim nächsten Mal liegen sie im Browser-Cache.
+ */
+function loadInBackground(keys, layer) {
+  const todo = keys.filter(k => !backgroundLoads.has(cacheKey(layer, k)));
+  if (!todo.length) return;
+  todo.forEach(k => backgroundLoads.add(cacheKey(layer, k)));
+  overpassTiles(todo, layer)
+    .then(fetched => saveTiles(fetched, layer))
+    .catch(e => console.warn(`Nachladen im Hintergrund (${layer}) fehlgeschlagen:`, e.message))
+    .finally(() => todo.forEach(k => backgroundLoads.delete(cacheKey(layer, k))));
+}
+
 /**
  * Orte einer Ebene in den Kacheln – Browser-Cache, sonst Server-Cache, sonst direkt Overpass.
- * `cacheOnly`: nie auf Overpass warten → {pois, complete: false}, wenn Kacheln (noch) fehlen.
+ * `cacheOnly`: nie auf Overpass warten → {pois, complete: false}, wenn Kacheln (noch) fehlen; sie werden
+ * im Hintergrund nachgeladen (vom Server bzw. ohne Server vom Browser).
  */
 async function layerPois(keys, layer, signal, cacheOnly) {
   const cached = await loadTiles(keys, layer);
   const missing = keys.filter(k => !cached.has(k));
   if (missing.length) {
     let fetched = await fetchTilesFromServer(missing, layer, signal, cacheOnly);
-    if (!fetched && !cacheOnly) {
-      // Direkt bei Overpass – in Paketen, große Abfragen brechen bei Last ab
-      fetched = new Map();
-      for (let i = 0; i < missing.length; i += OVERPASS_CHUNK) {
-        const chunk = missing.slice(i, i + OVERPASS_CHUNK);
-        for (const [k, pois] of await fetchTilesFromOverpass(chunk, { layer, signal })) fetched.set(k, pois);
-      }
-    }
+    if (!fetched && cacheOnly) loadInBackground(missing, layer);
+    else if (!fetched) fetched = await overpassTiles(missing, layer, signal);
     if (fetched) {
       await saveTiles(fetched, layer);
       for (const [k, pois] of fetched) cached.set(k, pois);
@@ -170,4 +191,34 @@ export function fetchPois(r, signal, layers = ['supply'], opts = {}) {
 /** Orte der Ebenen rund um einzelne Punkte (`margin` in Grad, z. B. 0,03 ≈ 3 km) – etwa um Etappenenden. */
 export function fetchPoisNear(points, signal, layers, { margin = 0.03, ...opts } = {}) {
   return fetchPoisInTiles(tilesNear(points, margin), signal, layers, opts);
+}
+
+// ---------- Vorrat entlang der Route (Server) ----------
+
+const WARM_ROUTE_API = new URL('../api/warm-route', import.meta.url);
+const warmedTiles = new Set(); // in dieser Sitzung schon gemeldete Kacheln
+const MAX_WARM_TILES = 1000;   // Obergrenze des Servers je Anfrage
+// Eigenes Kennzeichen: Ein älterer Server ohne /api/warm-route (404) soll den POI-Cache nicht abschalten
+let warmAvailable = true;
+
+/**
+ * Kacheln entlang der Route beim Server vormerken: Er lädt alle Datenebenen im Hintergrund in seinen
+ * gemeinsamen Cache, damit Verpflegungsstopps, „Entlang der Route“ und Mehrtagestouren danach sofort Daten
+ * haben. Übermittelt werden nur Kacheln (0,1° ≈ 11 × 7 km) – dieselben, die auch /api/pois bekommt.
+ * Ohne Server (statisches Hosting) oder bei Fehlern passiert nichts; je Sitzung wird jede Kachel nur einmal
+ * gemeldet.
+ */
+export function warmRoute(r) {
+  if (!serverAvailable || !warmAvailable) return;
+  const tiles = routeTiles(r).filter(k => !warmedTiles.has(k)).slice(0, MAX_WARM_TILES);
+  if (!tiles.length) return;
+  tiles.forEach(k => warmedTiles.add(k));
+  fetch(WARM_ROUTE_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tiles }),
+  }).then(res => {
+    // Statisch ausgeliefert oder älterer Server → in dieser Sitzung nicht weiter versuchen
+    if ([404, 405, 501].includes(res.status)) warmAvailable = false;
+  }).catch(() => {});
 }

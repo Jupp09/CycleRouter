@@ -1,7 +1,7 @@
 /**
  * Orte aus OpenStreetMap über Overpass, aufgeteilt in Kacheln (0,1° ≈ 11 × 7 km) und Datenebenen
  * (LAYERS). Jede Ebene wird getrennt geladen und gecacht – so lässt sich eine neue Ebene nachladen,
- * ohne vorhandene Kacheln erneut abzufragen. Wird vom Browser (js/stops.js) und vom lokalen Server
+ * ohne vorhandene Kacheln erneut abzufragen. Wird vom Browser (js/poiTiles.js) und vom lokalen Server
  * (server.mjs, Datei-Cache) gemeinsam genutzt – daher ohne Abhängigkeiten zu Browser-APIs.
  */
 
@@ -138,32 +138,46 @@ async function overpass(query, { signal, headers = {} } = {}) {
 }
 
 /**
- * Lädt eine Datenebene (`opts.layer`, Standard „supply“) für Kacheln von Overpass → Map key → [poi].
- * Flächen (z. B. Supermarkt-Gebäude) werden der Kachel ihres Mittelpunkts zugeordnet; liegt der außerhalb
- * der angefragten Kacheln, entfällt die Fläche – sie ist dann ohnehin weiter als die maximale Entfernung
- * von der Route weg.
+ * Lädt mehrere Datenebenen für dieselben Kacheln mit *einer* Overpass-Abfrage → Map ebene → Map key → [poi].
+ * Eine Abfrage statt einer je Ebene: Overpass erlaubt je Absender nur wenige gleichzeitige Abfragen, und
+ * jede wartet für sich in der Warteschlange – das Zusammenfassen spart diese Wartezeit.
+ *
+ * Jede Ebene ordnet die Orte unabhängig ein – ein Ort kann so in zwei Ebenen landen (z. B. Hotel mit
+ * Restaurant), genau wie bei getrennten Abfragen. Flächen (z. B. Supermarkt-Gebäude) werden der Kachel ihres
+ * Mittelpunkts zugeordnet; liegt der außerhalb der angefragten Kacheln, entfällt die Fläche – sie ist dann
+ * ohnehin weiter als die maximale Entfernung von der Route weg.
  */
-export async function fetchTilesFromOverpass(keys, { layer = 'supply', ...opts } = {}) {
-  const def = LAYERS[layer];
-  const statements = keys.map(tileBox).map(def.statements).join('');
+export async function fetchLayersFromOverpass(keys, { layers = ['supply'], ...opts } = {}) {
+  const defs = layers.map(l => [l, LAYERS[l]]);
+  const boxes = keys.map(tileBox);
+  const statements = defs.map(([, def]) => boxes.map(def.statements).join('')).join('');
   // meta: Datum/Version der letzten Bearbeitung (nur wo nötig – vergrößert die Antwort)
+  const meta = defs.some(([, def]) => def.meta);
   const json = await overpass(`[out:json][timeout:90];(${statements}
 );
-out center tags${def.meta ? ' meta' : ''};`, opts);
+out center tags${meta ? ' meta' : ''};`, opts);
 
-  const tiles = new Map(keys.map(k => [k, []]));
+  const result = new Map(defs.map(([l]) => [l, new Map(keys.map(k => [k, []]))]));
   const seen = new Set();
   for (const el of json.elements) {
     const id = `${el.type}/${el.id}`;
-    const tags = el.tags || {};
-    const type = def.classify(tags);
     const lat = el.lat ?? el.center?.lat, lon = el.lon ?? el.center?.lon;
-    if (!type || lat == null || seen.has(id)) continue;
+    if (lat == null || seen.has(id)) continue;
     seen.add(id);
+    const tags = el.tags || {};
     const keep = Object.fromEntries(KEEP_TAGS.filter(t => tags[t]).map(t => [t, tags[t]]));
-    const poi = { id, type, lat, lon, tags: keep, name: tags.name || tags.brand || '' };
-    if (def.meta && el.timestamp) { poi.edited = el.timestamp.slice(0, 10); poi.version = el.version; }
-    tiles.get(tileKey(lat, lon))?.push(poi);
+    for (const [layer, def] of defs) {
+      const type = def.classify(tags);
+      if (!type) continue;
+      const poi = { id, type, lat, lon, tags: keep, name: tags.name || tags.brand || '' };
+      if (def.meta && el.timestamp) { poi.edited = el.timestamp.slice(0, 10); poi.version = el.version; }
+      result.get(layer).get(tileKey(lat, lon))?.push(poi);
+    }
   }
-  return tiles;
+  return result;
+}
+
+/** Lädt eine Datenebene (`opts.layer`, Standard „supply“) für Kacheln von Overpass → Map key → [poi]. */
+export async function fetchTilesFromOverpass(keys, { layer = 'supply', ...opts } = {}) {
+  return (await fetchLayersFromOverpass(keys, { layers: [layer], ...opts })).get(layer);
 }

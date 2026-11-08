@@ -92,6 +92,8 @@ function renderStops() {
     messages.push(`Zwischen km ${Math.round(g.from / 1000)} und ${Math.round(g.to / 1000)} wurde keine passende, geöffnete Verpflegungsstelle gefunden.`);
   }
   if (stops.length) messages.push(`Ankunftszeiten inkl. ${DWELL_MIN} min Pause je Stopp.`);
+  // Bäckereien/Cafés werden nicht abgewartet (siehe addStops) – beim nächsten Planen sind sie dabei
+  if (r.foodPartial) messages.push('Bäckereien und Cafés werden für einen Teil der Strecke gerade nachgeladen und beim nächsten Planen berücksichtigt.');
   gaps.hidden = !messages.length;
   gaps.className = 'hint' + (r.gaps.length ? ' warn' : '');
   gaps.textContent = messages.join(' ');
@@ -103,8 +105,9 @@ function renderRegions(r) {
   const segs = (r.regions || []).filter(s => s.country);
   const home = homeCountry();
   regionsEl.hidden = segs.length < 2;
+  // Grenzen ohne Feiertag nur grob bestimmt (±10 km, siehe regionsAlong) → „ab ca. km …“
   regionsEl.textContent = segs.length < 2 ? '' : 'Route durch: ' + segs.map((s, i) =>
-    `${regionLabel(s, home)}${i ? ` (ab km ${Math.round(s.from / 1000)})` : ''}`).join(' → ');
+    `${regionLabel(s, home)}${i ? ` (ab ${s.approx ? 'ca. ' : ''}km ${Math.round(s.from / 1000)})` : ''}`).join(' → ');
 
   const notes = $('#holiday-notes');
   const items = (r.holidays || []).map(h => {
@@ -116,11 +119,9 @@ function renderRegions(r) {
     li.textContent = `🎉 ${holidayDay(h.date)}: ${h.name} – Feiertag in ${where}. Läden haben meist geschlossen; Trinkwasser und Tankstellen werden bevorzugt.`;
     return li;
   });
-  if (r.holidayCheck === false) {
-    const li = document.createElement('li');
-    li.textContent = 'Feiertage konnten nicht geprüft werden (Regionen bzw. Feiertagsdaten nicht erreichbar).';
-    items.push(li);
-  }
+  const note = text => { const li = document.createElement('li'); li.textContent = text; items.push(li); };
+  if (r.holidayCheck === 'pending') note('Feiertage entlang der Route werden noch geprüft …');
+  if (r.holidayCheck === false) note('Feiertage konnten nicht geprüft werden (Regionen bzw. Feiertagsdaten nicht erreichbar).');
   notes.replaceChildren(...items);
   notes.hidden = !items.length;
 }

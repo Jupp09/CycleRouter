@@ -143,9 +143,27 @@ function plan(r, candidates, { interval, departure, bike, holidayFor }) {
   return { stops, gaps };
 }
 
+// ---------- Feiertage ----------
+// Für Feiertage muss bekannt sein, durch welche Länder und Bundesländer die Route führt. Das kommt von Nominatim
+// (höchstens eine Anfrage pro Sekunde) und dauert bei langen Routen viele Sekunden. Deshalb werden die Stopps
+// zuerst ohne Feiertage geplant und angezeigt; die Feiertagsprüfung läuft parallel (holidayContext) und wird
+// danach angewendet (applyHolidays). Nur wenn an einem Fahrtag wirklich ein Feiertag gilt, wird neu geplant.
+
+/** Kalendertage von `from` bis `to` (jeweils 12 Uhr – für den Datumsvergleich, unabhängig von der Uhrzeit). */
+function daysBetween(from, to) {
+  const out = [];
+  const day = new Date(from.getFullYear(), from.getMonth(), from.getDate()); // Tagesbeginn
+  while (day <= to && out.length < 60) { // Obergrenze: Schutz vor unsinnigen Zeiten
+    out.push(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12));
+    day.setDate(day.getDate() + 1);
+  }
+  return out;
+}
+
 /**
  * Feiertage, die während der Fahrt in durchfahrenen Regionen gelten:
- * [{date, name, national, regions: [Abschnitt, …]}]
+ * [{date, name, national, regions: [Abschnitt, …]}]. Geprüft wird jeder Tag, an dem man in der Region ist –
+ * bei Mehrtagestouren auch Tage mitten im Abschnitt.
  */
 function holidayNotes(r, regions, lookup, departure, bike) {
   const eta = timeline(r, departure, bike);
@@ -153,9 +171,8 @@ function holidayNotes(r, regions, lookup, departure, bike) {
   regions.forEach((seg, i) => {
     if (!seg.country) return;
     const to = regions[i + 1]?.from ?? r.distance;
-    // Ankunfts- und Abfahrtstag im Abschnitt (bei Touren über Mitternacht zwei Tage)
-    for (const t of [eta(seg.from), eta(to)]) {
-      const h = lookup(seg, t);
+    for (const day of daysBetween(eta(seg.from), eta(to))) {
+      const h = lookup(seg, day);
       if (!h) continue;
       const key = `${h.date}|${h.name}`;
       const note = notes.get(key) || { ...h, regions: [] };
@@ -166,34 +183,79 @@ function holidayNotes(r, regions, lookup, departure, bike) {
   return [...notes.values()];
 }
 
-/** Regionen entlang der Route und Feiertagsabfrage dafür – Fehler sind nicht fatal (dann ohne Feiertage). */
-async function holidayContext(base, departure, bike, signal) {
-  const regions = await regionsAlong(base, signal).catch(e => { if (e.name === 'AbortError') throw e; console.warn(e); return null; });
-  if (!regions) return { regions: null, lookup: null };
+/**
+ * Regionen entlang der Route und Feiertagsabfrage dafür → {regions, lookup, notes}. Fehler sind nicht fatal
+ * (dann regions/lookup null = Feiertage nicht geprüft). Die Regionen werden zuerst grob bestimmt (alle 20 km);
+ * die Grenzen werden nur dann genau eingegrenzt, wenn während der Fahrt überhaupt ein Feiertag gilt – das spart
+ * die meisten Nominatim-Anfragen.
+ */
+export async function holidayContext(base, departure, bike, signal) {
+  const soft = e => { if (e.name === 'AbortError') throw e; console.warn(e); return null; };
+  let regions = await regionsAlong(base, signal, { precise: false }).catch(soft);
+  if (!regions) return { regions: null, lookup: null, notes: [] };
   const arrival = timeline(base, departure, bike, DWELL_MIN)(base.distance, 10);
   const countries = new Set(regions.map(s => s.country).filter(Boolean));
-  const lookup = await holidayLookup(countries, departure, arrival, signal)
-    .catch(e => { if (e.name === 'AbortError') throw e; console.warn(e); return null; });
-  return { regions, lookup };
+  const lookup = await holidayLookup(countries, departure, arrival, signal).catch(soft);
+  if (!lookup) return { regions, lookup: null, notes: [] };
+  let notes = holidayNotes(base, regions, lookup, departure, bike);
+  if (notes.length && regions.some(s => s.approx)) {
+    // Feiertag auf der Strecke: Grenzen genau bestimmen, damit Stopps diesseits/jenseits richtig bewertet werden
+    regions = await regionsAlong(base, signal).catch(soft) || regions;
+    notes = holidayNotes(base, regions, lookup, departure, bike);
+  }
+  return { regions, lookup, notes };
 }
+
+/**
+ * Ergebnis der Feiertagsprüfung auf eine Route mit Stopps anwenden. Gilt während der Fahrt kein Feiertag,
+ * bleiben die Stopps, wie sie sind – sie bekommen nur ihre Region (für die Anzeige) → neue Route.
+ * Gilt einer, muss neu geplant werden → null (dann addStops mit `holidays`).
+ */
+export function applyHolidays(stopped, ctx) {
+  if (ctx.notes.length) return null;
+  return {
+    ...stopped,
+    regions: ctx.regions || [],
+    holidays: [],
+    holidayCheck: !!ctx.lookup,
+    stops: stopped.stops.map(s => ({ ...s, region: regionAtDistance(ctx.regions, s.planAlong) })),
+  };
+}
+
+// ---------- Planen ----------
 
 /**
  * Ergänzt eine Route um Verpflegungsstopps.
  * Ergebnis: neue Route (durch die Stopps) mit `stops`, `gaps`, `regions`, `holidays` und `base`
  * (Route ohne Stopps). Bei Mehrtagestouren werden `origin`, `stays` und `stageStarts` weitergegeben.
+ *
+ * `holidays`: Ergebnis von holidayContext. Fehlt es, wird ohne Feiertage geplant (`holidayCheck: 'pending'`)
+ * – die Prüfung folgt dann mit applyHolidays.
+ *
+ * Trinkwasser, Supermärkte und Tankstellen (Ebene „supply“) werden vollständig geladen. Bäckereien und Cafés
+ * (Ebene „food“) nur, soweit sie schon im Cache liegen: Overpass braucht für eine neue Gegend oft eine halbe
+ * Minute, und das soll die Planung nicht aufhalten. Fehlendes wird im Hintergrund nachgeladen (`foodPartial`).
  */
-export async function addStops(base, { provider, opts, interval, departure, bike, signal }) {
-  // Stellen sowie Regionen/Feiertage parallel laden
-  const [pois, { regions, lookup }] = await Promise.all([
-    fetchPois(base, signal, ['supply', 'food']),
-    holidayContext(base, departure, bike, signal),
+export async function addStops(base, { provider, opts, interval, departure, bike, signal, holidays = null }) {
+  const [supply, food] = await Promise.all([
+    fetchPois(base, signal, ['supply']),
+    fetchPois(base, signal, ['food'], { cacheOnly: true }).catch(e => {
+      if (signal?.aborted) throw e;
+      console.warn(e);
+      return Object.assign([], { complete: false });
+    }),
   ]);
+  const seen = new Set();
+  const pois = [...supply, ...food].filter(p => !seen.has(p.id) && seen.add(p.id));
+  const regions = holidays?.regions || null;
+  const lookup = holidays?.lookup || null;
   const regionFor = along => regionAtDistance(regions, along);
   const holidayFor = (along, date) => lookup?.(regionFor(along), date) ?? null;
   const info = {
     regions: regions || [],
-    holidays: lookup ? holidayNotes(base, regions, lookup, departure, bike) : [],
-    holidayCheck: !!lookup, // false = Feiertage konnten nicht geprüft werden
+    holidays: holidays?.notes || [],
+    holidayCheck: holidays ? !!lookup : 'pending', // false = Feiertage konnten nicht geprüft werden
+    foodPartial: !food.complete,
   };
 
   // Restaurants gehören nicht zu den Verpflegungsstopps (zu lange Pause) – nur Typen mit MAX_OFFSET
@@ -222,7 +284,7 @@ export async function addStops(base, { provider, opts, interval, departure, bike
     const ev = evaluate(s.poi, t, holiday) || { state: 'closed' };
     const type = STOP_TYPES[s.poi.type];
     finalStops.push({
-      ...s, along: along[i], eta: t, state: ev.state, point: p, region, holiday,
+      ...s, planAlong: s.along, along: along[i], eta: t, state: ev.state, point: p, region, holiday,
       icon: type.icon, typeLabel: type.label, gpxSym: type.gpxSym,
     });
   });

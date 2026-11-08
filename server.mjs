@@ -1,13 +1,14 @@
 // Server für CycloRouter – liefert die App aus (nur öffentliche Dateien, siehe PUBLIC), egal von wo gestartet.
 // Zusätzlich: POST /api/pois – Verpflegungsstellen je Kachel aus dem Datei-Cache (server/poiCache.mjs),
-// /api/warm – Vorrat für Heimatregionen, /api/account|settings|routes|shared – Konten (server/accountApi.mjs).
+// /api/warm – Vorrat für Heimatregionen, /api/warm-route – Vorrat entlang einer Route,
+// /api/account|settings|routes|shared – Konten (server/accountApi.mjs).
 import './server/env.mjs'; // muss der erste Import bleiben (.env laden, bevor andere Module Werte lesen)
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getTiles } from './server/poiCache.mjs';
-import { initWarmQueue, requestWarm, warmStatus, RADIUS_KM } from './server/warmQueue.mjs';
+import { initWarmQueue, requestWarm, requestRouteWarm, warmStatus, RADIUS_KM } from './server/warmQueue.mjs';
 import { isTileKey, isLayer } from './js/poiSource.js';
 import { initDb } from './server/db.mjs';
 import { handleAccountApi } from './server/accountApi.mjs';
@@ -86,6 +87,23 @@ async function handleWarm(req, res, url) {
 }
 
 /**
+ * Vorrat entlang einer Route: POST {tiles: [Kachelschlüssel]} – der Server lädt alle Datenebenen dieser Kacheln
+ * im Hintergrund in den gemeinsamen Cache. Die Kacheln (0,1°) sind dieselben, die auch /api/pois erhält.
+ */
+async function handleWarmRoute(req, res) {
+  if (req.method !== 'POST') return json(res, 405, { error: 'Nur POST' });
+  try {
+    const { tiles } = JSON.parse(await readBody(req, 32 * 1024));
+    if (!Array.isArray(tiles) || !tiles.length || tiles.length > 1000 || !tiles.every(isTileKey)) {
+      return json(res, 400, { error: 'Ungültige Kachelliste' });
+    }
+    json(res, 200, await requestRouteWarm(tiles, clientIp(req)));
+  } catch (e) {
+    json(res, 400, { error: e.message });
+  }
+}
+
+/**
  * Nur diese Dateien/Ordner werden ausgeliefert – alles andere im Projektordner (.env mit Zugangsdaten,
  * server/, node_modules/, cache/, package.json …) bleibt privat.
  */
@@ -97,6 +115,7 @@ createServer(async (req, res) => {
   try { path = decodeURIComponent(url.pathname); } catch { res.writeHead(400).end(); return; }
   if (path === '/api/pois') return handlePois(req, res);
   if (path === '/api/warm') return handleWarm(req, res, url);
+  if (path === '/api/warm-route') return handleWarmRoute(req, res);
   if (await handleAccountApi(req, res, url)) return;
   if (path === '/') path = '/index.html';
   const file = normalize(join(ROOT, path));

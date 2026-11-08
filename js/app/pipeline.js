@@ -2,6 +2,7 @@
  * Berechnungsablauf: Route berechnen bzw. erzeugen, anzeigen und schrittweise ergänzen.
  *
  *   Grundroute ─▶ (Mehrtagestour: Unterkünfte, Route durch sie) ─▶ (Verpflegungsstopps, Route durch sie)
+ *                                                                  ─▶ (Feiertage angewendet, ggf. neu geplant)
  *
  * Nach jedem Schritt wird die Route angezeigt, sie ist also nutzbar, bevor die Suche nach Unterkünften
  * oder Stopps fertig ist. Jeder Schritt liefert eine *neue* Route, die die vorige behält (route.origin,
@@ -10,7 +11,8 @@
  */
 import { route } from '../routing/index.js';
 import { generateLoop, generateOneWay } from '../generators.js';
-import { addStops } from '../stops.js';
+import { addStops, holidayContext, applyHolidays } from '../stops.js';
+import { warmRoute } from '../poiTiles.js';
 import { isMultiDayCandidate, planStays, routeThroughStays } from '../stays.js';
 import { seededRandom } from '../utils.js';
 import { state, emit, provider, routeOpts, departureDate, activeVias, originRoute } from './state.js';
@@ -71,6 +73,7 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
     if (signal.aborted) return;
     setStatus(null);
     showRoute(r, { fit });
+    warmRoute(r); // Server lädt Orte entlang der Route vor (für Stopps, Suche, Mehrtagestour)
 
     // Mehrtagestour (nur auf Wunsch): Unterkünfte suchen und die Route durch sie führen
     if (state.multiDay && isMultiDayCandidate(r, state.stays.maxKm)) {
@@ -99,8 +102,22 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
 
     // Route steht schon auf der Karte; Stopps werden nachgeladen und die Route dann durch sie geführt
     setStatus('Verpflegungsstopps werden gesucht … (die Route ist bereits nutzbar)', 'loading');
+    // Feiertagsprüfung parallel starten – sie ist langsam (Nominatim, 1 Anfrage/s), die Stopps warten nicht darauf
+    const holidays = holidayContext(r, departureDate(), state.bike, signal);
+    holidays.catch(() => {}); // ein Abbruch wird unten behandelt
     try {
-      const withStops = await withSupply(r, signal);
+      let withStops = await withSupply(r, signal);
+      if (signal.aborted) return;
+      setStatus(null);
+      showRoute(withStops, { fit: false });
+
+      // Feiertage anwenden: meist ist keiner – dann bleiben die Stopps und bekommen nur ihre Regionen
+      const ctx = await holidays;
+      if (signal.aborted) return;
+      const annotated = applyHolidays(withStops, ctx);
+      if (annotated) { showRoute(annotated, { fit: false }); return; }
+      setStatus('Feiertag auf der Strecke – Verpflegungsstopps werden angepasst …', 'loading');
+      withStops = await withSupply(r, signal, ctx);
       if (signal.aborted) return;
       setStatus(null);
       showRoute(withStops, { fit: false });
@@ -116,10 +133,13 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
   }
 }
 
-/** Route (mit oder ohne Übernachtungen, ohne Stopps) um Verpflegungsstopps ergänzen. */
-function withSupply(base, signal) {
+/**
+ * Route (mit oder ohne Übernachtungen, ohne Stopps) um Verpflegungsstopps ergänzen.
+ * `holidays`: Ergebnis der Feiertagsprüfung (holidayContext) – ohne wird zunächst ohne Feiertage geplant.
+ */
+function withSupply(base, signal, holidays = null) {
   return addStops(base, {
-    provider: provider(), opts: routeOpts(), bike: state.bike, signal,
+    provider: provider(), opts: routeOpts(), bike: state.bike, signal, holidays,
     interval: state.supply.intervalKm * 1000,
     departure: departureDate(),
   });

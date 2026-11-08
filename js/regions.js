@@ -60,10 +60,13 @@ export async function regionAt(point, signal) {
 const same = (a, b) => (a?.country ?? null) === (b?.country ?? null) && (a?.region ?? null) === (b?.region ?? null);
 
 /**
- * Abschnitte gleicher Region entlang der Route: [{from (m), country, countryName, region, regionName}].
- * Geprüft wird alle 20 km; wo sich die Region ändert, wird die Grenze auf ~2 km genau eingegrenzt.
+ * Abschnitte gleicher Region entlang der Route: [{from (m), country, countryName, region, regionName, approx?}].
+ * Geprüft wird alle 20 km. Mit `precise` (Standard) wird jede Grenze auf ~2 km genau eingegrenzt – das kostet
+ * je Grenze 3–4 weitere Nominatim-Anfragen (höchstens eine pro Sekunde). Ohne `precise` liegt die Grenze
+ * in der Mitte zwischen zwei Stichproben (±10 km, `approx: true`). Ein zweiter, genauer Aufruf für dieselbe
+ * Route fragt die Stichproben nicht erneut ab (Cache).
  */
-export async function regionsAlong(r, signal) {
+export async function regionsAlong(r, signal, { precise = true } = {}) {
   const pointAt = along => {
     const c = r.coords[indexAtDistance(r, along)];
     return { lat: c[0], lon: c[1], along };
@@ -75,6 +78,10 @@ export async function regionsAlong(r, signal) {
   const segments = [{ from: 0, ...regs[0] }];
   for (let i = 1; i < pts.length; i++) {
     if (same(regs[i - 1], regs[i])) continue;
+    if (!precise) {
+      segments.push({ from: (pts[i - 1].along + pts[i].along) / 2, ...regs[i], approx: true });
+      continue;
+    }
     let a = pts[i - 1].along, b = pts[i].along, rb = regs[i];
     while (b - a > 2000) {
       const m = (a + b) / 2;
