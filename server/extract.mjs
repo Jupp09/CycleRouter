@@ -24,6 +24,11 @@ const META = join(DIR, 'meta.json');
 const DEFAULT_URL = 'https://github.com/Jupp09/CycleRouter/releases/download/poi-data/pois-europe.json';
 const CHECK_EVERY = 12 * 3600 * 1000;  // alle 12 h nachsehen, ob es ein neues Paket gibt
 const FIRST_CHECK = 60 * 1000;         // erst kurz nach dem Start – der Server soll zuerst Anfragen beantworten
+// Nach einem Fehler (z. B. GitHub kurz nicht erreichbar) früher erneut versuchen: 30 min, dann doppelt so lange, höchstens 6 h
+const RETRY_FIRST = 30 * 60 * 1000;
+const RETRY_MAX = 6 * 3600 * 1000;
+const MANIFEST_TIMEOUT = 60 * 1000;
+const BUNDLE_TIMEOUT = 30 * 60 * 1000; // ~100 MB auch über eine langsame Leitung
 const CACHED_CELLS = 64;               // gelesene Zellen im Speicher (dichte Städte: ~1 MB je Zelle)
 const USER_AGENT = 'CycloRouter/1.0 (+https://github.com/Jupp09/CycleRouter)';
 
@@ -89,25 +94,26 @@ function hashing(hash) {
 /**
  * Neues Paket laden, wenn die Beschreibung (pois-europe.json) einen neueren Stand meldet. Entpackt wird in
  * einen neuen Ordner, der den alten erst ersetzt, wenn alles geprüft ist (Prüfsumme, Format).
+ * → false, wenn es fehlgeschlagen ist (dann wird früher erneut versucht), sonst true.
  */
 async function update() {
   const url = process.env.POI_EXTRACT_URL ?? DEFAULT_URL;
-  if (!url || url === 'off' || updating) return;
+  if (!url || url === 'off' || updating) return true;
   updating = true;
   const tmp = join(DIR, 'cells.new');
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
-    if (res.status === 404) return; // noch nichts veröffentlicht
+    const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(MANIFEST_TIMEOUT) });
+    if (res.status === 404) { log('Datenauszug: noch kein Paket veröffentlicht'); return true; }
     if (!res.ok) throw new Error(`Beschreibung: HTTP ${res.status}`);
     const manifest = await res.json();
     if (!Number.isFinite(manifest.t) || typeof manifest.file !== 'string' || !/^[0-9a-f]{64}$/.test(manifest.sha256)) {
       throw new Error('Beschreibung unvollständig');
     }
-    if (meta?.sha256 === manifest.sha256) return; // schon aktuell
+    if (meta?.sha256 === manifest.sha256) return true; // schon aktuell
 
     log(`Datenauszug: neuer Stand vom ${new Date(manifest.t).toLocaleDateString('de-DE')} wird geladen (${(manifest.bytes / 1e6).toFixed(0)} MB) …`);
     const t0 = Date.now();
-    const data = await fetch(new URL(manifest.file, url), { headers: { 'User-Agent': USER_AGENT } });
+    const data = await fetch(new URL(manifest.file, url), { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(BUNDLE_TIMEOUT) });
     if (!data.ok) throw new Error(`Paket: HTTP ${data.status}`);
 
     await rm(tmp, { recursive: true, force: true });
@@ -151,12 +157,31 @@ async function update() {
     await rm(old, { recursive: true, force: true });
     await loadIndex();
     log(`Datenauszug: ${count} Zellen (${head.regions?.length ?? '?'} Regionen) in ${Math.round((Date.now() - t0) / 1000)} s übernommen`);
+    return true;
   } catch (e) {
-    log(`Datenauszug: Aktualisierung fehlgeschlagen – ${e.message}`);
+    const reason = e.name === 'TimeoutError' ? 'Zeitüberschreitung' : e.message;
+    log(`Datenauszug: Aktualisierung fehlgeschlagen – ${reason}`);
     await rm(tmp, { recursive: true, force: true }).catch(() => {});
+    return false;
   } finally {
     updating = false;
   }
+}
+
+/** Nächste Prüfung planen: regulär alle 12 h, nach Fehlern früher (30 min, dann länger, höchstens 6 h). */
+let retryDelay = RETRY_FIRST;
+function schedule(delay) {
+  setTimeout(async () => {
+    const ok = await update();
+    if (ok) {
+      retryDelay = RETRY_FIRST;
+      schedule(CHECK_EVERY);
+    } else {
+      log(`Datenauszug: nächster Versuch in ${Math.round(retryDelay / 60000)} min`);
+      schedule(retryDelay);
+      retryDelay = Math.min(retryDelay * 2, RETRY_MAX);
+    }
+  }, delay).unref();
 }
 
 /** Beim Start: vorhandenen Auszug einlesen und regelmäßig nach neuen Ständen sehen. */
@@ -165,8 +190,8 @@ export async function initExtract(logger) {
   await mkdir(DIR, { recursive: true });
   await loadIndex();
   if (meta) log(`Datenauszug: Stand vom ${new Date(meta.t).toLocaleDateString('de-DE')}, ${covered.size} Zellen`);
-  setTimeout(update, FIRST_CHECK).unref();
-  setInterval(update, CHECK_EVERY).unref();
+  else log('Datenauszug: noch keiner vorhanden – erster Abruf in 1 min');
+  schedule(FIRST_CHECK);
 }
 
 /** Sofort aktualisieren (`npm run extract:update`, z. B. per Cronjob oder nach der ersten Einrichtung). */
