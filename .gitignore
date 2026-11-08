@@ -1,3 +1,6 @@
 cache/
 node_modules/
 .env
+# Datenauszug lokal bauen (npm run extract:build)
+dist/
+tmp-extract/

@@ -6,7 +6,9 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "warm": "node server/warm.mjs"
+    "warm": "node server/warm.mjs",
+    "extract:update": "node server/extract-update.mjs",
+    "extract:build": "node --max-old-space-size=12288 scripts/build-poi-extract.mjs"
   },
   "dependencies": {
     "mariadb": "3.5.4"

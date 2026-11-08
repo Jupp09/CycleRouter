@@ -3,10 +3,13 @@
 // Jede Ebene hat ihre eigene Gültigkeit – eine neue Ebene wird für vorhandene Kacheln nachgeladen, ohne die
 // übrigen Ebenen erneut abzufragen. Die Daten ändern sich selten, Overpass ist dagegen oft langsam – deshalb
 // lange Gültigkeit und „stale-while-revalidate“: Abgelaufenes wird sofort ausgeliefert und im Hintergrund erneuert.
+// Für Europa liegt zusätzlich ein wöchentlicher Datenauszug vor (server/extract.mjs) – dort wird Overpass nur
+// noch gebraucht, wenn der Auszug älter als die Gültigkeit ist.
 import { mkdir, readFile, writeFile, rename, stat, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fetchLayersFromOverpass, LAYERS, TILE, tileKey, cacheName } from '../js/poiSource.js';
+import { extractTile, extractCovers, extractAge } from './extract.mjs';
 
 const DIR = fileURLToPath(new URL('../cache/pois/', import.meta.url));
 const DAY = 24 * 3600 * 1000;
@@ -36,8 +39,18 @@ const migrated = (async () => {
   console.log(`Cache: ${files.length} vorhandene Kacheln als Ebene „supply“ übernommen`);
 })();
 
-async function readTile(layer, key) {
+async function readOwnTile(layer, key) {
   try { return JSON.parse(await readFile(file(layer, key), 'utf8')); } catch { return null; }
+}
+
+/**
+ * Kachel einer Ebene → {t, pois} oder null. Quellen: eigene Kachel-Datei (von Overpass) und der Datenauszug
+ * Europa (server/extract.mjs) – es gilt der neuere Stand.
+ */
+async function readTile(layer, key) {
+  const [own, ext] = await Promise.all([readOwnTile(layer, key), extractTile(layer, key)]);
+  if (own && ext) return own.t >= ext.t ? own : ext;
+  return own || ext;
 }
 
 async function writeTile(layer, key, pois) {
@@ -166,11 +179,16 @@ export function tilesAround(lat, lon, radiusKm) {
   return [...dist].sort((x, y) => x[1] - y[1]).map(([k]) => k);
 }
 
-/** Kacheln, deren Ebene fehlt oder abgelaufen ist (nur Dateizeitstempel – schnell auch für tausende Kacheln). */
+/**
+ * Kacheln, deren Ebene fehlt oder abgelaufen ist (nur Dateizeitstempel – schnell auch für tausende Kacheln).
+ * Was ein aktueller Datenauszug abdeckt, fehlt nicht.
+ */
 export async function tilesNeedingFetch(keys, layer) {
   await migrated;
   const now = Date.now();
+  const extractFresh = extractAge() < TTL;
   const need = await Promise.all(keys.map(async k => {
+    if (extractFresh && extractCovers(layer, k)) return false;
     try { return now - (await stat(file(layer, k))).mtimeMs >= TTL; } catch { return true; }
   }));
   return keys.filter((_, i) => need[i]);

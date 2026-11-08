@@ -1,0 +1,52 @@
+# Datenauszug Europa für den POI-Cache (siehe scripts/build-poi-extract.mjs und server/extract.mjs).
+# Läuft wöchentlich, lädt die Geofabrik-Auszüge der europäischen Länder nacheinander (zusammen gut 30 GB),
+# filtert die benötigten Orte und veröffentlicht das Ergebnis als Release „poi-data“. Die Server holen es
+# sich von dort (POI_EXTRACT_URL).
+name: POI-Daten Europa
+
+on:
+  schedule:
+    - cron: '23 3 * * 1' # montags früh – Geofabrik aktualisiert die Auszüge nachts
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/build-poi-extract.mjs
+      - js/poiSource.js
+      - .github/workflows/poi-extract.yml
+
+permissions:
+  contents: write # Release-Dateien hochladen
+
+concurrency:
+  group: poi-extract
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: osmium installieren
+        run: sudo apt-get update && sudo apt-get install -y osmium-tool
+
+      - name: Auszüge laden und aufbereiten
+        # Ganz Europa liegt bis zum Schreiben im Speicher (einige Millionen Orte)
+        run: node --max-old-space-size=12288 scripts/build-poi-extract.mjs --out dist --work "$RUNNER_TEMP/extract"
+
+      - name: Release „poi-data“ aktualisieren
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view poi-data >/dev/null 2>&1 || gh release create poi-data --prerelease \
+            --title "POI-Daten Europa" \
+            --notes "Wöchentlicher Datenauszug für den POI-Cache von CycloRouter. Daten © OpenStreetMap-Mitwirkende (ODbL), Auszüge: Geofabrik."
+          # Erst das Paket, dann die Beschreibung – Server laden nur, was zur Beschreibung (Prüfsumme) passt
+          gh release upload poi-data dist/pois-europe.ndjson.gz --clobber
+          gh release upload poi-data dist/pois-europe.json --clobber

@@ -36,6 +36,8 @@ Alternativ geht jeder statische Server, er muss aber **im Projektordner** gestar
 
 **Schnelle Verpflegungsstopps:** Die Stopps warten nur auf Trinkwasser, Supermärkte und Tankstellen. Bäckereien und Cafés nimmt die App, soweit sie schon im Cache liegen; den Rest lädt der Server nach, und ein Hinweis weist darauf hin. Die Feiertagsprüfung (Länder und Bundesländer über Nominatim, höchstens eine Anfrage pro Sekunde) läuft im Hintergrund. Nur wenn an einem Fahrtag tatsächlich ein Feiertag gilt, werden die Stopps danach angepasst.
 
+**Datenauszug Europa:** Für ganz Europa muss der Server Overpass gar nicht mehr fragen. Ein GitHub-Workflow ([.github/workflows/poi-extract.yml](.github/workflows/poi-extract.yml)) lädt jeden Montag die OpenStreetMap-Auszüge aller europäischen Länder von [Geofabrik](https://download.geofabrik.de/europe.html), insgesamt gut 30 GB. Er filtert mit `osmium` die benötigten Orte heraus (Versorgung, Gastronomie, Unterkünfte) und veröffentlicht das Ergebnis als Release `poi-data`. Der Server lädt dieses Paket kurz nach dem Start und danach alle 12 Stunden, sobald es einen neuen Stand gibt. Er prüft die Prüfsumme und legt es in `cache/extract/` ab. Einstellbar ist das über `POI_EXTRACT_URL` (`off` = abschalten); sofort aktualisieren geht mit `npm run extract:update`. Gegenden außerhalb des Auszugs (z. B. am Rand Europas) lädt der Server weiter bei Overpass. Lokal bauen lässt sich das Paket mit `npm run extract:build` (Linux/macOS mit `curl` und `osmium-tool`).
+
 Eine beliebige Region lässt sich auch manuell vorab laden, z. B. 60 km um einen Ort:
 
 ```sh
@@ -120,7 +122,8 @@ js/account.js          Konto-Schnittstelle (Client)
 js/shared.js           Gemeinsame Konstanten für Browser und Server
 
 server.mjs             Server: App ausliefern, /api/pois, /api/warm, Konten
-server/                POI-Cache, Vorrat-Warteschlange, Datenbank, Anmeldung, HTTP-Helfer
+server/                POI-Cache, Datenauszug Europa, Vorrat-Warteschlange, Datenbank, Anmeldung, HTTP-Helfer
+scripts/               Datenauszug Europa bauen (läuft wöchentlich in GitHub Actions)
 ```
 
 ## Datenquellen

@@ -8,6 +8,8 @@ CycloRouter (repo name: CycleRouter) is a bike route planner for road bikes, gra
 npm install          # only dependency: mariadb (needed only when using accounts)
 npm start            # node server.mjs → http://localhost:8000 (PORT=… to change)
 npm run warm -- <lat> <lon> [radius-km]   # preload the POI cache for a region, e.g. 53.07 8.80 60
+npm run extract:update   # download the current Europe extract now (the server also does this by itself)
+npm run extract:build    # build the extract locally (Linux/macOS with curl + osmium-tool, ~30 GB download)
 ```
 
 - **No build step, no bundler, no tests, no linter.** To check a change, run `npm start` and use the app in a browser. The browser console and the server log are the only diagnostics.
@@ -93,12 +95,16 @@ A provider is `{id, name, supportsTraffic, supportsEurovelo?, route(points, opts
 The POI layers in `LAYERS` ([poiSource.js](js/poiSource.js)) are `supply`, `food` and `stay`. Each POI type belongs to exactly one layer (`layerOfType`). Each layer is fetched and cached per tile on its own. When looking up a tile, the client tries these sources in order:
 
 1. Memory and IndexedDB (`cyclerouter` db, `poiTiles` store, 7 days): [poiTiles.js](js/poiTiles.js)
-2. The server, `POST /api/pois`: a file cache at `cache/pois/<layer>/<tile>.json` with 30-day TTL (`POI_TTL_DAYS`), stale-while-revalidate, and up to 365 days stale ([server/poiCache.mjs](server/poiCache.mjs))
+2. The server, `POST /api/pois`: a file cache at `cache/pois/<layer>/<tile>.json` with 30-day TTL (`POI_TTL_DAYS`), stale-while-revalidate, and up to 365 days stale ([server/poiCache.mjs](server/poiCache.mjs)). The server also has the **Europe extract** (see below); per tile the newer of the two wins.
 3. Overpass directly, in chunks of 40 tiles
+
+**Europe extract:** a GitHub Actions workflow ([.github/workflows/poi-extract.yml](.github/workflows/poi-extract.yml), weekly) runs [scripts/build-poi-extract.mjs](scripts/build-poi-extract.mjs). It processes the Geofabrik extracts of all European countries one by one (composite regions like `dach`/`alps` are skipped): `osmium tags-filter` with each layer's `filters`, then `osmium export` to GeoJSON lines, then `toPoi` (the same conversion as the Overpass path). The result goes to the release `poi-data`: `pois-europe.ndjson.gz` (one line per 0.5° cell = 5 × 5 tiles) and `pois-europe.json` (manifest with sha256). [server/extract.mjs](server/extract.mjs) checks the manifest 1 min after start and then every 12 h (`POI_EXTRACT_URL`, `off` disables it). It stores the cells in `cache/extract/cells/` and swaps them in only after the checksum matches. `npm run extract:update` updates by hand. Only cells that lie fully inside the processed countries are in the bundle; a missing tile inside a covered cell means "no POIs". Everything else (and layers the bundle doesn't know, e.g. after a `cacheVersion` bump) still goes to Overpass.
+
+**Keep `statements` (Overpass) and `filters` (osmium) of a layer in sync.** A change to `js/poiSource.js` triggers a rebuild of the extract.
 
 With `cacheOnly` the caller gets only what is cached. Missing tiles are loaded in the background, by the server or, without a server, by the browser itself. Supply stops wait for the `supply` layer but take `food` (bakeries, cafés) as `cacheOnly` (`route.foodPartial`), because a cold Overpass request often takes 30+ s. "Find along the route" works the same way.
 
-To add a layer: add it to `LAYERS`, add its types to `LAYER_OF_TYPE`, add any tags you need to `KEEP_TAGS`, then **restart the server**. An old server rejects an unknown layer, and the client then fetches from Overpass and logs a warning.
+To add a layer: add it to `LAYERS` (with `statements` and `filters`), add its types to `LAYER_OF_TYPE`, add any tags you need to `KEEP_TAGS`, then **restart the server**. An old server rejects an unknown layer, and the client then fetches from Overpass and logs a warning.
 
 Several layers of the same tiles go into **one** Overpass query (`fetchLayersFromOverpass`), because every query waits in Overpass's queue on its own. The server groups tiles by their combination of missing layers.
 
@@ -122,6 +128,6 @@ Be gentle with the public services. The server sends at most 2 parallel Overpass
 
 ## Notes
 
-- `cache/`, `node_modules/` and `.env` are git-ignored. `.env` holds real DB credentials, so never commit it or print its contents.
+- `cache/`, `node_modules/`, `dist/`, `tmp-extract/` and `.env` are git-ignored. `.env` holds real DB credentials, so never commit it or print its contents.
 - Development is on Windows; git warns about LF→CRLF line endings, which is harmless.
 - The app is installable as a PWA (`manifest.webmanifest`, iOS meta tags in `index.html`) but has no service worker.

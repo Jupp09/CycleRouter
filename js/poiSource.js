@@ -1,8 +1,10 @@
 /**
  * Orte aus OpenStreetMap über Overpass, aufgeteilt in Kacheln (0,1° ≈ 11 × 7 km) und Datenebenen
  * (LAYERS). Jede Ebene wird getrennt geladen und gecacht – so lässt sich eine neue Ebene nachladen,
- * ohne vorhandene Kacheln erneut abzufragen. Wird vom Browser (js/poiTiles.js) und vom lokalen Server
- * (server.mjs, Datei-Cache) gemeinsam genutzt – daher ohne Abhängigkeiten zu Browser-APIs.
+ * ohne vorhandene Kacheln erneut abzufragen. Wird vom Browser (js/poiTiles.js), vom lokalen Server
+ * (server.mjs, Datei-Cache) und vom Datenauszug (scripts/build-poi-extract.mjs) gemeinsam genutzt – daher ohne
+ * Abhängigkeiten zu Browser-APIs. Overpass-Abfrage (`statements`) und Auszug (`filters`) müssen dieselben
+ * Objekte erfassen; eingeordnet wird beides mit toPoi.
  */
 
 const OVERPASS = [
@@ -31,6 +33,9 @@ export const LAYERS = {
   nwr["amenity"~"^(drinking_water|water_point|fuel)$"](${b});
   node["man_made"="water_tap"]["drinking_water"="yes"](${b});
   nwr["shop"~"^(supermarket|convenience)$"](${b});`,
+    // Dasselbe als Filter für `osmium tags-filter` (Datenauszug, scripts/build-poi-extract.mjs) – bei Änderungen
+    // an `statements` mitziehen. Feinheiten wie drinking_water=yes prüft classify.
+    filters: ['nwr/amenity=drinking_water,water_point,fuel', 'n/man_made=water_tap', 'nwr/shop=supermarket,convenience'],
     classify(tags) {
       if (tags.drinking_water === 'no' || ['private', 'no'].includes(tags.access)) return null;
       if (tags.amenity === 'drinking_water' || tags.amenity === 'water_point') return 'water';
@@ -46,6 +51,7 @@ export const LAYERS = {
     statements: b => `
   nwr["amenity"~"^(cafe|restaurant)$"](${b});
   nwr["shop"="bakery"](${b});`,
+    filters: ['nwr/amenity=cafe,restaurant', 'nwr/shop=bakery'],
     classify(tags) {
       if (['private', 'no'].includes(tags.access)) return null;
       if (tags.shop === 'bakery') return 'bakery'; // Bäckerei mit Café-Ecke bleibt Bäckerei
@@ -66,6 +72,7 @@ LAYERS.stay = {
   meta: true,
   statements: b => `
   nwr["tourism"~"^(hotel|motel|guest_house|hostel|camp_site)$"](${b});`,
+  filters: ['nwr/tourism=hotel,motel,guest_house,hostel,camp_site'],
   classify(tags) {
     if (['private', 'no', 'customers', 'members'].includes(tags.access) || tags.disused === 'yes') return null;
     if (tags.group_only === 'yes' || tags.reservation === 'members_only') return null;
@@ -92,6 +99,33 @@ const KEEP_TAGS = ['opening_hours', 'seasonal', 'fee', 'brand',
   // Unterkünfte: Sterne, Preisangaben (Freitext), Webseite, Ort für die Preissuche
   'stars', 'charge', 'website', 'contact:website', 'addr:city', 'addr:place', 'addr:postcode',
   'check_date', 'phone', 'contact:phone'];
+
+/**
+ * OSM-Objekt → Ort einer Ebene, oder null, wenn es nicht dazugehört. Gemeinsam für Overpass und den
+ * Datenauszug, damit beide Wege dieselben Daten liefern.
+ * `obj`: {id: 'node/123', lat, lon, tags, timestamp?, version?} – bei Flächen der Mittelpunkt ihres Rechtecks.
+ */
+export function toPoi(obj, layer) {
+  const def = LAYERS[layer];
+  const tags = obj.tags || {};
+  const type = def.classify(tags);
+  if (!type) return null;
+  const keep = Object.fromEntries(KEEP_TAGS.filter(t => tags[t]).map(t => [t, tags[t]]));
+  const poi = { id: obj.id, type, lat: obj.lat, lon: obj.lon, tags: keep, name: tags.name || tags.brand || '' };
+  if (def.meta && obj.timestamp) { poi.edited = obj.timestamp.slice(0, 10); poi.version = obj.version; }
+  return poi;
+}
+
+// ---------- Zellen des Datenauszugs ----------
+// Der Datenauszug (scripts/build-poi-extract.mjs, server/extract.mjs) fasst 5 × 5 Kacheln zu einer Zelle
+// (0,5°) zusammen – eine Datei je Zelle statt je Kachel und Ebene (Webhoster begrenzen oft die Dateianzahl).
+export const CELL_TILES = 5;
+export const CELL = TILE * CELL_TILES;
+/** Zelle, in der eine Kachel liegt. */
+export function cellOfTile(key) {
+  const [i, j] = key.split('_').map(Number);
+  return `${Math.floor(i / CELL_TILES)}_${Math.floor(j / CELL_TILES)}`;
+}
 
 const sleep = (ms, signal) => new Promise((resolve, reject) => {
   const t = setTimeout(resolve, ms);
@@ -164,14 +198,10 @@ out center tags${meta ? ' meta' : ''};`, opts);
     const lat = el.lat ?? el.center?.lat, lon = el.lon ?? el.center?.lon;
     if (lat == null || seen.has(id)) continue;
     seen.add(id);
-    const tags = el.tags || {};
-    const keep = Object.fromEntries(KEEP_TAGS.filter(t => tags[t]).map(t => [t, tags[t]]));
-    for (const [layer, def] of defs) {
-      const type = def.classify(tags);
-      if (!type) continue;
-      const poi = { id, type, lat, lon, tags: keep, name: tags.name || tags.brand || '' };
-      if (def.meta && el.timestamp) { poi.edited = el.timestamp.slice(0, 10); poi.version = el.version; }
-      result.get(layer).get(tileKey(lat, lon))?.push(poi);
+    const obj = { id, lat, lon, tags: el.tags, timestamp: el.timestamp, version: el.version };
+    for (const [layer] of defs) {
+      const poi = toPoi(obj, layer);
+      if (poi) result.get(layer).get(tileKey(lat, lon))?.push(poi);
     }
   }
   return result;

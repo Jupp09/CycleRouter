@@ -14,6 +14,7 @@ import { initDb } from './server/db.mjs';
 import { handleAccountApi } from './server/accountApi.mjs';
 import { clientIp } from './server/auth.mjs';
 import { sendJson as json, readBody } from './server/http.mjs';
+import { initExtract } from './server/extract.mjs';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 8000;
@@ -132,6 +133,9 @@ createServer(async (req, res) => {
   }
 }).listen(PORT, () => {
   console.log(`CycloRouter läuft auf http://localhost:${PORT}`);
-  initWarmQueue(msg => console.log(msg));
+  // Erst den Datenauszug einlesen – sonst lädt der Vorrat Kacheln, die der Auszug schon hat
+  initExtract(msg => console.log(msg))
+    .catch(e => console.warn(`Datenauszug: ${e.message}`))
+    .finally(() => initWarmQueue(msg => console.log(msg)));
   initDb(msg => console.log(msg));
 });
