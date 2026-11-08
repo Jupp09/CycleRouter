@@ -92,8 +92,9 @@ function bestInsertIndex(points, p) {
 }
 
 /** Zwischenstopp hinzufügen – an der günstigsten Stelle der Route – und neu berechnen. */
-export function addVia(point, { label = '', icon = null } = {}) {
-  const via = { lat: point.lat, lon: point.lon, label, icon, manual: true };
+export function addVia(point, { label = '', icon = null, food = false } = {}) {
+  // `food`: Verpflegungsstelle (Café, Bäckerei …) – zählt bei der Stopp-Planung als Stopp (stops.js)
+  const via = { lat: point.lat, lon: point.lon, label, icon, manual: true, ...(food && { food: true }) };
   if (!label) reverse(via).then(l => { via.label = l; renderVias(); updateMarkers(); });
 
   if (state.mode === 'ab') {
@@ -200,7 +201,7 @@ function handleMarkerDrag(index, point) {
   // Zwischenstopp ohne berechnete Route (Ziel fehlt noch)
   if (typeof index === 'string' && index.startsWith('via')) {
     const via = activeVias()[Number(index.slice(3))];
-    Object.assign(via, point, { label: '' });
+    Object.assign(via, point, { label: '', food: false }); // liegt nicht mehr an der Verpflegungsstelle
     reverse(via).then(l => { via.label = l; renderVias(); });
     renderVias();
     updateMarkers();
@@ -212,7 +213,7 @@ function handleMarkerDrag(index, point) {
     const wps = r.waypoints.slice();
     const old = wps[index];
     // Verschobener Zwischenstopp bleibt Zwischenstopp, bekommt aber eine neue Bezeichnung
-    wps[index] = old?.manual ? { ...old, ...point, label: '', icon: null } : point;
+    wps[index] = old?.manual ? { ...old, ...point, label: '', icon: null, food: false } : point;
     if (old?.manual) {
       const moved = wps[index];
       reverse(moved).then(l => { moved.label = l; renderVias(); updateMarkers(); });

@@ -38,6 +38,7 @@ function serializeRoute(name) {
   const wp = p => ({
     lat: round5(p.lat), lon: round5(p.lon),
     ...(p.label && { label: p.label }), ...(p.manual && { manual: true }), ...(p.icon && { icon: p.icon }),
+    ...(p.food && { food: true }), // fester Verpflegungs-Zwischenstopp
   });
   return {
     name, mode: state.mode, bike: state.bike, distance: Math.round(r.distance), ascent: Math.round(r.ascent),

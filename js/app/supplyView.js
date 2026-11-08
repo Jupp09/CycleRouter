@@ -7,7 +7,8 @@ import { regionAt, regionLabel } from '../regions.js';
 import { holidayAt } from '../holidays.js';
 import { storage, formatKm, formatM, formatClock, formatWeekday, formatDayDate } from '../utils.js';
 import { state, on, defaultDeparture } from './state.js';
-import { $, textLines, externalLink, rowButton, span } from './dom.js';
+import { $, textLines, externalLink, rowButton, span, popupButton, listAction } from './dom.js';
+import { addVia } from './waypoints.js';
 import { map } from './mapView.js';
 import { syncUi } from './controls.js';
 import { replanStops } from './pipeline.js';
@@ -44,8 +45,24 @@ function stopPopup(s) {
   if (hours) lines.push(hours);
   if (s.region) lines.push(regionLabel(s.region, homeCountry()));
   if (s.holiday) lines.push(`🎉 Feiertag: ${s.holiday.name}`);
-  el.append(title, ...textLines(lines), externalLink('In OpenStreetMap ansehen', `https://www.openstreetmap.org/${s.poi.id}`));
+  el.append(title, ...textLines(lines), externalLink('In OpenStreetMap ansehen', `https://www.openstreetmap.org/${s.poi.id}`),
+    popupButton('Als festen Zwischenstopp übernehmen', () => fixStop(s)));
   return el;
+}
+
+/**
+ * Geplanten Stopp als festen Zwischenstopp übernehmen: Er bleibt beim Neuplanen (andere Abfahrt, anderer Abstand,
+ * verschobenes Ziel) in der Route und zählt weiter als Verpflegungsstopp (`food`, siehe stops.js).
+ */
+function fixStop(s) {
+  map.closePopup();
+  addVia(s.poi, { label: s.poi.name || s.typeLabel, icon: s.icon, food: true });
+}
+
+/** Wasserstelle als Zwischenstopp in die Route aufnehmen (sie wird dann angefahren). */
+function addWater(w) {
+  map.closePopup();
+  addVia(w.poi, { label: w.poi.name || 'Trinkwasser', icon: '💧' });
 }
 
 /** Kennung eines Wassermarkers – dieselbe Stelle kann auf einem Rundkurs zweimal vorkommen. */
@@ -61,13 +78,16 @@ function waterPopup(w) {
     `Ankunft ca. ${formatWeekday(w.eta)} ${formatClock(w.eta)} – ${STATE_LABELS[w.state]}`,
   ];
   if (w.poi.tags.opening_hours) lines.push(`Öffnungszeiten: ${w.poi.tags.opening_hours}`);
-  el.append(title, ...textLines(lines), externalLink('In OpenStreetMap ansehen', `https://www.openstreetmap.org/${w.poi.id}`));
+  el.append(title, ...textLines(lines), externalLink('In OpenStreetMap ansehen', `https://www.openstreetmap.org/${w.poi.id}`),
+    popupButton('Als Zwischenstopp hinzufügen', () => addWater(w)));
   return el;
 }
 
 /** Trinkwasser: kleine Marker (ohne Umweg, nur zur Info) und eine einklappbare Liste. */
 function renderWater(r) {
-  const water = r?.water || [];
+  // Schon als Zwischenstopp übernommene Stellen zeigt der Zwischenstopp-Marker – nicht doppelt
+  const taken = new Set((r?.waypoints || []).filter(p => p.manual).map(p => `${p.lat},${p.lon}`));
+  const water = (r?.water || []).filter(w => !taken.has(`${w.poi.lat},${w.poi.lon}`));
   map.setWater(water.map(w => ({
     id: waterId(w), lat: w.poi.lat, lon: w.poi.lon, warn: isWarn(w), popup: waterPopup(w),
     title: `Trinkwasser${w.poi.name ? ': ' + w.poi.name : ''}, km ${Math.round(w.along / 1000)}`,
@@ -91,7 +111,9 @@ function renderWater(r) {
     const clock = document.createElement('small');
     clock.textContent = `ca. ${formatClock(w.eta)}`;
     when.append(km, clock);
-    li.append(rowButton([ico, main, when], () => map.openWater(waterId(w))));
+    li.className = 'with-action';
+    li.append(rowButton([ico, main, when], () => map.openWater(waterId(w))),
+      listAction('+', `${w.poi.name || 'Trinkwasser'} bei km ${Math.round(w.along / 1000)} als Zwischenstopp hinzufügen`, () => addWater(w)));
     return li;
   }));
   const hint = $('#water-gaps');
@@ -135,7 +157,8 @@ function renderStops() {
     // Ganze Zeile als Knopf: zeigt den Stopp auf der Karte (per Tastatur erreichbar)
     const row = rowButton([ico, main, when], () => map.openStop(s.poi.id));
     row.title = hoursText(s) || '';
-    li.append(row);
+    li.className = 'with-action';
+    li.append(row, listAction('📌', `${s.poi.name || s.typeLabel} als festen Zwischenstopp übernehmen`, () => fixStop(s)));
     return li;
   }));
 

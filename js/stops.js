@@ -151,11 +151,12 @@ const freeWater = poi => poi.type === 'water' && poi.tags.fee !== 'yes';
 /**
  * Wählt Stopps: im Fenster (50 %–100 % des Intervalls nach dem letzten Stopp) zuerst geöffnete Stellen,
  * zuletzt solche mit unbekannten Öffnungszeiten; innerhalb einer Stufe nach Pausenstil. Außerdem zählt:
- * möglichst spät im Fenster und nah an der Route. Nach einer Übernachtung wird neu gezählt.
+ * möglichst spät im Fenster und nah an der Route. Nach einer Übernachtung wird neu gezählt, ebenso nach
+ * einem festen Verpflegungs-Zwischenstopp des Nutzers (`fixed`: Positionen in m).
  */
-function plan(r, candidates, { interval, departure, bike, holidayFor, style }) {
+function plan(r, candidates, { interval, departure, bike, holidayFor, style, fixed }) {
   const eta = timeline(r, departure, bike, style.dwell);
-  const pausesOnDay = (stops, along) => stops.filter(s => eta.dayOf(s.along) === eta.dayOf(along)).length;
+  const pausesOnDay = (stops, along) => pausesBefore(eta, stops, fixed, along);
   const stops = [], gaps = [];
   const stageStarts = r.stageStarts || [];
   let pos = 0;
@@ -164,6 +165,9 @@ function plan(r, candidates, { interval, departure, bike, holidayFor, style }) {
     // Übernachtung im Abschnitt: dort wird ohnehin aufgefüllt – am nächsten Morgen neu zählen
     const night = stageStarts.find(s => s > pos && s <= hi);
     if (night != null) { pos = night; continue; }
+    // Selbst gewählter Stopp (Café, Bäckerei …) im Abschnitt: ab dort neu zählen
+    const own = fixed.find(f => f > pos && f <= hi);
+    if (own != null) { pos = own; continue; }
     let best = null;
     for (const c of candidates) {
       if (c.along <= lo || c.along > hi) continue;
@@ -178,6 +182,13 @@ function plan(r, candidates, { interval, departure, bike, holidayFor, style }) {
     else { gaps.push({ from: pos, to: hi }); pos = hi; }
   }
   return { stops, gaps };
+}
+
+/** Pausen am selben Tag vor `along`: geplante Stopps (`{along}`) und feste Verpflegungs-Zwischenstopps (m). */
+function pausesBefore(eta, stops, fixed, along) {
+  const day = eta.dayOf(along);
+  return stops.filter(s => s.along < along && eta.dayOf(s.along) === day).length
+    + fixed.filter(f => f < along && eta.dayOf(f) === day).length;
 }
 
 /**
@@ -341,18 +352,23 @@ export async function addStops(base, { provider, opts, interval, departure, bike
     dwellMin: style.dwell,
   };
   const waters = pois.filter(freeWater);
-  /** Trinkwasser auf der endgültigen Route; `stops` bestimmen die Pausen vor jeder Stelle. */
+  /** Positionen (m) der festen Verpflegungs-Zwischenstopps (`food`, vom Nutzer übernommen) auf einer Route. */
+  const fixedOn = r => {
+    const along = locateOnRoute(r, r.waypoints);
+    return r.waypoints.flatMap((p, i) => (p.food ? [along[i]] : []));
+  };
+  /** Trinkwasser auf der endgültigen Route; Stopps davor verschieben die Ankunftszeit. */
   const withWater = (r, stops) => {
     const eta = timeline(r, departure, bike, style.dwell);
-    const water = waterAlong(r, waters, eta,
-      along => stops.filter(s => s.along < along && eta.dayOf(s.along) === eta.dayOf(along)).length);
+    const fixed = fixedOn(r);
+    const water = waterAlong(r, waters, eta, along => pausesBefore(eta, stops, fixed, along));
     return { water, waterGaps: waterGaps(r, water) };
   };
 
   // Nur Typen, die der Pausenstil vorsieht (ohne Trinkwasser – das wird nur angezeigt)
   const candidates = withTypicalHours(pois).filter(p => style.bias[p.type] != null);
   const located = locateNearRoute(base, candidates, poi => MAX_OFFSET[poi.type]);
-  const { stops, gaps } = plan(base, located, { interval, departure, bike, holidayFor, style });
+  const { stops, gaps } = plan(base, located, { interval, departure, bike, holidayFor, style, fixed: fixedOn(base) });
   if (!stops.length) return { ...base, base, stops: [], gaps, ...withWater(base, []), ...info };
 
   // Route durch die Stopps führen
@@ -364,11 +380,12 @@ export async function addStops(base, { provider, opts, interval, departure, bike
   const along = locateOnRoute(routed, wps);
   routed.stageStarts = wps.flatMap((p, i) => (p.stay ? [along[i]] : []));
   const eta = timeline(routed, departure, bike, style.dwell);
+  const fixed = wps.flatMap((p, i) => (p.food ? [along[i]] : []));
   const finalStops = [];
   wps.forEach((p, i) => {
     if (!p.stop) return;
     const s = stops[points.indexOf(p)];
-    const t = eta(along[i], finalStops.filter(f => eta.dayOf(f.along) === eta.dayOf(along[i])).length);
+    const t = eta(along[i], pausesBefore(eta, finalStops, fixed, along[i]));
     // Region aus der Planung (Position auf der Basisroute), Feiertag zur neuen Ankunftszeit
     const region = regionFor(s.along);
     const holiday = lookup?.(region, t) ?? null;

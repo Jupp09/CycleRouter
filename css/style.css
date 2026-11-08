@@ -242,6 +242,9 @@ input[type="datetime-local"] {
 .stop-list li { border-radius: 8px; background: var(--surface); font-size: 0.8125rem; }
 .stop-list .row { grid-template-columns: 26px 1fr auto; gap: 8px; padding: 6px 8px; }
 .stop-list li:hover { background: var(--accent-soft); }
+/* Zeile mit Knopf rechts („+“ bzw. 📌 – Zwischenstopp übernehmen), wie .along-list */
+.stop-list li.with-action { display: grid; grid-template-columns: 1fr 30px; gap: 4px; align-items: center; padding-right: 6px; }
+.stop-list .add { width: 30px; height: 30px; padding: 0; font-weight: 700; }
 .stop-list .ico { font-size: 1.125rem; text-align: center; }
 .stop-list .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stop-list small { display: block; color: var(--muted); font-size: 0.75rem; }
@@ -414,8 +417,8 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
   input, select, textarea { font-size: max(16px, 1rem); }
   /* Tippflächen mind. 44 px (Apple-Richtlinie) */
   .icon-btn { width: 44px; min-height: 44px; }
-  .route-list .tools button, .along-list .add { width: 44px; height: 44px; }
-  .along-list li { grid-template-columns: 1fr 44px; }
+  .route-list .tools button, .along-list .add, .stop-list .add { width: 44px; height: 44px; }
+  .along-list li, .stop-list li.with-action { grid-template-columns: 1fr 44px; }
   .chips button { padding: 8px 12px; }
   .segmented button, .tabs button { min-height: 40px; }
   .link-btn { padding: 8px 0; }

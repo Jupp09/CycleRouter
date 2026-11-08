@@ -8,7 +8,7 @@ import { arrivalAt } from '../timeline.js';
 import { haversine, debounce, formatClock } from '../utils.js';
 import { announce } from '../announce.js';
 import { state, on, departureDate } from './state.js';
-import { $, rowButton, span } from './dom.js';
+import { $, rowButton, span, popupButton, listAction } from './dom.js';
 import { map } from './mapView.js';
 import { addVia } from './waypoints.js';
 
@@ -56,11 +56,7 @@ function alongPopup(res) {
   line(openingText(res).text);
   if (res.opening.hours) line(`Öffnungszeiten${res.opening.typical ? ' (typisch)' : ''}: ${res.opening.hours}`, 'muted');
   line(`km ${(res.along / 1000).toFixed(1)} · ${offsetText(res)}`);
-  const add = document.createElement('button');
-  add.className = 'primary';
-  add.textContent = 'Als Zwischenstopp hinzufügen';
-  add.addEventListener('click', () => addAlongResult(res));
-  el.append(add);
+  el.append(popupButton('Als Zwischenstopp hinzufügen', () => addAlongResult(res)));
   return el;
 }
 
@@ -68,7 +64,8 @@ function addAlongResult(res) {
   map.closePopup();
   alongResults = alongResults.filter(r => r.id !== res.id);
   renderAlongResults();
-  addVia(res, { label: res.name, icon: PLACE_CATEGORIES[res.category].icon });
+  // Alle Kategorien sind Verpflegung – der Ort zählt bei der Stopp-Planung als Stopp
+  addVia(res, { label: res.name, icon: PLACE_CATEGORIES[res.category].icon, food: true });
 }
 
 function renderAlongResults() {
@@ -87,14 +84,7 @@ function renderAlongResults() {
     const km = span('km', `km ${(r.along / 1000).toFixed(1)}`);
     // Zeile zeigt den Ort auf der Karte, „+“ übernimmt ihn – zwei getrennte Knöpfe (keine Knöpfe ineinander)
     const row = rowButton([main, km], () => map.openSearchResult(r.id));
-    const add = document.createElement('button');
-    add.type = 'button';
-    add.className = 'add';
-    add.textContent = '+';
-    add.title = 'Als Zwischenstopp hinzufügen';
-    add.setAttribute('aria-label', `${r.name} als Zwischenstopp hinzufügen`);
-    add.addEventListener('click', () => addAlongResult(r));
-    li.append(row, add);
+    li.append(row, listAction('+', `${r.name} als Zwischenstopp hinzufügen`, () => addAlongResult(r)));
     return li;
   }));
 }

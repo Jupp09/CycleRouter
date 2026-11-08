@@ -103,6 +103,28 @@ export function rowButton(parts, onClick) {
   return b;
 }
 
+/** Hauptknopf in einem Karten-Popup (z. B. „Als Zwischenstopp hinzufügen“). */
+export function popupButton(text, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'primary';
+  b.textContent = text;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+/** Kleiner Knopf rechts in einer Listenzeile; `label` ist der vollständige Name für Screenreader. */
+export function listAction(text, label, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'add';
+  b.textContent = text;
+  b.title = label;
+  b.setAttribute('aria-label', label);
+  b.addEventListener('click', onClick);
+  return b;
+}
+
 /** <span> mit Klasse und Text. */
 export function span(className, text = '') {
   const s = document.createElement('span');

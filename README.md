@@ -14,6 +14,7 @@ Routenplaner für **Rennrad**, **Gravelbike** und **Fahrrad** (Trekking-/Alltags
   - Alle *x* km ein Stopp mit Essen (Supermarkt, Kiosk, Bäckerei, Café, Restaurant, Tankstelle), der bei der geschätzten Ankunft geöffnet hat – mit Feiertagen am Ort und typischen Öffnungszeiten von Ketten. Die Route führt durch die Stopps.
   - **Pausenstil** in den Einstellungen: *Zügig* (Supermarkt und Tankstelle, 10 min je Stopp) oder *Gemütlich* (Café, Bäckerei, Restaurant, keine Tankstellen, 30 min je Stopp).
   - Öffentliche, kostenlose **Trinkwasserstellen** bis 400 m neben der Route werden immer angezeigt (Karte, Liste, GPX), aber nicht angefahren. Strecken über 50 km ohne Wasser werden gemeldet.
+  - **In die Route aufnehmen:** Wasserstellen und Orte aus „Entlang der Route finden“ lassen sich per Knopf als Zwischenstopp hinzufügen. Ein geplanter Verpflegungsstopp lässt sich mit 📌 als *festen* Zwischenstopp übernehmen. Er bleibt beim Neuplanen in der Route und zählt weiter als Stopp, damit nicht gleich daneben ein weiterer geplant wird.
 - „Neu würfeln" erzeugt eine andere Variante, optional mit Wunschrichtung
 - **Barrierefrei bedienbar:** komplett per Tastatur (Pfeiltasten in den Umschaltern, Ortssuche mit Vorschlagsliste, alle Listen), Ansagen für Screenreader (Ergebnis, Statusmeldungen, Anzahl der Vorschläge), Höhenprofil mit Textzusammenfassung und per Pfeiltasten abfahrbar, deutlicher Fokusrahmen, ausreichende Kontraste in Hell und Dunkel; Schrift folgt der Grundschriftgröße des Browsers, Farben auch bei Rot-Grün-Schwäche unterscheidbar (unbefestigte Wege zusätzlich gestrichelt), Windows-Kontrastmodus und „Bewegung reduzieren“ werden berücksichtigt; geprüft mit axe-core
 
@@ -79,7 +80,7 @@ Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Pr
 ## Routing
 
 | Dienst | Rennrad | Gravel | Fahrrad (Trekking/Alltag) | Hinweise |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **BRouter** (Standard) | `fastbike`, `fastbike-lowtraffic`, `fastbike-verylowtraffic` | `gravel` | `trekking` | kein Key nötig |
 | **OpenRouteService** | `cycling-road` | `cycling-regular` | `cycling-regular` | kostenloser API-Key ([Registrierung](https://openrouteservice.org/dev/#/signup)), Eingabe über das Zahnrad; Rundkurse nativ über `round_trip` |
 
@@ -89,7 +90,7 @@ Rundkurse und Distanz-Routen mit BRouter werden in [js/generators.js](js/generat
 
 ## Aufbau
 
-```
+```text
 index.html             Oberfläche
 css/style.css          Layout (hell/dunkel, mobil); Darstellung wählbar: System, Hell, Dunkel
 js/main.js             Einstieg: lädt und startet die Module in js/app/
