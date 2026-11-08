@@ -81,7 +81,7 @@ Rundkurse und Distanz-Routen mit BRouter werden in [js/generators.js](js/generat
 
 ```
 index.html             Oberfläche
-css/style.css          Layout (hell/dunkel, mobil)
+css/style.css          Layout (hell/dunkel, mobil); Darstellung wählbar: System, Hell, Dunkel
 js/main.js             Einstieg: lädt und startet die Module in js/app/
 
 js/app/                Oberfläche und Ablauf
@@ -99,6 +99,7 @@ js/app/                Oberfläche und Ablauf
   accountView.js       Konto, gespeicherte Routen, Teilen-Links, Einstellungs-Abgleich
   homeView.js          Heimatadresse, Vorrat der Heimatregion auf dem Server
   settingsDialog.js    Einstellungsdialog
+  theme.js             Darstellung: System (Standard), Hell oder Dunkel – nur auf diesem Gerät
 
 js/map.js              Leaflet-Karte, Layer, Marker
 js/geocode.js          Ortssuche (Photon, Nominatim als Ausweich)

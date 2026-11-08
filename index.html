@@ -17,6 +17,17 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1b1a22" media="(prefers-color-scheme: dark)">
+  <script>
+    // Gewählte Darstellung setzen, bevor die Seite gezeichnet wird – sonst blitzt beim Laden kurz das
+    // System-Schema auf (die Module laden erst danach). Gleiche Logik wie applyTheme() in js/app/theme.js.
+    try {
+      const t = JSON.parse(localStorage.getItem('cyclerouter.theme'));
+      if (t === 'light' || t === 'dark') {
+        document.documentElement.dataset.theme = t;
+        for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.content = t === 'dark' ? '#1b1a22' : '#ffffff';
+      }
+    } catch { /* privater Modus o. Ä. → System-Schema */ }
+  </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -257,6 +268,14 @@
           </div>
         </div>
       </section>
+      <div class="field">
+        <span class="label">Darstellung</span>
+        <div class="segmented" id="theme-switch" role="radiogroup" aria-label="Darstellung">
+          <button type="button" role="radio" data-value="system" title="Hell oder dunkel wie im Betriebssystem eingestellt">System</button>
+          <button type="button" role="radio" data-value="light">Hell</button>
+          <button type="button" role="radio" data-value="dark">Dunkel</button>
+        </div>
+      </div>
       <div class="field">
         <span class="label">Heimatadresse</span>
         <div class="search">

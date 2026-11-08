@@ -1,5 +1,5 @@
 /**
- * Einstellungsdialog (Zahnrad): ORS-Schlüssel, Heimatadresse, Durchschnittsgeschwindigkeit, Mehrtagestour
+ * Einstellungsdialog (Zahnrad): Darstellung, ORS-Schlüssel, Heimatadresse, Durchschnittsgeschwindigkeit, Mehrtagestour
  * und Konto. Die Abschnitte füllen und speichern ihre Felder selbst (homeView, stagesView, accountView);
  * hier wird nur beim Öffnen gefüllt und beim Speichern entschieden, was neu berechnet werden muss.
  */
@@ -9,6 +9,7 @@ import { $ } from './dom.js';
 import { showRoute, replanStops, recalc } from './pipeline.js';
 import { renderStaySettings, saveStaySettings } from './stagesView.js';
 import { openHomeSettings, saveHomeSettings, warmNewHome } from './homeView.js';
+import { savedTheme, applyTheme, saveTheme } from './theme.js';
 
 // ---------- Durchschnittsgeschwindigkeit ----------
 // Gespeichert als km/h oder null (= Standard je Fahrradtyp). Grundlage für Fahrzeit und Ankunftszeiten.
@@ -37,6 +38,23 @@ function refreshTimes() {
   else showRoute(state.route, { fit: false });
 }
 
+// ---------- Darstellung ----------
+// Ein Klick zeigt das Schema sofort (Vorschau); „Abbrechen“ nimmt es zurück.
+
+let pendingTheme = savedTheme();
+
+function renderTheme() {
+  for (const b of document.querySelectorAll('#theme-switch button')) b.setAttribute('aria-checked', b.dataset.value === pendingTheme);
+}
+
+$('#theme-switch').addEventListener('click', e => {
+  const value = e.target.closest('button')?.dataset.value;
+  if (!value) return;
+  pendingTheme = value;
+  renderTheme();
+  applyTheme(value);
+});
+
 // ---------- Öffnen und Speichern ----------
 
 const dialog = $('#settings-dialog');
@@ -44,6 +62,8 @@ const dialog = $('#settings-dialog');
 $('#btn-settings').addEventListener('click', () => {
   // Der ORS-Schlüssel bleibt im Browser (localStorage) und wird nie mit dem Konto abgeglichen
   $('#ors-key').value = storage.get('orsKey', '');
+  pendingTheme = savedTheme();
+  renderTheme();
   pendingSpeed = storage.get('avgSpeed', null);
   renderSpeed();
   renderStaySettings();
@@ -52,7 +72,11 @@ $('#btn-settings').addEventListener('click', () => {
 });
 
 dialog.addEventListener('close', () => {
-  if (dialog.returnValue !== 'save') return;
+  if (dialog.returnValue !== 'save') {
+    applyTheme(savedTheme()); // Vorschau zurücknehmen (Abbrechen oder Esc)
+    return;
+  }
+  saveTheme(pendingTheme);
   storage.set('orsKey', $('#ors-key').value.trim());
 
   const speedChanged = pendingSpeed !== storage.get('avgSpeed', null);
