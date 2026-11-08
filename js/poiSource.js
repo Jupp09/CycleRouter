@@ -104,6 +104,7 @@ const KEEP_TAGS = ['opening_hours', 'seasonal', 'fee', 'brand',
  * OSM-Objekt → Ort einer Ebene, oder null, wenn es nicht dazugehört. Gemeinsam für Overpass und den
  * Datenauszug, damit beide Wege dieselben Daten liefern.
  * `obj`: {id: 'node/123', lat, lon, tags, timestamp?, version?} – bei Flächen der Mittelpunkt ihres Rechtecks.
+ * `timestamp`: Overpass liefert ISO-Text, `osmium export` Sekunden seit 1970 – beides geht.
  */
 export function toPoi(obj, layer) {
   const def = LAYERS[layer];
@@ -112,7 +113,11 @@ export function toPoi(obj, layer) {
   if (!type) return null;
   const keep = Object.fromEntries(KEEP_TAGS.filter(t => tags[t]).map(t => [t, tags[t]]));
   const poi = { id: obj.id, type, lat: obj.lat, lon: obj.lon, tags: keep, name: tags.name || tags.brand || '' };
-  if (def.meta && obj.timestamp) { poi.edited = obj.timestamp.slice(0, 10); poi.version = obj.version; }
+  if (def.meta && obj.timestamp != null) {
+    const iso = typeof obj.timestamp === 'number' ? new Date(obj.timestamp * 1000).toISOString() : String(obj.timestamp);
+    poi.edited = iso.slice(0, 10);
+    poi.version = obj.version;
+  }
   return poi;
 }
 

@@ -45,7 +45,9 @@ async function loadIndex() {
   try {
     meta = JSON.parse(await readFile(META, 'utf8'));
     covered = new Set((await readdir(CELLS)).filter(f => f.endsWith('.json')).map(f => f.slice(0, -5)));
-    layersInExtract = new Set(meta.layers);
+    // Nur Ebenen mit Orten gelten als abgedeckt – eine leere Ebene würde sonst vorhandene Daten überdecken.
+    // Ältere Stände ohne Zählung werden nicht genutzt (und beim nächsten Abruf neu geladen).
+    layersInExtract = new Set(meta.layers.filter(l => meta.counts?.[l] > 0));
   } catch {
     meta = null; covered = new Set(); layersInExtract = new Set();
   }
@@ -109,7 +111,7 @@ async function update() {
     if (!Number.isFinite(manifest.t) || typeof manifest.file !== 'string' || !/^[0-9a-f]{64}$/.test(manifest.sha256)) {
       throw new Error('Beschreibung unvollständig');
     }
-    if (meta?.sha256 === manifest.sha256) return true; // schon aktuell
+    if (meta?.sha256 === manifest.sha256 && meta.counts) return true; // schon aktuell (und gezählt)
 
     log(`Datenauszug: neuer Stand vom ${new Date(manifest.t).toLocaleDateString('de-DE')} wird geladen (${(manifest.bytes / 1e6).toFixed(0)} MB) …`);
     const t0 = Date.now();
@@ -124,6 +126,7 @@ async function update() {
     const download = pipeline(Readable.fromWeb(data.body), hashing(hash), gunzip);
     download.catch(() => {}); // Fehler kommen über die Zeilen bzw. `await download` unten an
     let head = null, count = 0;
+    const counts = {}; // Orte je Ebene
     try {
       for await (const line of lines) {
         if (!line) continue;
@@ -134,8 +137,9 @@ async function update() {
           continue;
         }
         if (!isCellKey(row.cell) || !row.layers || typeof row.layers !== 'object') throw new Error('Paket enthält ungültige Zellen');
-        for (const tiles of Object.values(row.layers)) {
+        for (const [layer, tiles] of Object.entries(row.layers)) {
           if (Object.keys(tiles).some(k => !isTileKey(k) || cellOfTile(k) !== row.cell)) throw new Error('Paket enthält ungültige Kacheln');
+          for (const pois of Object.values(tiles)) counts[layer] = (counts[layer] || 0) + pois.length;
         }
         await writeFile(join(tmp, `${row.cell}.json`), JSON.stringify({ layers: row.layers }));
         count++;
@@ -153,13 +157,19 @@ async function update() {
     await rm(old, { recursive: true, force: true });
     await rename(CELLS, old).catch(() => {});
     await rename(tmp, CELLS);
-    await writeFile(META, JSON.stringify({ t: manifest.t, sha256: manifest.sha256, layers: head.layers, regions: head.regions, cells: count }));
+    for (const l of head.layers) counts[l] ??= 0;
+    await writeFile(META, JSON.stringify({ t: manifest.t, sha256: manifest.sha256, layers: head.layers, counts, regions: head.regions, cells: count }));
     await rm(old, { recursive: true, force: true });
     await loadIndex();
-    log(`Datenauszug: ${count} Zellen (${head.regions?.length ?? '?'} Regionen) in ${Math.round((Date.now() - t0) / 1000)} s übernommen`);
+    const summary = Object.entries(counts).map(([l, n]) => `${l} ${n.toLocaleString('de-DE')}`).join(', ');
+    log(`Datenauszug: ${count} Zellen (${head.regions?.length ?? '?'} Regionen) in ${Math.round((Date.now() - t0) / 1000)} s übernommen – ${summary}`);
+    const unused = head.layers.filter(l => !counts[l]);
+    if (unused.length) log(`Datenauszug: Ebene ohne Orte wird nicht genutzt: ${unused.join(', ')}`);
     return true;
   } catch (e) {
-    const reason = e.name === 'TimeoutError' ? 'Zeitüberschreitung' : e.message;
+    // fetch meldet Netzwerkfehler nur als „fetch failed“/„terminated“ – der Grund steckt in `cause`
+    const reason = e.name === 'TimeoutError' ? 'Zeitüberschreitung'
+      : e.message + (e.cause ? ` (${e.cause.code || e.cause.message})` : '');
     log(`Datenauszug: Aktualisierung fehlgeschlagen – ${reason}`);
     await rm(tmp, { recursive: true, force: true }).catch(() => {});
     return false;
@@ -189,7 +199,8 @@ export async function initExtract(logger) {
   log = logger || log;
   await mkdir(DIR, { recursive: true });
   await loadIndex();
-  if (meta) log(`Datenauszug: Stand vom ${new Date(meta.t).toLocaleDateString('de-DE')}, ${covered.size} Zellen`);
+  if (meta?.counts) log(`Datenauszug: Stand vom ${new Date(meta.t).toLocaleDateString('de-DE')}, ${covered.size} Zellen, Ebenen: ${[...layersInExtract].join(', ') || 'keine'}`);
+  else if (meta) log('Datenauszug: älterer Stand ohne Zählung – wird nicht genutzt und in 1 min neu geladen');
   else log('Datenauszug: noch keiner vorhanden – erster Abruf in 1 min');
   schedule(FIRST_CHECK);
 }

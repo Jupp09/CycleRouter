@@ -99,14 +99,21 @@ function addFeature(f) {
   }
 }
 
+let skipped = 0;
+/**
+ * GeoJSON-Zeilen einlesen. Fehlerhafte Zeilen werden übersprungen, aber gezählt und der erste Fehler je Datei
+ * gemeldet – ein stiller Fehler hat sonst schon einmal eine ganze Ebene verschluckt.
+ */
 async function readGeojsonSeq(file) {
   const lines = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
-  let n = 0;
+  let n = 0, bad = 0, firstError = null;
   for await (const raw of lines) {
     const line = raw.replace(/^\x1e/, '').trim(); // Datensatz-Trenner von GeoJSON Text Sequences
     if (!line) continue;
-    try { addFeature(JSON.parse(line)); n++; } catch { /* kaputte Zeile überspringen */ }
+    try { addFeature(JSON.parse(line)); n++; } catch (e) { bad++; firstError ??= `${e.message} – ${line.slice(0, 200)}`; }
   }
+  if (bad) log(`  ${bad} Zeilen übersprungen, erster Fehler: ${firstError}`);
+  skipped += bad;
   return n;
 }
 
@@ -179,11 +186,20 @@ function coveredCells(regions) {
 
 // ---------- Ausgabe ----------
 
-async function writeBundle(covered, regionIds) {
+/** Orte je Ebene in den abgedeckten Zellen. */
+function countLayers(covered) {
+  const counts = Object.fromEntries(layers.map(l => [cacheName(l), 0]));
+  for (const cell of covered) {
+    for (const [name, byTile] of cells.get(cell) || []) for (const pois of byTile.values()) counts[name] += pois.size;
+  }
+  return counts;
+}
+
+async function writeBundle(covered, regionIds, counts) {
   await mkdir(OUT, { recursive: true });
   const file = join(OUT, `${NAME}.ndjson.gz`);
   const t = Date.now();
-  const meta = { type: 'meta', t, cell: CELL, layers: layers.map(cacheName), regions: regionIds,
+  const meta = { type: 'meta', t, cell: CELL, layers: layers.map(cacheName), counts, regions: regionIds,
     attribution: '© OpenStreetMap-Mitwirkende (ODbL), Auszüge: Geofabrik' };
   async function* lines() {
     yield JSON.stringify(meta) + '\n';
@@ -200,7 +216,7 @@ async function writeBundle(covered, regionIds) {
   const hash = createHash('sha256');
   await pipeline(createReadStream(file), hash);
   const manifest = { t, file: `${NAME}.ndjson.gz`, bytes: (await stat(file)).size, sha256: hash.digest('hex'),
-    cells: covered.size, pois: poiCount, regions: regionIds.length };
+    cells: covered.size, pois: poiCount, counts, regions: regionIds.length };
   await writeFile(join(OUT, `${NAME}.json`), JSON.stringify(manifest, null, 1));
   return manifest;
 }
@@ -232,6 +248,11 @@ if (!done.length) throw new Error('Keine Region verarbeitet');
 
 const covered = coveredCells(done);
 // Orte außerhalb abgedeckter Zellen (Randzellen) fallen weg – dort bleibt es bei Overpass
-const manifest = await writeBundle(covered, done.map(r => r.id));
+const counts = countLayers(covered);
+log(`Orte je Ebene: ${JSON.stringify(counts)}${skipped ? ` – ${skipped} Zeilen übersprungen` : ''}`);
+// Sicherung: Eine leere Ebene würde auf den Servern die vorhandenen Daten überdecken → lieber nichts veröffentlichen
+const empty = Object.entries(counts).filter(([, n]) => n === 0).map(([name]) => name);
+if (empty.length && !givenGeojson.size) throw new Error(`Ebene ohne Orte: ${empty.join(', ')} – Paket wird nicht veröffentlicht`);
+const manifest = await writeBundle(covered, done.map(r => r.id), counts);
 log(`Fertig: ${manifest.cells} Zellen, ${manifest.pois} Orte, ${(manifest.bytes / 1e6).toFixed(1)} MB (${manifest.regions} Regionen)`);
 await rm(WORK, { recursive: true, force: true });
