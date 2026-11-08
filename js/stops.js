@@ -170,6 +170,11 @@ async function fetchTilesFromServer(keys, layer, signal, cacheOnly = false) {
     return null;
   }
   const data = await res.json();
+  // Älterer Server, der diese Datenebene noch nicht kennt (z. B. nicht neu gestartet) → direkt bei Overpass laden
+  if (res.status === 400 && /Datenebene/i.test(data.error || '')) {
+    console.warn(`Server kennt die Ebene „${layer}“ nicht – lade direkt von Overpass (Server neu starten!)`);
+    return null;
+  }
   if (!res.ok) throw new Error(data.error || `Server-Fehler ${res.status}`);
   return new Map(Object.entries(data.tiles));
 }
@@ -183,7 +188,13 @@ async function layerPois(keys, layer, signal, cacheOnly) {
   const missing = keys.filter(k => !cached.has(k));
   if (missing.length) {
     let fetched = await fetchTilesFromServer(missing, layer, signal, cacheOnly);
-    if (!fetched && !cacheOnly) fetched = await fetchTilesFromOverpass(missing, { layer, signal });
+    if (!fetched && !cacheOnly) {
+      // Direkt bei Overpass – in Paketen, große Abfragen brechen bei Last ab
+      fetched = new Map();
+      for (let i = 0; i < missing.length; i += 40) {
+        for (const [k, pois] of await fetchTilesFromOverpass(missing.slice(i, i + 40), { layer, signal })) fetched.set(k, pois);
+      }
+    }
     if (fetched) {
       await saveTiles(fetched, layer);
       for (const [k, pois] of fetched) cached.set(k, pois);

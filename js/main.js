@@ -374,6 +374,8 @@ function clearRoute() {
   state.loadedName = null;
   state.multiDay = false;
   state.stayChoices = [];
+  state.staysLoading = false;
+  state.staysError = null;
   renderSaveActions();
   renderStages();
   map.setRoute(null);
@@ -393,6 +395,7 @@ let controller = null;
 async function run(task, { loadingText = 'Route wird berechnet …', fit = true } = {}) {
   controller?.abort();
   const ctrl = controller = new AbortController();
+  state.staysLoading = false; // eine abgebrochene Unterkunftssuche darf den Knopf nicht gesperrt lassen
   setStatus(loadingText, 'loading');
   try {
     let r = await task(ctrl.signal);
@@ -403,15 +406,24 @@ async function run(task, { loadingText = 'Route wird berechnet …', fit = true 
     // Mehrtagestour (nur auf Wunsch): Unterkünfte suchen und die Route durch sie führen
     if (state.multiDay && isMultiDayCandidate(r, state.stays.maxKm)) {
       setStatus('Unterkünfte für die Übernachtungen werden gesucht …', 'loading');
+      state.staysLoading = true;
+      state.staysError = null;
+      renderStages();
       try {
         r = await withStays(r, ctrl.signal);
         if (ctrl.signal.aborted) return;
         setStatus(null);
+        state.staysLoading = false;
         showRoute(r, { fit: false });
       } catch (e) {
         if (e.name === 'AbortError' || ctrl.signal.aborted) return;
         console.error(e);
-        setStatus(e.message, 'error');
+        state.staysLoading = false;
+        state.staysError = `Unterkünfte konnten nicht gesucht werden: ${e.message}`;
+        setStatus(state.staysError, 'error');
+        renderStages();
+      } finally {
+        if (controller === ctrl) state.staysLoading = false;
       }
     }
     if (!state.supply.enabled) return;
@@ -1027,10 +1039,18 @@ function renderStages() {
   if (box.hidden) return;
 
   const days = Math.max(2, Math.ceil(origin.distance / (state.stays.maxKm * 1000)));
-  $('#btn-multiday').textContent = state.multiDay
-    ? 'Mehrtagestour aufheben'
-    : `Als Mehrtagestour planen (${days} Tage à ca. ${Math.round(origin.distance / days / 1000)} km)`;
-  $('#btn-multiday').className = state.multiDay ? '' : 'primary';
+  const btn = $('#btn-multiday');
+  btn.disabled = !!state.staysLoading;
+  btn.textContent = state.staysLoading
+    ? `Unterkünfte für ${days - 1}+ Nächte werden gesucht …`
+    : state.multiDay
+      ? 'Mehrtagestour aufheben'
+      : `Als Mehrtagestour planen (${days} Tage à ca. ${Math.round(origin.distance / days / 1000)} km)`;
+  btn.className = state.multiDay && !state.staysLoading ? '' : 'primary';
+  // Fehler direkt am Knopf anzeigen (die Statuszeile oben ist auf dem Handy oft nicht im Blick)
+  const err = $('#stages-error');
+  err.hidden = !state.staysError || state.staysLoading;
+  err.textContent = state.staysError || '';
   $('#stages-body').hidden = !state.multiDay || !plan;
   if (!plan) return;
 
@@ -1105,7 +1125,9 @@ function renderNight(night) {
 
 $('#btn-multiday').addEventListener('click', () => {
   state.multiDay = !state.multiDay;
+  state.staysError = null;
   if (!state.multiDay) state.stayChoices = [];
+  renderStages(); // sofortige Rückmeldung am Knopf
   replanStops();
 });
 $('#stage-departure').addEventListener('change', e => {
