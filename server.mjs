@@ -1,6 +1,7 @@
 // Server für CycloRouter – liefert die App aus (nur öffentliche Dateien, siehe PUBLIC), egal von wo gestartet.
 // Zusätzlich: POST /api/pois – Verpflegungsstellen je Kachel aus dem Datei-Cache (server/poiCache.mjs),
 // /api/warm – Vorrat für Heimatregionen, /api/warm-route – Vorrat entlang einer Route,
+// /api/regions – Land/Bundesland je Punkt für die Feiertagsprüfung (server/regions.mjs),
 // /api/account|settings|routes|shared – Konten (server/accountApi.mjs).
 import './server/env.mjs'; // muss der erste Import bleiben (.env laden, bevor andere Module Werte lesen)
 import { createServer } from 'node:http';
@@ -17,6 +18,7 @@ import { initExtract } from './server/extract.mjs';
 import { setSecurityHeaders, contentSecurityPolicy } from './server/security.mjs';
 import { createLimiter } from './server/rateLimit.mjs';
 import { serveStatic } from './server/static.mjs';
+import { getRegions, isRegionKey } from './server/regions.mjs';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 8000;
@@ -83,6 +85,43 @@ async function handlePois(req, res) {
   }
 }
 
+/**
+ * Nominatim-Kontingent je IP: neue Regionen-Abfragen pro Stunde. Eine lange Mehrtagestour braucht ~100;
+ * ohne Grenze könnte einer die gemeinsame Warteschlange (1 Anfrage/s) für alle verstopfen.
+ */
+const nominatimBudget = createLimiter({ windowMs: 60 * 60 * 1000, max: 600 });
+
+/**
+ * Land/Bundesland je Rasterpunkt: POST {keys: ['5074_710', …]} → {regions: {key: …|null}, missing: [key]}.
+ * Fehlende fragt der Browser selbst bei Nominatim (js/regions.js).
+ */
+async function handleRegions(req, res) {
+  if (req.method !== 'POST') return json(res, 405, { error: 'Nur POST' });
+  let keys;
+  try {
+    ({ keys } = JSON.parse(await readBody(req, 16 * 1024)));
+  } catch (e) {
+    return json(res, 400, { error: e.message });
+  }
+  if (!Array.isArray(keys) || !keys.length || keys.length > 200 || !keys.every(isRegionKey)) {
+    return json(res, 400, { error: 'Ungültige Punktliste' });
+  }
+  const ip = clientIp(req);
+  try {
+    const t0 = Date.now();
+    const out = await getRegions([...new Set(keys)], {
+      allowFetch: n => nominatimBudget.fits(ip, n) && (nominatimBudget.add(ip, n), true),
+    });
+    if (out.fetched || out.missing.length) {
+      console.log(`/api/regions: ${keys.length} Punkte (${out.fetched} neu, ${out.missing.length} offen) in ${Date.now() - t0} ms`);
+    }
+    json(res, 200, { regions: out.regions, missing: out.missing });
+  } catch (e) {
+    console.error('/api/regions:', e.message);
+    json(res, 502, { error: 'Regionen sind gerade nicht abrufbar.' });
+  }
+}
+
 const validPoint = (lat, lon) => Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 85 && Math.abs(lon) <= 180;
 
 /**
@@ -138,6 +177,7 @@ createServer(async (req, res) => {
   if (path === '/api/pois') return handlePois(req, res);
   if (path === '/api/warm') return handleWarm(req, res, url);
   if (path === '/api/warm-route') return handleWarmRoute(req, res);
+  if (path === '/api/regions') return handleRegions(req, res);
   if (await handleAccountApi(req, res, url)) return;
   if (path === '/') path = '/index.html';
   const file = normalize(join(ROOT, path));

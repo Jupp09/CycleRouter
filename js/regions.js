@@ -4,6 +4,10 @@ import { sampleRoute, indexAtDistance, storage } from './utils.js';
  * Land und Bundesland/Region (ISO 3166-2, z. B. „DE-NW“, „AT-5“) für Punkte und entlang von Routen.
  * Quelle: Nominatim (OpenStreetMap). Ergebnisse werden dauerhaft im Browser gespeichert,
  * da sich Grenzen praktisch nie ändern.
+ *
+ * Reihenfolge je Punkt (Raster ≈ 1 km): Browser-Cache → Server (POST /api/regions, gemeinsamer Cache aller
+ * Nutzer, server/regions.mjs) → Nominatim direkt (höchstens eine Anfrage pro Sekunde). Ohne Server (statisch
+ * ausgeliefert) wird er übersprungen. Übermittelt werden nur die Rasterpunkte (0,01°).
  */
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org/reverse';
@@ -32,9 +36,47 @@ function throttled(fn) {
 
 const keyOf = p => `${Math.round(p.lat / PRECISION)}_${Math.round(p.lon / PRECISION)}`;
 
+// ---------- Server-Cache ----------
+
+const SERVER_API = new URL('../api/regions', import.meta.url);
+let serverAvailable = true; // false, wenn die App ohne server.mjs läuft (oder ein älterer Server ohne Endpunkt)
+
+/** Rasterschlüssel beim Server nachschlagen; Gefundenes landet im Browser-Cache. Fehler → nichts gefunden. */
+async function fromServer(keys, signal) {
+  if (!serverAvailable || !keys.length) return;
+  let res;
+  try {
+    res = await fetch(SERVER_API, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keys }), signal,
+    });
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    serverAvailable = false;
+    return;
+  }
+  if ([404, 405, 501].includes(res.status) || !res.headers.get('content-type')?.includes('json')) {
+    serverAvailable = false;
+    return;
+  }
+  if (!res.ok) return; // z. B. Kontingent erschöpft – dann direkt bei Nominatim
+  const { regions } = await res.json();
+  for (const [k, v] of Object.entries(regions || {})) cache.set(k, v);
+  persist();
+}
+
+/** Mehrere Punkte auf einmal: erst gesammelt beim Server, den Rest einzeln bei Nominatim → [Ergebnis] */
+export async function regionsAt(points, signal) {
+  await fromServer([...new Set(points.map(keyOf).filter(k => !cache.has(k)))], signal);
+  const out = [];
+  for (const p of points) out.push(await regionAt(p, signal));
+  return out;
+}
+
 /** → {country: 'DE', countryName, region: 'DE-NW' | null, regionName} oder null (z. B. auf dem Meer) */
 export async function regionAt(point, signal) {
   const key = keyOf(point);
+  if (cache.has(key)) return cache.get(key);
+  await fromServer([key], signal);
   if (cache.has(key)) return cache.get(key);
   const result = await throttled(async () => {
     if (cache.has(key)) return cache.get(key);
@@ -72,8 +114,7 @@ export async function regionsAlong(r, signal, { precise = true } = {}) {
     return { lat: c[0], lon: c[1], along };
   };
   const pts = sampleRoute(r, 20000);
-  const regs = [];
-  for (const p of pts) regs.push(await regionAt(p, signal));
+  const regs = await regionsAt(pts, signal); // Stichpunkte gesammelt in einer Server-Anfrage
 
   const segments = [{ from: 0, ...regs[0] }];
   for (let i = 1; i < pts.length; i++) {
