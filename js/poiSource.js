@@ -57,16 +57,27 @@ export const LAYERS = {
 };
 
 // Übernachtung: Hotels, Motels, Pensionen/B&B, Hostels, Zeltplätze (für Mehrtagestouren)
+// Einrichtungen, die nur Teilnehmer oder Gruppen aufnehmen, aber in OSM oft als Hostel/Pension eingetragen sind
+const NOT_PUBLIC = /meditat|retreat|vipassana|dhamma|zen-?zentrum|ashram|seminar|bildungs|tagungs|schullandheim|jugendbildung|freizeitheim|klassenfahrt|pfadfinder|scout/i;
+
 LAYERS.stay = {
+  // v2: mit Datum der letzten Bearbeitung (veraltete Einträge erkennen) – alte Cache-Daten ohne Datum nicht verwenden
+  cacheVersion: 2,
+  meta: true,
   statements: b => `
   nwr["tourism"~"^(hotel|motel|guest_house|hostel|camp_site)$"](${b});`,
   classify(tags) {
-    if (['private', 'no'].includes(tags.access) || tags.disused === 'yes') return null;
+    if (['private', 'no', 'customers', 'members'].includes(tags.access) || tags.disused === 'yes') return null;
+    if (tags.group_only === 'yes' || tags.reservation === 'members_only') return null;
+    if (NOT_PUBLIC.test(`${tags.name || ''} ${tags.operator || ''} ${tags.description || ''}`)) return null;
     if (tags.tourism === 'camp_site') return tags.tents === 'no' ? null : 'camp_site'; // reine Wohnmobilplätze nicht
     if (['hotel', 'motel', 'guest_house', 'hostel'].includes(tags.tourism)) return tags.tourism;
     return null;
   },
 };
+
+/** Name, unter dem eine Ebene gecacht wird – ändert sich mit cacheVersion, damit alte Daten nicht weiterverwendet werden. */
+export const cacheName = layer => (LAYERS[layer]?.cacheVersion ? `${layer}.v${LAYERS[layer].cacheVersion}` : layer);
 
 export const isLayer = l => Object.hasOwn(LAYERS, l);
 const LAYER_OF_TYPE = {
@@ -79,7 +90,8 @@ export const layerOfType = type => LAYER_OF_TYPE[type] || 'supply';
 /** Nur die Tags, die für Auswahl, Anzeige und GPX gebraucht werden (hält die Caches klein). */
 const KEEP_TAGS = ['opening_hours', 'seasonal', 'fee', 'brand',
   // Unterkünfte: Sterne, Preisangaben (Freitext), Webseite, Ort für die Preissuche
-  'stars', 'charge', 'website', 'contact:website', 'addr:city', 'addr:place', 'addr:postcode'];
+  'stars', 'charge', 'website', 'contact:website', 'addr:city', 'addr:place', 'addr:postcode',
+  'check_date', 'phone', 'contact:phone'];
 
 const sleep = (ms, signal) => new Promise((resolve, reject) => {
   const t = setTimeout(resolve, ms);
@@ -134,9 +146,10 @@ async function overpass(query, { signal, headers = {} } = {}) {
 export async function fetchTilesFromOverpass(keys, { layer = 'supply', ...opts } = {}) {
   const def = LAYERS[layer];
   const statements = keys.map(tileBox).map(def.statements).join('');
+  // meta: Datum/Version der letzten Bearbeitung (nur wo nötig – vergrößert die Antwort)
   const json = await overpass(`[out:json][timeout:90];(${statements}
 );
-out center tags;`, opts);
+out center tags${def.meta ? ' meta' : ''};`, opts);
 
   const tiles = new Map(keys.map(k => [k, []]));
   const seen = new Set();
@@ -148,7 +161,9 @@ out center tags;`, opts);
     if (!type || lat == null || seen.has(id)) continue;
     seen.add(id);
     const keep = Object.fromEntries(KEEP_TAGS.filter(t => tags[t]).map(t => [t, tags[t]]));
-    tiles.get(tileKey(lat, lon))?.push({ id, type, lat, lon, tags: keep, name: tags.name || tags.brand || '' });
+    const poi = { id, type, lat, lon, tags: keep, name: tags.name || tags.brand || '' };
+    if (def.meta && el.timestamp) { poi.edited = el.timestamp.slice(0, 10); poi.version = el.version; }
+    tiles.get(tileKey(lat, lon))?.push(poi);
   }
   return tiles;
 }

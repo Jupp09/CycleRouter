@@ -9,7 +9,7 @@
  */
 export const SYNC_KEYS = ['home', 'bike', 'traffic', 'eurovelo', 'provider', 'breakdown', 'colorRoute',
   'supplyEnabled', 'supplyInterval', 'avgSpeed', 'mode', 'distanceKm',
-  'stageMaxKm', 'nightBudget', 'stayTypes', 'endStay'];
+  'stageMaxKm', 'nightBudget', 'stayTypes', 'endStay', 'hiddenStays'];
 
 /** Routenarten: A → B, Start + Distanz, Rundkurs. */
 export const MODES = ['ab', 'distance', 'loop'];

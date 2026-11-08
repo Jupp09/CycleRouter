@@ -101,6 +101,27 @@ export function availability(poi, date) {
 
 export const AVAILABILITY_LABEL = { open: 'laut OSM geöffnet', season: 'Saison prüfen – im Winter oft geschlossen' };
 
+// ---------- Aktualität ----------
+
+/**
+ * Wann wurde der Eintrag zuletzt bestätigt (OSM-Bearbeitung oder check_date)? → Jahr oder null.
+ * Einträge, die lange niemand angefasst hat, gibt es oft nicht mehr.
+ */
+export function lastConfirmed(poi) {
+  const dates = [poi.edited, poi.tags.check_date].filter(Boolean).map(d => Number(String(d).slice(0, 4))).filter(y => y > 2000);
+  return dates.length ? Math.max(...dates) : null;
+}
+
+/** Veraltet: seit über 5 Jahren unverändert, oder nie überarbeitet (Version 1) und älter als 3 Jahre. */
+export function isStale(poi, now = new Date()) {
+  const year = lastConfirmed(poi);
+  if (!year) return false;
+  const age = now.getFullYear() - year;
+  return age > 5 || (poi.version === 1 && !poi.tags.check_date && age > 3);
+}
+
+const hasContact = poi => !!(poi.tags.website || poi.tags['contact:website'] || poi.tags.phone || poi.tags['contact:phone']);
+
 // ---------- Etappen ----------
 
 /** Lohnt sich eine Mehrtagestour (Route deutlich länger als die Tagesetappe)? */
@@ -111,7 +132,8 @@ export const isMultiDayCandidate = (r, maxKm) => r.distance > maxKm * 1000 * 1.1
  * → {stageLength, nights: [{index, target, date, end, options: [{poi, along, offset, price, fit}], chosen}]}
  * `choices`: früher gewählte Unterkünfte (OSM-Kennungen je Nacht), werden bevorzugt übernommen.
  */
-export async function planStays(r, { maxKm, budget, groups, departure, endStay, choices = [], signal }) {
+export async function planStays(r, { maxKm, budget, groups, departure, endStay, choices = [], hidden = [], signal }) {
+  const hiddenIds = new Set(hidden);
   const days = Math.max(2, Math.ceil(r.distance / (maxKm * 1000)));
   const stageLength = r.distance / days;
   const types = new Set(Object.entries(STAY_GROUPS).filter(([g]) => groups.includes(g)).flatMap(([, v]) => v.types));
@@ -127,7 +149,8 @@ export async function planStays(r, { maxKm, budget, groups, departure, endStay, 
   const samples = sampleRoute(r, 250);
   const inWindow = (s, w) => s.along >= w.lo && s.along <= w.hi;
   const searchPoints = samples.filter(s => windows.some(w => inWindow(s, w)));
-  const pois = (await fetchPoisNear(searchPoints, signal, ['stay'], { margin: 0.04 })).filter(p => types.has(p.type));
+  const pois = (await fetchPoisNear(searchPoints, signal, ['stay'], { margin: 0.04 }))
+    .filter(p => types.has(p.type) && !hiddenIds.has(p.id)); // vom Nutzer ausgeblendete nie vorschlagen
 
   // Nächte der Reihe nach wählen: Die Etappe seit der vorigen Unterkunft (und bei der letzten Nacht
   // vor dem Ziel auch die Reststrecke) soll das Tageslimit nicht überschreiten und möglichst gleich lang sein.
@@ -165,7 +188,10 @@ export async function planStays(r, { maxKm, budget, groups, departure, endStay, 
       // Budget zuerst, dann Etappenlänge und kleiner Umweg (1 km Umweg ≈ 2 km Abweichung);
       // Zeltplätze ohne Angaben im Winter (oft geschlossen) hinter „evtl. im Budget“, aber vor „über Budget“
       score += { ok: 0, maybe: 100, over: 200 }[fit] + (open === 'season' ? 150 : 0);
-      options.push({ poi, along: best.along, offset: best.offset, price, fit, open, score });
+      // Lange nicht bestätigte Einträge (gibt es oft nicht mehr) nach hinten, ohne Kontaktdaten leicht nach hinten
+      const stale = isStale(poi);
+      score += (stale ? 80 : 0) + (hasContact(poi) ? 0 : 15);
+      options.push({ poi, along: best.along, offset: best.offset, price, fit, open, stale, score });
     }
     options.sort((a, b) => a.score - b.score);
     const top = options.slice(0, MAX_OPTIONS);

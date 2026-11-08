@@ -13,7 +13,7 @@ import { addStops, STATE_LABELS, DWELL_MIN, arrivalAt, openingAt } from './stops
 import { PLACE_CATEGORIES, searchAlongRoute } from './placeSearch.js';
 import {
   STAY_TYPES, STAY_GROUPS, isMultiDayCandidate, planStays, routeThroughStays, stageStats,
-  priceLabel, priceLink, websiteOf, AVAILABILITY_LABEL,
+  priceLabel, priceLink, websiteOf, AVAILABILITY_LABEL, lastConfirmed,
 } from './stays.js';
 import { regionAt, regionLabel } from './regions.js';
 import { holidayAt } from './holidays.js';
@@ -50,6 +50,7 @@ const state = {
     groups: storage.get('stayTypes', ['hotel', 'guest_house', 'hostel', 'camp_site']),
     endStay: storage.get('endStay', true),
   },
+  hiddenStays: storage.get('hiddenStays', []), // vom Nutzer ausgeblendete Unterkünfte (OSM-Kennungen)
   multiDay: false,
   stayChoices: [], // OSM-Kennung der gewählten Unterkunft je Nacht
   seed: newSeed(),
@@ -467,7 +468,7 @@ async function withStays(origin, signal) {
   const plan = await planStays(origin, {
     maxKm: state.stays.maxKm, budget: state.stays.budget, groups: state.stays.groups,
     endStay: state.stays.endStay && state.mode !== 'loop', // Rundkurs endet zu Hause
-    departure: departureDate(), choices: state.stayChoices, signal,
+    departure: departureDate(), choices: state.stayChoices, hidden: state.hiddenStays, signal,
   });
   state.stayChoices = plan.nights.map(n => n.chosen?.poi.id ?? null);
   return routeThroughStays(origin, plan, { provider: provider(), opts: routeOpts(), signal });
@@ -1015,15 +1016,27 @@ function stayLinks(night) {
   link('Preis prüfen', priceLink(night.chosen.poi, night));
   const web = websiteOf(night.chosen.poi);
   if (web && /^https?:\/\//i.test(web)) link('Webseite', web);
-  link('In OSM', `https://www.openstreetmap.org/${night.chosen.poi.id}`);
+  // Fehler in OpenStreetMap melden: Hinweis („Note“) an der Stelle anlegen – Mapper vor Ort korrigieren ihn
+  const { lat, lon } = night.chosen.poi;
+  link('Fehler melden', `https://www.openstreetmap.org/note/new?lat=${lat.toFixed(5)}&lon=${lon.toFixed(5)}#map=18/${lat.toFixed(5)}/${lon.toFixed(5)}`);
   return box;
+}
+
+/** Unterkunft nie wieder vorschlagen (z. B. existiert nicht, keine Übernachtung möglich) – wird mit dem Konto abgeglichen. */
+function hideStay(night) {
+  const poi = night.chosen.poi;
+  state.hiddenStays = [...new Set([...state.hiddenStays, poi.id])];
+  storage.set('hiddenStays', state.hiddenStays);
+  delete state.stayChoices[night.index]; // nächstbeste Unterkunft für diese Nacht wählen
+  flashStatus(`„${poi.name || STAY_TYPES[poi.type].label}“ wird nicht mehr vorgeschlagen.`);
+  replanStops();
 }
 
 function optionLabel(o) {
   const t = STAY_TYPES[o.poi.type];
   const name = o.poi.name || t.label;
   return `${t.icon} ${name}${o.poi.tags.stars ? ` ${o.poi.tags.stars}★` : ''} · ${priceLabel(o.price)} · ${(o.offset / 1000).toFixed(1)} km`
-    + `${o.fit === 'over' ? ' · über Budget' : ''}${o.open === 'season' ? ' · Saison prüfen' : ''}`;
+    + `${o.fit === 'over' ? ' · über Budget' : ''}${o.open === 'season' ? ' · Saison prüfen' : ''}${o.stale ? ' · evtl. veraltet' : ''}`;
 }
 
 function renderStages() {
@@ -1109,16 +1122,25 @@ function renderNight(night) {
   });
   const meta = document.createElement('span');
   const c = night.chosen;
-  meta.className = 'meta' + (c.fit === 'over' || c.open === 'season' ? ' over' : '');
+  meta.className = 'meta' + (c.fit === 'over' || c.open === 'season' || c.stale ? ' over' : '');
+  const year = lastConfirmed(c.poi);
   meta.textContent = `${STAY_TYPES[c.poi.type].label} · ${priceLabel(c.price)} – ${FIT_LABEL[c.fit]} (Budget ${state.stays.budget} €)`
-    + (AVAILABILITY_LABEL[c.open] ? ` · ${AVAILABILITY_LABEL[c.open]}` : '');
+    + (AVAILABILITY_LABEL[c.open] ? ` · ${AVAILABILITY_LABEL[c.open]}` : '')
+    + (c.stale ? ` · Angaben von ${year} – evtl. veraltet, vorher prüfen` : '');
   const show = document.createElement('button');
   show.type = 'button';
   show.className = 'link-btn inline';
   show.textContent = 'Auf der Karte zeigen';
   show.addEventListener('click', () => map.openStay(night.chosen.poi.id));
+  const hide = document.createElement('button');
+  hide.type = 'button';
+  hide.className = 'link-btn inline';
+  hide.textContent = 'Ausblenden';
+  hide.title = 'Diese Unterkunft nicht mehr vorschlagen (z. B. existiert nicht oder bietet keine Übernachtung)';
+  hide.addEventListener('click', () => hideStay(night));
   const links = stayLinks(night);
   links.prepend(show);
+  links.append(hide);
   box.append(select, meta, links);
   return box;
 }

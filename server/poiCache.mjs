@@ -6,7 +6,7 @@
 import { mkdir, readFile, writeFile, rename, stat, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fetchTilesFromOverpass, LAYERS, TILE, tileKey } from '../js/poiSource.js';
+import { fetchTilesFromOverpass, LAYERS, TILE, tileKey, cacheName } from '../js/poiSource.js';
 
 const DIR = fileURLToPath(new URL('../cache/pois/', import.meta.url));
 const DAY = 24 * 3600 * 1000;
@@ -22,7 +22,8 @@ export const ALL_LAYERS = Object.keys(LAYERS);
 
 const inflight = new Map(); // `${ebene}/${kachel}` → Promise<pois>
 
-const file = (layer, key) => join(DIR, layer, `${key}.json`);
+// Ordner je Ebene (mit Cache-Version, z. B. „stay.v2“ – ältere Stände ohne nötige Angaben werden neu geladen)
+const file = (layer, key) => join(DIR, cacheName(layer), `${key}.json`);
 
 // Kacheln aus der Zeit vor den Ebenen (cache/pois/<kachel>.json) enthalten die Versorgungs-Ebene →
 // einmalig nach cache/pois/supply/ verschieben, damit sie nicht neu geladen werden müssen.
@@ -40,7 +41,7 @@ async function readTile(layer, key) {
 }
 
 async function writeTile(layer, key, pois) {
-  await mkdir(join(DIR, layer), { recursive: true });
+  await mkdir(join(DIR, cacheName(layer)), { recursive: true });
   const tmp = file(layer, key) + '.tmp';
   await writeFile(tmp, JSON.stringify({ t: Date.now(), pois }));
   await rename(tmp, file(layer, key)); // atomar, damit parallele Leser keine halbe Datei sehen

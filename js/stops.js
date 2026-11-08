@@ -3,7 +3,7 @@ import { openState, hasHolidayRule, parseOpeningHours } from './openingHours.js'
 import { regionsAlong, regionAtDistance } from './regions.js';
 import { holidayLookup } from './holidays.js';
 import { route } from './routing/index.js';
-import { tileKey, fetchTilesFromOverpass } from './poiSource.js';
+import { tileKey, fetchTilesFromOverpass, cacheName } from './poiSource.js';
 
 /**
  * Verpflegungsstopps: Trinkwasserstellen, Supermärkte, Bäckereien, Cafés und Tankstellen aus OpenStreetMap
@@ -77,7 +77,7 @@ function locateSequential(r, points) {
 
 const TILE_TTL = 7 * 24 * 3600 * 1000;
 const memTiles = new Map(); // `${ebene}/${kachel}` → {t, pois}
-const cacheKey = (layer, key) => `${layer}/${key}`;
+const cacheKey = (layer, key) => `${cacheName(layer)}/${key}`;
 
 /** Kacheln, die Punkte samt Rand (`m` Grad) berühren. */
 function tilesNear(points, m) {
