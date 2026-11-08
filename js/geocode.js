@@ -1,4 +1,5 @@
 import { debounce } from './utils.js';
+import { announce } from './announce.js';
 
 /**
  * Ortssuche und Ortsbestimmung.
@@ -123,18 +124,39 @@ export async function reverse(point) {
   }
 }
 
-/** Autocomplete für ein Eingabefeld. Die Vorschlagsliste ist das <ul class="suggestions"> im selben Container. */
+let listSeq = 0;
+
+/**
+ * Autocomplete für ein Eingabefeld. Die Vorschlagsliste ist das <ul class="suggestions"> im selben Container.
+ * Barrierefrei nach dem Combobox-Muster: Das Feld meldet, ob Vorschläge offen sind und welcher markiert ist
+ * (aria-activedescendant); die Anzahl der Vorschläge wird angesagt.
+ */
 export function attachSearch(input, { onSelect, getBias }) {
   const list = input.parentElement.querySelector('.suggestions');
   let items = [], active = -1, requestId = 0;
   let notice = ''; // Hinweiszeile statt Vorschlägen (z. B. Photon ausgefallen)
 
-  const close = () => { list.hidden = true; active = -1; };
+  list.id ||= `suggestions-${++listSeq}`;
+  list.setAttribute('role', 'listbox');
+  list.setAttribute('aria-label', 'Vorschläge');
+  input.setAttribute('role', 'combobox');
+  input.setAttribute('aria-autocomplete', 'list');
+  input.setAttribute('aria-controls', list.id);
+  input.setAttribute('aria-expanded', 'false');
+
+  const close = () => {
+    list.hidden = true; active = -1;
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+  };
   const choose = place => { input.value = place.label; close(); onSelect(place); };
 
   function render() {
     const rows = items.map((place, i) => {
       const li = document.createElement('li');
+      li.id = `${list.id}-${i}`;
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', String(i === active));
       li.className = i === active ? 'active' : '';
       li.textContent = place.label;
       if (place.detail) {
@@ -148,15 +170,24 @@ export function attachSearch(input, { onSelect, getBias }) {
     if (notice) {
       const li = document.createElement('li');
       li.className = 'notice';
+      li.setAttribute('role', 'option');
       li.textContent = notice;
       li.addEventListener('mousedown', e => { e.preventDefault(); fallbackSearch(); });
       rows.push(li);
     }
     list.replaceChildren(...rows);
     list.hidden = rows.length === 0;
+    input.setAttribute('aria-expanded', String(!list.hidden));
+    if (active >= 0) input.setAttribute('aria-activedescendant', `${list.id}-${active}`);
+    else input.removeAttribute('aria-activedescendant');
   }
 
-  const showNotice = text => { items = []; notice = text; active = -1; render(); };
+  /** Ergebnis ansagen (nur nach einer Suche, nicht bei jedem Pfeiltasten-Schritt). */
+  const speak = () => announce(items.length
+    ? `${items.length} ${items.length === 1 ? 'Vorschlag' : 'Vorschläge'} – mit Pfeiltasten auswählen`
+    : notice || 'Keine Vorschläge');
+
+  const showNotice = text => { items = []; notice = text; active = -1; render(); speak(); };
 
   async function fallbackSearch() {
     const q = input.value.trim();
@@ -166,7 +197,7 @@ export function attachSearch(input, { onSelect, getBias }) {
     try {
       const results = await searchFallback(q, getBias());
       if (id !== requestId) return;
-      items = results; notice = results.length ? '' : 'Nichts gefunden.'; active = -1; render();
+      items = results; notice = results.length ? '' : 'Nichts gefunden.'; active = -1; render(); speak();
     } catch {
       if (id === requestId) showNotice('Ortssuche gerade nicht erreichbar – Ort bitte auf der Karte anklicken.');
     }
@@ -179,7 +210,7 @@ export function attachSearch(input, { onSelect, getBias }) {
     try {
       const results = await search(query, getBias());
       if (id !== requestId) return;
-      items = results; notice = ''; active = -1; render();
+      items = results; notice = ''; active = -1; render(); speak();
     } catch (e) {
       if (id === requestId && e.unavailable) showNotice(FALLBACK_HINT);
     }

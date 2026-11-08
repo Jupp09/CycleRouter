@@ -23,6 +23,18 @@ on('route', r => {
   ui.results.hidden = false;
 });
 
+/**
+ * Kurze Zusammenfassung für Screenreader, wenn eine Berechnung fertig ist (pipeline.js) –
+ * z. B. „Route berechnet: 42 km, 310 m Anstieg, Fahrzeit ca. 2 h 5 min, 3 Verpflegungsstopps“.
+ */
+export function routeSummary(r) {
+  const parts = [formatKm(r.distance), `${formatM(r.ascent)} Anstieg`, `Fahrzeit ca. ${formatDuration(estimateTime(r.distance, r.ascent, state.bike))}`];
+  if (r.stops?.length) parts.push(`${r.stops.length} ${r.stops.length === 1 ? 'Verpflegungsstopp' : 'Verpflegungsstopps'}`);
+  const nights = r.stays?.nights.filter(n => n.chosen).length;
+  if (nights) parts.push(`${nights} ${nights === 1 ? 'Übernachtung' : 'Übernachtungen'}`);
+  return `Route berechnet: ${parts.join(', ')}`;
+}
+
 function renderStats(r) {
   $('#stat-dist').textContent = formatKm(r.distance);
   $('#stat-up').textContent = formatM(r.ascent);

@@ -14,7 +14,7 @@ export function syncUi() {
     for (const b of document.querySelectorAll(sel)) b.setAttribute(attr, b.dataset[key] === value);
   };
   check('#bike-switch button', 'aria-checked', 'value', state.bike);
-  check('#mode-tabs button', 'aria-selected', 'mode', state.mode);
+  check('#mode-tabs button', 'aria-checked', 'mode', state.mode);
   check('#breakdown-switch button', 'aria-checked', 'value', state.breakdown);
   for (const n of document.querySelectorAll('[data-show]')) n.hidden = !n.dataset.show.split(' ').includes(state.mode);
 

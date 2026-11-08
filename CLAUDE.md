@@ -25,6 +25,12 @@ npm run extract:build    # build the extract locally (Linux/macOS with curl + os
 - Every network call takes an `AbortSignal`. `run()` in [js/app/pipeline.js](js/app/pipeline.js) aborts the previous calculation when a new one starts. `AbortError` is always swallowed silently, so keep that pattern when adding async work.
 - Persist settings in the browser only through `storage.get/set` in [js/utils.js](js/utils.js). It adds the `cyclerouter.` prefix, handles JSON and private mode, and notifies `onStorageSet` listeners, which drive account settings sync.
 - Comments explain the *why*: rate limits, data quirks, privacy decisions. Keep them up to date when you change behaviour.
+- **Accessibility** (checked with axe-core and a keyboard test; 0 axe violations in light and dark):
+  - Anything clickable is a `<button>` or a link, never a clickable `<li>`/`<div>`. List rows use `rowButton()` from `js/app/dom.js`, and its content must be phrasing elements (`span()`), not `<div>`.
+  - Switches are `role="radiogroup"` with `role="radio"` + `aria-checked` buttons. `dom.js` adds arrow keys and the single tab stop automatically for every radiogroup in the page.
+  - Things users only see happen are spoken via `announce()` ([js/announce.js](js/announce.js)). `setStatus()` already does this; `run()` announces the finished route. Don't add announcements for automatic refreshes.
+  - Map markers get a name (`title`, which `map.js` also sets as `aria-label`). Inputs get a real `<label for>` or `aria-label`, not just a placeholder. The place search follows the combobox pattern (`geocode.js`).
+  - Colours: text links and focus outlines use `--accent-text`, white-on-accent buttons use `--accent`. Body text needs ≥ 4.5:1, focus outlines and other UI parts ≥ 3:1, in both schemes.
 
 ## Architecture
 

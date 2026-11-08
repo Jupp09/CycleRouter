@@ -34,7 +34,9 @@ export function drawRouteLine() {
 }
 
 /** Beschriftung eines Zwischenstopp-Markers: Kategorie-Symbol oder laufende Nummer. */
-const manualMarker = (p, n) => ({ text: p.icon || String(n), title: p.label || `Zwischenstopp ${n}` });
+const manualMarker = (p, n) => ({ text: p.icon || String(n), title: `Zwischenstopp ${n}${p.label ? ': ' + p.label : ''}` });
+/** Name für Start-/Ziel-Marker, z. B. „Start: Bremen“ (vorgelesen und als Tooltip). */
+const placeName = (kind, p) => (p?.label ? `${kind}: ${p.label.split(',')[0]}` : kind);
 
 /**
  * Verschiebbare Marker setzen. Mit Route: aus deren Wegpunkten (`index` = Wegpunkt-Index für das
@@ -50,16 +52,17 @@ export function updateMarkers() {
     let n = 0;
     map.setMarkers(wps.map((point, index) => {
       const kind = index === 0 ? 'start' : !loop && index === last ? 'end' : point.manual ? 'manual' : 'via';
-      return { point, index, kind, ...(kind === 'manual' && manualMarker(point, ++n)) };
+      const title = kind === 'start' ? placeName('Start', state.start) : kind === 'end' ? placeName('Ziel', state.end) : undefined;
+      return { point, index, kind, title, ...(kind === 'manual' && manualMarker(point, ++n)) };
     }).filter(m => !m.point.stop && !m.point.stay));
     return;
   }
   const markers = [];
-  if (state.start) markers.push({ point: state.start, kind: 'start', index: 0 });
+  if (state.start) markers.push({ point: state.start, kind: 'start', index: 0, title: placeName('Start', state.start) });
   if (state.mode === 'ab') {
     // Ohne Route (z. B. Ziel fehlt) Zwischenstopps trotzdem zeigen; `index` 'via<n>' kennzeichnet sie
     activeVias().forEach((v, i) => markers.push({ point: v, kind: 'manual', index: `via${i}`, ...manualMarker(v, i + 1) }));
-    if (state.end) markers.push({ point: state.end, kind: 'end', index: 1 });
+    if (state.end) markers.push({ point: state.end, kind: 'end', index: 1, title: placeName('Ziel', state.end) });
   }
   map.setMarkers(markers);
 }

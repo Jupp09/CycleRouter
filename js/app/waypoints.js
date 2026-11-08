@@ -8,6 +8,7 @@
 import { route } from '../routing/index.js';
 import { attachSearch, reverse } from '../geocode.js';
 import { haversine } from '../utils.js';
+import { announce } from '../announce.js';
 import { state, emit, provider, routeOpts, isLoop, activeVias, originRoute } from './state.js';
 import { $, ui, setStatus } from './dom.js';
 import { map, setMapHandlers, updateMarkers } from './mapView.js';
@@ -75,6 +76,7 @@ $('#btn-locate').addEventListener('click', () => {
 $('#btn-clear').addEventListener('click', () => {
   if (state.mode === 'ab') { state.end = null; ui.endInput.value = ''; state.vias = []; renderVias(); }
   clearRoute();
+  announce('Route gelöscht');
 });
 
 // ---------- Zwischenstopps ----------
@@ -128,23 +130,31 @@ export function renderVias() {
   $('#via-list').replaceChildren(...state.vias.map((via, i) => {
     const row = document.createElement('div');
     row.className = 'field via-row';
-    const label = document.createElement('span');
+    const label = document.createElement('label');
     label.className = 'label';
+    label.htmlFor = `via-input-${i}`;
     const num = document.createElement('i');
     num.className = 'num';
     num.textContent = via.icon || String(i + 1);
-    label.append(num, ' Zwischenstopp');
+    num.setAttribute('aria-hidden', 'true');
+    // Sichtbar steht die Nummer im Kreis; Screenreader hören „Zwischenstopp 2“
+    const srNum = document.createElement('span');
+    srNum.className = 'sr-only';
+    srNum.textContent = ` ${i + 1}`;
+    label.append(num, ' Zwischenstopp', srNum);
 
     const search = document.createElement('div');
     search.className = 'search';
     const input = document.createElement('input');
+    input.id = `via-input-${i}`;
     input.type = 'text';
     input.placeholder = 'Ort, Café, Bäckerei … suchen';
     input.autocomplete = 'off';
     input.value = via.label || '';
     const remove = document.createElement('button');
     remove.className = 'icon-btn';
-    remove.title = remove.ariaLabel = 'Zwischenstopp entfernen';
+    remove.title = 'Zwischenstopp entfernen';
+    remove.setAttribute('aria-label', `Zwischenstopp ${i + 1} entfernen`);
     remove.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
     remove.addEventListener('click', () => removeVia(i));
     const suggestions = document.createElement('ul');

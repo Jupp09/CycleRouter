@@ -33,7 +33,8 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <aside class="panel">
+  <aside class="panel" aria-label="Routenplanung">
+    <a class="skip-link" href="#results">Zum Ergebnis springen</a>
     <header class="brand">
       <svg class="brand-icon" viewBox="0 0 32 32" aria-hidden="true">
         <circle cx="8" cy="21" r="6"/><circle cx="24" cy="21" r="6"/>
@@ -70,15 +71,15 @@
       <p class="hint" id="provider-hint" hidden></p>
     </section>
 
-    <nav class="tabs" id="mode-tabs" role="tablist">
-      <button role="tab" data-mode="ab">A → B</button>
-      <button role="tab" data-mode="distance">Distanz</button>
-      <button role="tab" data-mode="loop">Rundkurs</button>
-    </nav>
+    <div class="tabs" id="mode-tabs" role="radiogroup" aria-label="Art der Route">
+      <button role="radio" data-mode="ab" aria-label="A nach B">A → B</button>
+      <button role="radio" data-mode="distance">Distanz</button>
+      <button role="radio" data-mode="loop">Rundkurs</button>
+    </div>
 
     <section class="group">
       <div class="field">
-        <span class="label"><i class="dot start"></i>Start</span>
+        <label class="label" for="start-input"><i class="dot start"></i>Start</label>
         <div class="search">
           <input id="start-input" type="text" placeholder="Ort suchen oder auf Karte klicken" autocomplete="off">
           <button id="btn-home" class="icon-btn" title="Heimatadresse als Start" aria-label="Heimatadresse als Start" hidden>
@@ -95,7 +96,7 @@
       <button id="btn-add-via" class="link-btn" data-show="ab" title="Zwischenstopp hinzufügen – alternativ bei gesetztem Start und Ziel auf die Karte klicken">+ Zwischenstopp</button>
 
       <div class="field" data-show="ab">
-        <span class="label"><i class="dot end"></i>Ziel</span>
+        <label class="label" for="end-input"><i class="dot end"></i>Ziel</label>
         <div class="search">
           <input id="end-input" type="text" placeholder="Ort suchen oder auf Karte klicken" autocomplete="off">
           <button id="btn-swap" class="icon-btn" title="Start und Ziel tauschen" aria-label="Start und Ziel tauschen">
@@ -108,7 +109,8 @@
       <div class="field" data-show="distance loop">
         <span class="label">Distanz <output id="distance-out"></output></span>
         <div class="range-row">
-          <input id="distance-range" type="range" min="10" max="300" step="5">
+          <input id="distance-range" type="range" min="10" max="300" step="5" aria-label="Distanz">
+
           <input id="distance-num" type="number" min="5" max="400" step="1" aria-label="Distanz in km">
           <span class="unit">km</span>
         </div>
@@ -156,7 +158,8 @@
 
     <div id="status" class="status" hidden></div>
 
-    <section class="group results" id="results" hidden>
+    <section class="group results" id="results" aria-labelledby="h-results" tabindex="-1" hidden>
+      <h2 class="sr-only" id="h-results">Ergebnis</h2>
       <div class="stats">
         <div><span class="k">Distanz</span><span class="v" id="stat-dist"></span></div>
         <div><span class="k">Anstieg</span><span class="v" id="stat-up"></span></div>
@@ -188,14 +191,14 @@
         <label class="check"><input type="checkbox" id="color-route"> Route auf Karte einfärben</label>
       </div>
       <div class="stops" id="stops" hidden>
-        <span class="label">Verpflegungsstopps</span>
+        <h2 class="label">Verpflegungsstopps</h2>
         <p class="hint" id="route-regions" hidden></p>
         <ul class="holiday-notes" id="holiday-notes" hidden></ul>
         <ol class="stop-list" id="stop-list"></ol>
         <p class="hint warn" id="stop-gaps" hidden></p>
       </div>
       <div class="along">
-        <span class="label">Entlang der Route finden</span>
+        <h2 class="label">Entlang der Route finden</h2>
         <div class="chips" id="along-chips"></div>
         <p class="hint" id="along-hint" hidden></p>
         <ul class="along-list" id="along-list"></ul>
@@ -218,7 +221,7 @@
     </section>
 
     <details class="group my-routes" id="my-routes" hidden>
-      <summary>Meine Routen <span class="count" id="my-routes-count"></span></summary>
+      <summary><h2>Meine Routen <span class="count" id="my-routes-count"></span></h2></summary>
       <ul class="route-list" id="my-routes-list"></ul>
       <p class="hint" id="my-routes-empty" hidden>Noch keine Routen gespeichert – nach dem Berechnen „Route speichern“ wählen.</p>
     </details>
@@ -234,7 +237,7 @@
     </footer>
   </aside>
 
-  <main class="map-area">
+  <main class="map-area" aria-label="Karte">
     <div id="map"></div>
     <section id="elevation" class="elevation" hidden>
       <div class="elevation-chart" id="elevation-chart"></div>
@@ -278,7 +281,7 @@
         </div>
       </div>
       <div class="field">
-        <span class="label">Heimatadresse</span>
+        <label class="label" for="home-input">Heimatadresse</label>
         <div class="search">
           <input id="home-input" type="text" placeholder="Adresse suchen" autocomplete="off">
           <button type="button" id="btn-home-from-start" class="icon-btn" title="Aktuellen Startort übernehmen" aria-label="Aktuellen Startort übernehmen">

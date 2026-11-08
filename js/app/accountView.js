@@ -14,7 +14,7 @@ import {
 import { reverse } from '../geocode.js';
 import { storage, onStorageSet, debounce, formatKm, formatM, formatDate } from '../utils.js';
 import { state, on, emit, MODE_LABELS, originRoute, defaultName } from './state.js';
-import { $, ui, isMobile, setStatus, flashStatus, ask, externalLink, linkButton } from './dom.js';
+import { $, ui, isMobile, setStatus, flashStatus, ask, externalLink, linkButton, rowButton, span } from './dom.js';
 import { map } from './mapView.js';
 import { syncUi } from './controls.js';
 import { run, showRoute, abortCalculation } from './pipeline.js';
@@ -199,29 +199,28 @@ function renderMyRoutes() {
   $('#my-routes-empty').hidden = myRoutes.length > 0;
   $('#my-routes-list').replaceChildren(...myRoutes.map(r => {
     const li = document.createElement('li');
-    if (state.saved?.id === r.id) li.className = 'current';
-    const main = document.createElement('div');
-    const name = document.createElement('div');
-    name.className = 'name';
-    name.textContent = r.name;
+    const current = state.saved?.id === r.id;
+    if (current) li.className = 'current';
     const meta = document.createElement('small');
     meta.textContent = [formatKm(r.distance), `${formatM(r.ascent)} ↑`, MODE_LABELS[r.mode], formatDate(new Date(r.updatedAt))]
       .join(' · ') + (r.shared ? ' · 🔗 geteilt' : '');
-    main.append(name, meta);
+    // Name und Angaben als Knopf „öffnen“ – vorher ein anklickbares <li>, das per Tastatur nicht erreichbar war
+    const open = rowButton([span('name', r.name), meta], () => openSaved(r.id));
+    if (current) open.setAttribute('aria-current', 'true');
     const tools = document.createElement('div');
     tools.className = 'tools';
     const tool = (icon, title, fn) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.textContent = icon;
-      b.title = b.ariaLabel = title;
-      b.addEventListener('click', e => { e.stopPropagation(); fn(); });
+      b.title = title;
+      b.setAttribute('aria-label', `„${r.name}“ ${title.toLowerCase()}`);
+      b.addEventListener('click', fn);
       tools.append(b);
     };
     tool('✏️', 'Umbenennen', () => renameSaved(r));
     tool('🗑️', 'Löschen', () => deleteSaved(r));
-    li.append(main, tools);
-    li.addEventListener('click', () => openSaved(r.id));
+    li.append(open, tools);
     return li;
   }));
 }

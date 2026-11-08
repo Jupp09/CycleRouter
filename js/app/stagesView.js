@@ -33,6 +33,7 @@ export function renderStages() {
   const plan = r?.stays;
   map.setStays(plan ? plan.nights.filter(n => n.chosen).map(n => ({
     id: n.chosen.poi.id, lat: n.chosen.poi.lat, lon: n.chosen.poi.lon, icon: STAY_TYPES[n.chosen.poi.type].icon, popup: stayPopup(n),
+    title: `${n.end ? 'Übernachtung am Ziel' : `Nacht ${n.index + 1}`}: ${n.chosen.poi.name || STAY_TYPES[n.chosen.poi.type].label}`,
   })) : []);
   if (box.hidden) return;
 

@@ -11,6 +11,7 @@ Routenplaner für **Rennrad**, **Gravelbike** und **Fahrrad** (Trekking-/Alltags
 - Marker verschiebbar – die Route wird neu berechnet
 - **Mehrtagestouren** auf Knopfdruck (sobald die Route länger als die eingestellten km pro Tag ist): Tagesetappen, je Nacht wählbare Unterkunft (Hotel, Pension, Hostel, Zeltplatz aus OpenStreetMap) mit geschätztem Preis gegen das Budget pro Nacht und „Preis prüfen“-Link mit Datum ([js/stays.js](js/stays.js))
 - „Neu würfeln" erzeugt eine andere Variante, optional mit Wunschrichtung
+- **Barrierefrei bedienbar:** komplett per Tastatur (Pfeiltasten in den Umschaltern, Ortssuche mit Vorschlagsliste, alle Listen), Ansagen für Screenreader (Ergebnis, Statusmeldungen, Anzahl der Vorschläge), deutlicher Fokusrahmen, ausreichende Kontraste in Hell und Dunkel; geprüft mit axe-core
 
 ## Starten
 

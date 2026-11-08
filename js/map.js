@@ -38,6 +38,17 @@ const manualIcon = text => L.divIcon({
 });
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+/**
+ * Marker sind per Tastatur fokussierbar (Leaflet) – ohne Namen liest ein Screenreader nur „Schaltfläche“.
+ * Leaflet setzt bei divIcon nur `title`; der zugängliche Name kommt zusätzlich als aria-label.
+ */
+function named(marker, name) {
+  if (!name) return marker;
+  marker.once('add', () => marker.getElement()?.setAttribute('aria-label', name));
+  return marker;
+}
+const KIND_NAME = { start: 'Start', end: 'Ziel', via: 'Wegpunkt', manual: 'Zwischenstopp' };
+
 export function createMap(el, { onClick, onMarkerDrag }) {
   const view = storage.get('view', { center: [51.1657, 10.4515], zoom: 6 });
   const map = L.map(el, { zoomControl: false }).setView(view.center, view.zoom);
@@ -72,12 +83,13 @@ export function createMap(el, { onClick, onMarkerDrag }) {
     setMarkers(markers) {
       markerLayer.clearLayers();
       for (const m of markers) {
-        const marker = L.marker([m.point.lat, m.point.lon], {
+        const name = m.title || KIND_NAME[m.kind];
+        const marker = named(L.marker([m.point.lat, m.point.lon], {
           icon: m.kind === 'via' ? viaIcon : m.kind === 'manual' ? manualIcon(escapeHtml(m.text)) : icon(m.kind),
           draggable: true,
           zIndexOffset: m.kind === 'via' ? 0 : m.kind === 'manual' ? 600 : 1000,
-          title: m.title || '',
-        });
+          title: name,
+        }), name);
         marker
           .on('dragend', e => {
             const ll = e.target.getLatLng();
@@ -112,34 +124,36 @@ export function createMap(el, { onClick, onMarkerDrag }) {
       flush();
     },
 
-    /** stops: [{id, lat, lon, icon, warn, popup: HTMLElement}] */
+    /** stops: [{id, lat, lon, icon, warn, title?, popup: HTMLElement}] */
     setStops(stops = []) {
       stopLayer.clearLayers();
       stopMarkers.clear();
       for (const s of stops) {
-        const marker = L.marker([s.lat, s.lon], {
+        const marker = named(L.marker([s.lat, s.lon], {
           icon: L.divIcon({
             className: '', iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -14],
             html: `<div class="stop-pin${s.warn ? ' warn' : ''}">${s.icon}</div>`,
           }),
           zIndexOffset: 500,
-        }).bindPopup(s.popup).addTo(stopLayer);
+          title: s.title || '',
+        }), s.title).bindPopup(s.popup).addTo(stopLayer);
         stopMarkers.set(s.id, marker);
       }
     },
 
-    /** Gewählte Unterkünfte einer Mehrtagestour: [{id, lat, lon, icon, popup: HTMLElement}] */
+    /** Gewählte Unterkünfte einer Mehrtagestour: [{id, lat, lon, icon, title?, popup: HTMLElement}] */
     setStays(stays = []) {
       stayLayer.clearLayers();
       stayMarkers.clear();
       for (const s of stays) {
-        const marker = L.marker([s.lat, s.lon], {
+        const marker = named(L.marker([s.lat, s.lon], {
           icon: L.divIcon({
             className: '', iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -15],
             html: `<div class="stay-pin">${s.icon}</div>`,
           }),
           zIndexOffset: 700,
-        }).bindPopup(s.popup).addTo(stayLayer);
+          title: s.title || '',
+        }), s.title).bindPopup(s.popup).addTo(stayLayer);
         stayMarkers.set(s.id, marker);
       }
     },
@@ -151,18 +165,19 @@ export function createMap(el, { onClick, onMarkerDrag }) {
       m.openPopup();
     },
 
-    /** Suchtreffer entlang der Route: [{id, lat, lon, icon, popup: HTMLElement}] */
+    /** Suchtreffer entlang der Route: [{id, lat, lon, icon, title?, popup: HTMLElement}] */
     setSearchResults(results = []) {
       searchLayer.clearLayers();
       searchMarkers.clear();
       for (const s of results) {
-        const marker = L.marker([s.lat, s.lon], {
+        const marker = named(L.marker([s.lat, s.lon], {
           icon: L.divIcon({
             className: '', iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -12],
             html: `<div class="search-pin">${s.icon}</div>`,
           }),
           zIndexOffset: 400,
-        }).bindPopup(s.popup).addTo(searchLayer);
+          title: s.title || '',
+        }), s.title).bindPopup(s.popup).addTo(searchLayer);
         searchMarkers.set(s.id, marker);
       }
     },

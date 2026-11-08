@@ -8,12 +8,13 @@
   --accent: #6d28d9;
   --accent-hover: #5b21b6;
   --accent-soft: #ede9fe;
+  --accent-text: #6d28d9;   /* Textlinks und Fokusrahmen – im Dunkeln heller als --accent (Kontrast ≥ 4,5:1) */
   --on-accent: #ffffff;
   --start: #16a34a;
   --end: #dc2626;
   --error-bg: #fef2f2;
   --error-text: #991b1b;
-  --warn-text: #b45309;
+  --warn-text: #9c4a08;     /* ≥ 4,5:1 auch auf --surface (Listenzeilen) */
   --warn-bg: #fef3c7;
   --route: #7c3aed;
   --shadow: 0 1px 2px rgba(20, 16, 40, .06), 0 4px 16px rgba(20, 16, 40, .06);
@@ -32,9 +33,10 @@
     --text: #ecebf2;
     --muted: #9e9aae;
     --border: #312e3c;
-    --accent: #8b5cf6;
-    --accent-hover: #a78bfa;
+    --accent: #7c3aed;
+    --accent-hover: #6d28d9;
     --accent-soft: #2e2546;
+    --accent-text: #a78bfa;
     --error-bg: #3b1518;
     --error-text: #fca5a5;
     --warn-text: #fbbf24;
@@ -50,9 +52,10 @@
   --text: #ecebf2;
   --muted: #9e9aae;
   --border: #312e3c;
-  --accent: #8b5cf6;
-  --accent-hover: #a78bfa;
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
   --accent-soft: #2e2546;
+  --accent-text: #a78bfa;
   --error-bg: #3b1518;
   --error-text: #fca5a5;
   --warn-text: #fbbf24;
@@ -107,7 +110,41 @@ input[type="text"], input[type="password"], input[type="number"], select {
   outline: none;
 }
 .field.inline select { width: auto; }
-input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+input:focus, select:focus { border-color: var(--accent); }
+
+/* ---------- Barrierefreiheit ---------- */
+/* Sichtbarer Tastaturfokus: Rahmen in Akzentfarbe (Kontrast ≥ 3:1 in hell und dunkel). Eingabefelder haben
+   oben outline: none – deshalb hier mit höherer Spezifität. */
+:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
+input[type]:focus-visible, select:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 1px; }
+.segmented button:focus-visible, .tabs button:focus-visible { outline-offset: -2px; }
+.leaflet-marker-icon:focus-visible { outline: 3px solid var(--accent-text); outline-offset: 2px; border-radius: 50%; }
+
+/* Nur für Screenreader (z. B. Überschrift „Ergebnis“, Ansagen aus js/announce.js) */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+/* Sprunglink: erscheint erst bei Tastaturfokus, nur wenn es ein Ergebnis gibt */
+.skip-link {
+  position: absolute; left: 12px; top: -100px; z-index: 2000; padding: 8px 12px; border-radius: 8px;
+  background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none;
+}
+.skip-link:focus { top: calc(8px + env(safe-area-inset-top, 0px)); }
+body:has(#results[hidden]) .skip-link { display: none; }
+#results:focus { outline: none; }
+
+/* Ganze Listenzeile als Knopf – per Tastatur erreichbar (vorher nur ein anklickbares <li>) */
+button.row {
+  all: unset; box-sizing: border-box; display: grid; align-items: center; min-width: 0; width: 100%;
+  cursor: pointer; border-radius: 8px;
+}
+button.row:focus-visible { outline: 2px solid var(--accent-text); outline-offset: -2px; }
+.row .main, .row .name, .row .when, .row .km { display: block; min-width: 0; }
+
+/* Abschnittsüberschriften im Panel sehen aus wie die bisherigen Beschriftungen */
+h2.label { margin: 0; }
+.my-routes summary h2 { display: inline; margin: 0; font-size: inherit; font-weight: inherit; }
 
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .dot.start { background: var(--start); }
@@ -143,7 +180,7 @@ button.primary:hover { background: var(--accent-hover); }
 
 .segmented, .tabs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 3px; gap: 3px; background: var(--surface); border-radius: 9px; border: 1px solid var(--border); }
 .segmented button, .tabs button { border: none; background: transparent; padding: 7px 8px; font-weight: 600; color: var(--muted); }
-.segmented button[aria-checked="true"], .tabs button[aria-selected="true"] { background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+.segmented button[aria-checked="true"], .tabs button[aria-checked="true"] { background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
 
 .range-row { display: flex; align-items: center; gap: 8px; }
 .range-row input[type="range"] { flex: 1; accent-color: var(--accent); }
@@ -154,7 +191,7 @@ button.primary:hover { background: var(--accent-hover); }
 .actions button { flex: 1; }
 
 .hint { margin: 0; font-size: 12px; color: var(--muted); }
-.hint a { color: var(--accent); }
+.hint a { color: var(--accent-text); }
 
 .status { padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); font-size: 13px; display: flex; gap: 8px; align-items: center; }
 .status.error { background: var(--error-bg); color: var(--error-text); }
@@ -192,10 +229,8 @@ input[type="datetime-local"] {
 .stops { display: flex; flex-direction: column; gap: 6px; }
 .stops > .label { font-size: 12px; font-weight: 600; color: var(--muted); }
 .stop-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.stop-list li {
-  display: grid; grid-template-columns: 26px 1fr auto; gap: 8px; align-items: center;
-  padding: 6px 8px; border-radius: 8px; background: var(--surface); cursor: pointer; font-size: 13px;
-}
+.stop-list li { border-radius: 8px; background: var(--surface); font-size: 13px; }
+.stop-list .row { grid-template-columns: 26px 1fr auto; gap: 8px; padding: 6px 8px; }
 .stop-list li:hover { background: var(--accent-soft); }
 .stop-list .ico { font-size: 18px; text-align: center; }
 .stop-list .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -216,7 +251,7 @@ input[type="datetime-local"] {
   background: var(--route); color: #fff; font-size: 10px; font-weight: 700;
 }
 .link-btn {
-  align-self: flex-start; padding: 2px 0; background: none; border: none; color: var(--accent); font-weight: 600; font-size: 13px;
+  align-self: flex-start; padding: 2px 0; background: none; border: none; color: var(--accent-text); font-weight: 600; font-size: 13px;
 }
 .link-btn:hover { text-decoration: underline; }
 .link-btn.inline { display: inline; padding: 0; font-size: inherit; }
@@ -229,9 +264,10 @@ input[type="datetime-local"] {
 .chips button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
 .along-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
 .along-list li {
-  display: grid; grid-template-columns: 1fr auto 30px; gap: 8px; align-items: center;
-  padding: 5px 6px 5px 8px; border-radius: 8px; background: var(--surface); cursor: pointer; font-size: 13px;
+  display: grid; grid-template-columns: 1fr 30px; gap: 8px; align-items: center;
+  padding-right: 6px; border-radius: 8px; background: var(--surface); font-size: 13px;
 }
+.along-list .row { grid-template-columns: 1fr auto; gap: 8px; padding: 5px 0 5px 8px; }
 .along-list li:hover { background: var(--accent-soft); }
 .along-list .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .along-list small.warn { color: var(--warn-text); }
@@ -253,7 +289,7 @@ input[type="datetime-local"] {
 .stage-list .night .links { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; align-items: baseline; }
 .stage-list .night .links > * { white-space: nowrap; }
 .stage-list .night .links .link-btn { font-size: 12px; }
-.stage-list .night .links a { color: var(--accent); }
+.stage-list .night .links a { color: var(--accent-text); }
 .stay-settings { display: flex; flex-direction: column; gap: 6px; }
 .stay-settings input[type="number"] { width: 90px; }
 .stay-types { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
@@ -276,8 +312,9 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
 .route-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
 .route-list li {
   display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center;
-  padding: 6px 6px 6px 10px; border-radius: 8px; background: var(--surface); cursor: pointer; font-size: 13px;
+  padding-right: 6px; border-radius: 8px; background: var(--surface); font-size: 13px;
 }
+.route-list .row { padding: 6px 0 6px 10px; }
 .route-list li:hover { background: var(--accent-soft); }
 .route-list li.current { outline: 2px solid var(--accent); outline-offset: -2px; }
 .route-list .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -363,7 +400,7 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
   /* Tippflächen mind. 44 px (Apple-Richtlinie) */
   .icon-btn { width: 44px; min-height: 44px; }
   .route-list .tools button, .along-list .add { width: 44px; height: 44px; }
-  .along-list li { grid-template-columns: 1fr auto 44px; }
+  .along-list li { grid-template-columns: 1fr 44px; }
   .chips button { padding: 8px 12px; }
   .segmented button, .tabs button { min-height: 40px; }
   .link-btn { padding: 8px 0; }

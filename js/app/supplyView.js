@@ -7,7 +7,7 @@ import { regionAt, regionLabel } from '../regions.js';
 import { holidayAt } from '../holidays.js';
 import { storage, formatKm, formatClock, formatWeekday, formatDayDate } from '../utils.js';
 import { state, on, defaultDeparture } from './state.js';
-import { $, textLines, externalLink } from './dom.js';
+import { $, textLines, externalLink, rowButton, span } from './dom.js';
 import { map } from './mapView.js';
 import { syncUi } from './controls.js';
 import { replanStops } from './pipeline.js';
@@ -52,8 +52,9 @@ function stopPopup(s) {
 function renderStops() {
   const r = state.route;
   const stops = r?.stops || [];
-  map.setStops(stops.map(s => ({
+  map.setStops(stops.map((s, i) => ({
     id: s.poi.id, lat: s.poi.lat, lon: s.poi.lon, icon: s.icon, warn: isWarn(s), popup: stopPopup(s),
+    title: `Verpflegungsstopp ${i + 1}: ${s.poi.name || s.typeLabel}, km ${Math.round(s.along / 1000)}`,
   })));
 
   const box = $('#stops');
@@ -63,25 +64,23 @@ function renderStops() {
 
   $('#stop-list').replaceChildren(...stops.map(s => {
     const li = document.createElement('li');
-    li.title = hoursText(s) || '';
-    const ico = document.createElement('span');
-    ico.className = 'ico';
-    ico.textContent = s.icon;
-    const main = document.createElement('div');
-    const name = document.createElement('div');
-    name.className = 'name';
-    name.textContent = s.poi.name || s.typeLabel;
+    const ico = span('ico', s.icon);
+    ico.setAttribute('aria-hidden', 'true'); // Typ steht ohnehin im Text
+    const main = span('main');
     const detail = document.createElement('small');
     detail.textContent = `${s.poi.name ? s.typeLabel + ' · ' : ''}${STATE_LABELS[s.state]}${s.holiday ? ` · 🎉 ${s.holiday.name}` : ''}`;
     if (isWarn(s)) detail.className = 'warn';
-    main.append(name, detail);
-    const when = document.createElement('div');
-    when.className = 'when';
-    when.innerHTML = '<b></b><small></small>';
-    when.firstChild.textContent = formatKm(s.along);
-    when.lastChild.textContent = `ca. ${formatClock(s.eta)}`;
-    li.append(ico, main, when);
-    li.addEventListener('click', () => map.openStop(s.poi.id));
+    main.append(span('name', s.poi.name || s.typeLabel), detail);
+    const when = span('when');
+    const km = document.createElement('b');
+    km.textContent = formatKm(s.along);
+    const clock = document.createElement('small');
+    clock.textContent = `ca. ${formatClock(s.eta)}`;
+    when.append(km, clock);
+    // Ganze Zeile als Knopf: zeigt den Stopp auf der Karte (per Tastatur erreichbar)
+    const row = rowButton([ico, main, when], () => map.openStop(s.poi.id));
+    row.title = hoursText(s) || '';
+    li.append(row);
     return li;
   }));
 

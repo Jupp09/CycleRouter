@@ -13,12 +13,14 @@ import { route } from '../routing/index.js';
 import { generateLoop, generateOneWay } from '../generators.js';
 import { addStops, holidayContext, applyHolidays } from '../stops.js';
 import { warmRoute } from '../poiTiles.js';
+import { announce } from '../announce.js';
 import { isMultiDayCandidate, planStays, routeThroughStays } from '../stays.js';
 import { seededRandom } from '../utils.js';
 import { state, emit, provider, routeOpts, departureDate, activeVias, originRoute } from './state.js';
 import { setStatus } from './dom.js';
 import { map, relayout, drawRouteLine, updateMarkers } from './mapView.js';
 import { setPoint } from './waypoints.js';
+import { routeSummary } from './resultsView.js';
 
 let controller = null;
 
@@ -98,7 +100,7 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
         if (controller === ctrl) state.staysLoading = false;
       }
     }
-    if (!state.supply.enabled) return;
+    if (!state.supply.enabled) { announce(routeSummary(r)); return; }
 
     // Route steht schon auf der Karte; Stopps werden nachgeladen und die Route dann durch sie geführt
     setStatus('Verpflegungsstopps werden gesucht … (die Route ist bereits nutzbar)', 'loading');
@@ -110,6 +112,7 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
       if (signal.aborted) return;
       setStatus(null);
       showRoute(withStops, { fit: false });
+      announce(routeSummary(withStops)); // Screenreader: jetzt ist die Route mit Stopps fertig
 
       // Feiertage anwenden: meist ist keiner – dann bleiben die Stopps und bekommen nur ihre Regionen
       const ctx = await holidays;
@@ -121,6 +124,7 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
       if (signal.aborted) return;
       setStatus(null);
       showRoute(withStops, { fit: false });
+      announce(`Wegen eines Feiertags angepasst. ${routeSummary(withStops)}`);
     } catch (e) {
       if (e.name === 'AbortError' || signal.aborted) return;
       console.error(e);

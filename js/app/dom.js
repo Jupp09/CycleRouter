@@ -3,6 +3,7 @@
  * Das DOM wird von Hand gebaut (createElement/textContent); innerHTML nur für feste Gerüste, nie für
  * Daten aus OSM, vom Nutzer oder vom Server.
  */
+import { announce } from '../announce.js';
 
 export const $ = sel => document.querySelector(sel);
 
@@ -24,11 +25,15 @@ export const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
 
 // ---------- Statuszeile ----------
 
-/** Statuszeile oben im Panel; `kind`: undefined | 'loading' | 'error'. Leerer Text blendet sie aus. */
+/**
+ * Statuszeile oben im Panel; `kind`: undefined | 'loading' | 'error'. Leerer Text blendet sie aus.
+ * Der Text wird auch für Screenreader angesagt (Fehler sofort, sonst höflich).
+ */
 export function setStatus(text, kind) {
   ui.status.hidden = !text;
   ui.status.className = 'status' + (kind ? ' ' + kind : '');
   ui.status.textContent = text || '';
+  if (text) announce(text, { urgent: kind === 'error' });
 }
 
 /** Kurzer Hinweis in der Statuszeile, der nach einigen Sekunden verschwindet (wenn nichts anderes läuft). */
@@ -62,6 +67,57 @@ export function linkButton(text, onClick, title = '') {
 
 /** Einfache Textzeilen als <div>-Elemente (z. B. für Popups). */
 export const textLines = lines => lines.map(t => { const d = document.createElement('div'); d.textContent = t; return d; });
+
+/**
+ * Listenzeile als Knopf (per Tastatur erreichbar). `parts`: Inhalt als <span>/<small> – ein <button> darf
+ * keine <div> enthalten.
+ */
+export function rowButton(parts, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'row';
+  b.append(...parts);
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+/** <span> mit Klasse und Text. */
+export function span(className, text = '') {
+  const s = document.createElement('span');
+  if (className) s.className = className;
+  s.textContent = text;
+  return s;
+}
+
+// ---------- Umschalter (role="radiogroup") ----------
+
+/**
+ * Tastaturbedienung wie bei Optionsfeldern: nur der gewählte Knopf ist per Tab erreichbar, Pfeiltasten
+ * (und Pos1/Ende) wechseln die Auswahl. Der gewählte Knopf wird über aria-checked erkannt – ändert ihn
+ * der Code (syncUi), zieht ein MutationObserver die Tab-Reihenfolge nach.
+ */
+function radioGroup(group) {
+  const buttons = () => [...group.querySelectorAll('[role="radio"]')];
+  const sync = () => {
+    const bs = buttons();
+    const checked = bs.find(b => b.getAttribute('aria-checked') === 'true') || bs[0];
+    for (const b of bs) b.tabIndex = b === checked ? 0 : -1;
+  };
+  new MutationObserver(sync).observe(group, { subtree: true, attributes: true, attributeFilter: ['aria-checked'] });
+  sync();
+  group.addEventListener('keydown', e => {
+    const bs = buttons();
+    const i = bs.indexOf(document.activeElement);
+    if (i < 0) return;
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    const j = step ? (i + step + bs.length) % bs.length : e.key === 'Home' ? 0 : e.key === 'End' ? bs.length - 1 : -1;
+    if (j < 0) return;
+    e.preventDefault();
+    bs[j].focus();
+    bs[j].click();
+  });
+}
+for (const g of document.querySelectorAll('[role="radiogroup"]')) radioGroup(g);
 
 // ---------- Rückfrage ----------
 

@@ -6,8 +6,9 @@ import { PLACE_CATEGORIES, searchAlongRoute } from '../placeSearch.js';
 import { openingAt } from '../stops.js';
 import { arrivalAt } from '../timeline.js';
 import { haversine, debounce, formatClock } from '../utils.js';
+import { announce } from '../announce.js';
 import { state, on, departureDate } from './state.js';
-import { $ } from './dom.js';
+import { $, rowButton, span } from './dom.js';
 import { map } from './mapView.js';
 import { addVia } from './waypoints.js';
 
@@ -28,7 +29,7 @@ function renderAlongChips() {
     b.type = 'button';
     b.textContent = `${c.icon} ${c.label}`;
     b.setAttribute('aria-pressed', String(key === alongCategory));
-    b.addEventListener('click', () => searchAlong(key === alongCategory ? null : key));
+    b.addEventListener('click', () => searchAlong(key === alongCategory ? null : key, { spoken: true }));
     return b;
   }));
 }
@@ -73,34 +74,37 @@ function addAlongResult(res) {
 function renderAlongResults() {
   map.setSearchResults(alongResults.map(r => ({
     id: r.id, lat: r.lat, lon: r.lon, icon: PLACE_CATEGORIES[r.category].icon, popup: alongPopup(r),
+    title: `${PLACE_CATEGORIES[r.category].label}: ${r.name}, km ${(r.along / 1000).toFixed(1)}`,
   })));
   $('#along-list').replaceChildren(...alongResults.map(r => {
     const li = document.createElement('li');
-    const main = document.createElement('div');
-    const name = document.createElement('div');
-    name.className = 'name';
-    name.textContent = r.name;
+    const main = span('main');
     const detail = document.createElement('small');
     const op = openingText(r);
     detail.textContent = `${op.text} · ${offsetText(r)}`;
     if (op.warn) detail.className = 'warn';
-    main.append(name, detail);
-    const km = document.createElement('span');
-    km.className = 'km';
-    km.textContent = `km ${(r.along / 1000).toFixed(1)}`;
+    main.append(span('name', r.name), detail);
+    const km = span('km', `km ${(r.along / 1000).toFixed(1)}`);
+    // Zeile zeigt den Ort auf der Karte, „+“ übernimmt ihn – zwei getrennte Knöpfe (keine Knöpfe ineinander)
+    const row = rowButton([main, km], () => map.openSearchResult(r.id));
     const add = document.createElement('button');
+    add.type = 'button';
     add.className = 'add';
     add.textContent = '+';
     add.title = 'Als Zwischenstopp hinzufügen';
-    add.addEventListener('click', e => { e.stopPropagation(); addAlongResult(r); });
-    li.append(main, km, add);
-    li.addEventListener('click', () => map.openSearchResult(r.id));
+    add.setAttribute('aria-label', `${r.name} als Zwischenstopp hinzufügen`);
+    add.addEventListener('click', () => addAlongResult(r));
+    li.append(row, add);
     return li;
   }));
 }
 
-/** Suche für eine Kategorie starten; `null` beendet die Suche und entfernt die Treffer. */
-export async function searchAlong(category) {
+/**
+ * Suche für eine Kategorie starten; `null` beendet die Suche und entfernt die Treffer.
+ * `spoken`: Ergebnis für Screenreader ansagen (nur wenn der Nutzer selbst gesucht hat, nicht beim
+ * automatischen Aktualisieren nach einer Routenänderung).
+ */
+export async function searchAlong(category, { spoken = false } = {}) {
   alongController?.abort();
   alongCategory = category;
   alongResults = [];
@@ -124,14 +128,16 @@ export async function searchAlong(category) {
       const t = eta(r.along);
       return { ...r, eta: t, opening: r.poi ? openingAt(r.poi, t) : { state: 'unknown', typical: false, hours: '' } };
     });
-    hint.textContent = (alongResults.length
+    const summary = alongResults.length
       ? `${alongResults.length} × ${c.label} bis 1 km neben der Route – mit „+“ als Zwischenstopp übernehmen.`
-      : `Kein ${c.label} bis 1 km neben der Route gefunden.`)
+      : `Kein ${c.label} bis 1 km neben der Route gefunden.`;
+    hint.textContent = summary
       + (found.partial ? ' Einzelne Abschnitte konnten nicht durchsucht werden – ggf. erneut versuchen.' : '')
       + (found.source === 'photon' ? ' Öffnungszeiten für diesen Abschnitt werden gerade nachgeladen und stehen beim nächsten Mal zur Verfügung.' : '');
     renderAlongResults();
+    if (spoken) announce(summary);
   } catch (e) {
-    if (e.name !== 'AbortError') hint.textContent = e.message;
+    if (e.name !== 'AbortError') { hint.textContent = e.message; if (spoken) announce(e.message, { urgent: true }); }
   }
 }
 
