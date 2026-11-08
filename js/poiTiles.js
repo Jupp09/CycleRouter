@@ -120,6 +120,9 @@ async function fetchTilesFromServer(keys, layer, signal, cacheOnly = false) {
     console.warn(`Server kennt die Ebene „${layer}“ nicht – lade direkt von Overpass (Server neu starten!)`);
     return null;
   }
+  // Overpass-Kontingent dieses Nutzers auf dem Server erschöpft (server.mjs) → selbst bei Overpass laden;
+  // der Cache des Servers bleibt für alles andere nutzbar
+  if (res.status === 429) return null;
   if (!res.ok) throw new Error(data.error || `Server-Fehler ${res.status}`);
   return new Map(Object.entries(data.tiles));
 }

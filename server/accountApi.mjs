@@ -5,6 +5,8 @@
 //   POST   /api/account/login          {username, password}
 //   POST   /api/account/logout
 //   POST   /api/account/delete         {password}   – Konto samt allen Daten löschen
+//   POST   /api/account/password       {password, newPassword} – Passwort ändern, andere Geräte abmelden
+//   POST   /api/account/logout-others  → {count}    – alle anderen Sitzungen beenden
 //   GET    /api/settings               → {data, updatedAt}
 //   PUT    /api/settings               {data}
 //   GET    /api/routes                 → Liste (ohne Geometrie)
@@ -18,8 +20,8 @@
 import { randomBytes } from 'node:crypto';
 import { query, dbEnabled } from './db.mjs';
 import {
-  hashPassword, verifyPassword, burnPasswordCheck, validateCredentials,
-  createSession, destroySession, currentUser, limitReached, countAttempt, clientIp,
+  hashPassword, verifyPassword, burnPasswordCheck, validateCredentials, passwordProblem,
+  createSession, destroySession, destroyOtherSessions, currentUser, limitReached, countAttempt, clientIp,
 } from './auth.mjs';
 import { SYNC_KEYS, MODES, BIKES } from '../js/shared.js';
 import { HttpError, sendJson, readBody } from './http.mjs';
@@ -101,6 +103,20 @@ const toListItem = r => ({
   shared: !!r.share_token, shareToken: r.share_token, createdAt: r.created_at, updatedAt: r.updated_at,
 });
 
+// Speicher je Konto: 500 Routen à bis zu 8 MB wären 4 GB – mit wenigen Konten ließe sich die Platte füllen.
+// Eine lange Mehrtagestour braucht etwa 1–3 MB, 50 MB reichen also für viele Touren.
+const MAX_ROUTES = 500;
+const QUOTA_BYTES = 50 * 1024 * 1024;
+
+/** Passt `addBytes` (neue Routendaten) noch ins Kontingent? `replacingId`: deren alte Daten zählen nicht. */
+async function checkQuota(user, addBytes, replacingId = null) {
+  const rows = await query('SELECT COALESCE(SUM(LENGTH(data)), 0) AS used FROM routes WHERE user_id = ? AND id <> ?',
+    [user.id, replacingId ?? 0]);
+  if (Number(rows[0].used) + addBytes > QUOTA_BYTES) {
+    throw new HttpError(413, `Speicher voll: Gespeicherte Routen dürfen zusammen höchstens ${QUOTA_BYTES / 1024 / 1024} MB belegen – bitte alte löschen.`);
+  }
+}
+
 async function ownRoute(user, id) {
   const rows = await query('SELECT * FROM routes WHERE id = ? AND user_id = ?', [id, user.id]);
   if (!rows.length) throw new HttpError(404, 'Route nicht gefunden');
@@ -135,7 +151,7 @@ async function route(req, res, url) {
     const ip = clientIp(req);
     if (limitReached('register', ip)) throw new HttpError(429, 'Zu viele neue Konten von diesem Anschluss – bitte später erneut.');
     const { username, password } = await readJson(req, 4096);
-    const invalid = validateCredentials(username, password);
+    const invalid = validateCredentials(username, password, { isNew: true });
     if (invalid) throw new HttpError(400, invalid);
     const exists = await query('SELECT id FROM users WHERE username = ?', [username]);
     if (exists.length) throw new HttpError(409, 'Dieser Benutzername ist schon vergeben.');
@@ -149,11 +165,15 @@ async function route(req, res, url) {
     const ip = clientIp(req);
     if (limitReached('login', ip)) throw new HttpError(429, 'Zu viele fehlgeschlagene Anmeldungen – bitte in 15 Minuten erneut.');
     const { username, password } = await readJson(req, 4096);
+    if (limitReached('loginUser', username)) {
+      throw new HttpError(429, 'Zu viele fehlgeschlagene Anmeldungen für dieses Konto – bitte in einer Stunde erneut.');
+    }
     const invalid = validateCredentials(username, password);
     const rows = invalid ? [] : await query('SELECT id, username, pw_hash FROM users WHERE username = ?', [username]);
     const ok = rows.length ? await verifyPassword(password, rows[0].pw_hash) : (await burnPasswordCheck(String(password || '')), false);
     if (!ok) {
       countAttempt('login', ip);
+      if (typeof username === 'string' && username.length <= 40) countAttempt('loginUser', username);
       throw new HttpError(401, 'Benutzername oder Passwort falsch.');
     }
     await createSession(req, res, rows[0].id);
@@ -183,6 +203,29 @@ async function route(req, res, url) {
     return json(res, 200, { ok: true });
   }
 
+  // Passwort ändern: altes Passwort nötig; danach sind alle anderen Geräte abgemeldet (falls das alte
+  // Passwort oder ein Sitzungs-Cookie in fremde Hände geraten ist).
+  if (pathname === '/api/account/password' && m === 'POST') {
+    const ip = clientIp(req);
+    if (limitReached('login', ip)) throw new HttpError(429, 'Zu viele fehlgeschlagene Versuche – bitte in 15 Minuten erneut.');
+    const { password, newPassword } = await readJson(req, 4096);
+    if (typeof newPassword !== 'string') throw new HttpError(400, 'Neues Passwort fehlt.');
+    const rows = await query('SELECT pw_hash FROM users WHERE id = ?', [user.id]);
+    if (!rows.length || !await verifyPassword(String(password || ''), rows[0].pw_hash)) {
+      countAttempt('login', ip);
+      throw new HttpError(401, 'Bisheriges Passwort falsch.');
+    }
+    const problem = passwordProblem(newPassword, user.username);
+    if (problem) throw new HttpError(400, problem);
+    await query('UPDATE users SET pw_hash = ? WHERE id = ?', [await hashPassword(newPassword), user.id]);
+    const count = await destroyOtherSessions(req, user.id);
+    return json(res, 200, { ok: true, count });
+  }
+
+  if (pathname === '/api/account/logout-others' && m === 'POST') {
+    return json(res, 200, { count: await destroyOtherSessions(req, user.id) });
+  }
+
   if (pathname === '/api/settings') {
     if (m === 'GET') {
       const rows = await query('SELECT data, updated_at FROM settings WHERE user_id = ?', [user.id]);
@@ -205,7 +248,8 @@ async function route(req, res, url) {
     if (m === 'POST') {
       const r = cleanRoute(await readJson(req, 8 * 1024 * 1024));
       const count = await query('SELECT COUNT(*) AS n FROM routes WHERE user_id = ?', [user.id]);
-      if (count[0].n >= 500) throw new HttpError(409, 'Maximal 500 gespeicherte Routen – bitte alte löschen.');
+      if (count[0].n >= MAX_ROUTES) throw new HttpError(409, `Maximal ${MAX_ROUTES} gespeicherte Routen – bitte alte löschen.`);
+      await checkQuota(user, Buffer.byteLength(r.data));
       const result = await query(
         'INSERT INTO routes (user_id, name, mode, bike, distance, ascent, data) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [user.id, r.name, r.mode, r.bike, r.distance, r.ascent, r.data]);
@@ -231,6 +275,7 @@ async function route(req, res, url) {
       if (m === 'GET') return json(res, 200, { ...toListItem(row), data: fromJson(row.data) });
       if (m === 'PATCH') {
         const r = cleanRoute(await readJson(req, 8 * 1024 * 1024), true);
+        if (r.data) await checkQuota(user, Buffer.byteLength(r.data), id);
         const cols = Object.keys(r);
         if (cols.length) {
           await query(`UPDATE routes SET ${cols.map(c => `${c} = ?`).join(', ')} WHERE id = ?`, [...cols.map(c => r[c]), id]);

@@ -8,7 +8,8 @@
  */
 import { providers, withStats } from '../routing/index.js';
 import {
-  account, SYNC_KEYS, loadAccount, login, register, logout, deleteAccount, fetchSettings, pushSettings,
+  account, SYNC_KEYS, loadAccount, login, register, logout, deleteAccount, changePassword, logoutOthers,
+  fetchSettings, pushSettings,
   listRoutes, getRoute, createRoute, updateRoute, deleteRoute, shareRoute, unshareRoute, getSharedRoute, shareUrl,
 } from '../account.js';
 import { reverse } from '../geocode.js';
@@ -136,7 +137,7 @@ async function shareCurrentRoute() {
   if (isMobile && navigator.share) {
     try { await navigator.share({ title: saved.name, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
   }
-  flashStatus(await copyText(url) ? 'Link kopiert – wer ihn öffnet, sieht die Route (auch ohne Konto).' : 'Link erstellt – siehe unten.');
+  flashStatus(await copyText(url) ? 'Link kopiert – wer ihn öffnet, sieht die Route samt Start und Ziel (auch ohne Konto).' : 'Link erstellt – siehe unten.');
 }
 
 async function revokeShareLink() {
@@ -269,8 +270,9 @@ function renderAccount(message = '', isError = false) {
   const loggedIn = !!account.user;
   $('#account-out').hidden = loggedIn;
   $('#account-in').hidden = !loggedIn;
-  $('#btn-delete-account').hidden = !loggedIn;
+  for (const id of ['#btn-delete-account', '#btn-change-password', '#btn-logout-others']) $(id).hidden = !loggedIn;
   $('#account-delete').hidden = true;
+  $('#account-password').hidden = true;
   if (loggedIn) $('#account-name').textContent = account.user.username;
   const msg = $('#account-msg');
   msg.textContent = message;
@@ -314,6 +316,36 @@ for (const id of ['#account-user', '#account-pass']) {
 $('#btn-logout').addEventListener('click', async () => {
   try { await logout(); } catch { account.user = null; }
   signedOut('Abgemeldet. Die Einstellungen bleiben auf diesem Gerät erhalten.');
+});
+
+// Passwort ändern: Felder einblenden, dann bestätigen. Der Server meldet danach alle anderen Geräte ab.
+function showPasswordForm(show) {
+  $('#account-password').hidden = !show;
+  $('#btn-change-password').hidden = show;
+  if (!show) { $('#account-pass-old').value = ''; $('#account-pass-new').value = ''; }
+}
+const sessionsText = n => (n === 1 ? '1 anderes Gerät wurde abgemeldet.' : n ? `${n} andere Geräte wurden abgemeldet.` : '');
+$('#btn-change-password').addEventListener('click', () => { showPasswordForm(true); $('#account-pass-old').focus(); });
+$('#btn-password-cancel').addEventListener('click', () => renderAccount());
+for (const id of ['#account-pass-old', '#account-pass-new']) {
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#btn-password-confirm').click(); } });
+}
+$('#btn-password-confirm').addEventListener('click', async () => {
+  let count;
+  try {
+    count = await changePassword($('#account-pass-old').value, $('#account-pass-new').value);
+  } catch (e) {
+    renderAccount(e.message, true);
+    showPasswordForm(true);
+    return;
+  }
+  renderAccount(`Passwort geändert. ${sessionsText(count)}`.trim());
+});
+$('#btn-logout-others').addEventListener('click', async () => {
+  try {
+    const count = await logoutOthers();
+    renderAccount(count ? sessionsText(count) : 'Auf keinem anderen Gerät angemeldet.');
+  } catch (e) { renderAccount(e.message, true); }
 });
 
 // Löschen in zwei Schritten: erst das Passwortfeld zeigen, dann bestätigen

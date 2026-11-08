@@ -200,8 +200,10 @@ export async function tilesNeedingFetch(keys, layer) {
  * Fehlendes wird bei Overpass geladen – je Ebene nur das, was fehlt, mehrere Ebenen derselben Kacheln in einer
  * Abfrage. Mit `cacheOnly` wird auf Fehlendes nicht gewartet: Es wird im Hintergrund geladen und in `missing`
  * gemeldet (fehlt in `tiles`). Nur Anfragen ohne `cacheOnly` haben Vorrang (ein Nutzer wartet darauf).
+ * `allowFetch(n)`: Kontingent des Nutzers – darf der Server n Kacheln × Ebenen neu bei Overpass laden?
+ * Wenn nicht, wird nichts geladen und {limited: n} zurückgegeben.
  */
-export async function getTiles(keys, { layers = ['supply'], log, cacheOnly = false } = {}) {
+export async function getTiles(keys, { layers = ['supply'], log, cacheOnly = false, allowFetch } = {}) {
   await migrated;
   const now = Date.now();
   const tiles = Object.fromEntries(keys.map(k => [k, []]));
@@ -223,6 +225,7 @@ export async function getTiles(keys, { layers = ['supply'], log, cacheOnly = fal
   }));
 
   const only = sel => new Map([...sel].filter(([, ks]) => ks.length));
+  if (stats.fetched && allowFetch && !allowFetch(stats.fetched)) return { limited: stats.fetched };
 
   // Abgelaufenes: nicht abwarten – der Aufrufer bekommt den alten Stand sofort
   const old = only(stale);

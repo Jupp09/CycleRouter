@@ -60,14 +60,17 @@ Einrichtung:
 ```sql
 CREATE DATABASE cyclerouter CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'cyclerouter'@'localhost' IDENTIFIED BY 'ein-sicheres-passwort';
-GRANT ALL ON cyclerouter.* TO 'cyclerouter'@'localhost';
+-- Nur die Rechte, die der Server braucht (Tabellen anlegen, lesen, schreiben) – kein ALL, kein FILE
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES ON cyclerouter.* TO 'cyclerouter'@'localhost';
 ```
 
 Dann `.env.example` nach `.env` kopieren, die Zugangsdaten eintragen und `npm install` sowie `npm start` ausführen. Die Tabellen legt der Server beim Start selbst an ([server/db.mjs](server/db.mjs)). Ohne `DB_HOST` läuft CycloRouter wie gewohnt ohne Konten.
 
 MySQL 8 meldet Benutzer standardmäßig per `caching_sha2_password` an. Läuft die Datenbank auf demselben Rechner, funktioniert das automatisch. Bei einer Datenbank auf einem anderen Rechner `DB_SSL=true` (oder `skip-verify` bei selbst signiertem Zertifikat) setzen. Bei Verbindungsproblemen nennt die Startmeldung des Servers die Ursache und die passende Einstellung.
 
-Sicherheit: Passwörter werden mit scrypt gehasht, Sitzungen laufen über ein HttpOnly-Cookie (in der Datenbank nur als Hash), ändernde Anfragen müssen JSON sein und von derselben Seite kommen, fehlgeschlagene Anmeldungen werden je IP begrenzt. Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Proxy wie Caddy oder nginx) – dann wird das Cookie automatisch als `Secure` gesetzt.
+Sicherheit: Passwörter werden mit scrypt gehasht (verbreitete Passwörter werden abgelehnt), Sitzungen laufen über ein HttpOnly-Cookie (in der Datenbank nur als Hash), ändernde Anfragen müssen JSON sein und von derselben Seite kommen, fehlgeschlagene Anmeldungen werden je IP und je Benutzername begrenzt. „Passwort ändern“ und „Auf allen anderen Geräten abmelden“ beenden fremde Sitzungen. Gespeicherte Routen dürfen je Konto zusammen höchstens 50 MB belegen. Der Server sendet eine Content-Security-Policy und weitere Sicherheits-Header, Leaflet wird mit Integritätsprüfung (SRI) geladen.
+
+Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Proxy wie Caddy oder nginx). Dann `PUBLIC_URL=https://…` setzen: Das Cookie ist damit immer `Secure`, und der Server sendet HSTS. Hinter einem Proxy (z. B. Plesk/Passenger) einmal mit `DEBUG_IP=1` starten und im Log prüfen, ob die echten Nutzer-IPs erkannt werden – alle Begrenzungen hängen daran (siehe [.env.example](.env.example)).
 
 ## Routing
 

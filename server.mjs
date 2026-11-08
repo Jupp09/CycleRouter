@@ -15,6 +15,8 @@ import { handleAccountApi } from './server/accountApi.mjs';
 import { clientIp } from './server/auth.mjs';
 import { sendJson as json, readBody } from './server/http.mjs';
 import { initExtract } from './server/extract.mjs';
+import { setSecurityHeaders, contentSecurityPolicy } from './server/security.mjs';
+import { createLimiter } from './server/rateLimit.mjs';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 8000;
@@ -31,6 +33,15 @@ const TYPES = {
   '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.brf': 'text/plain; charset=utf-8',
 };
+
+/**
+ * Overpass-Kontingent je IP: Kacheln × Ebenen, die der Server für einen Nutzer neu bei Overpass laden darf.
+ * Ohne Grenze könnte jemand den Server in Dauerschleife Overpass abfragen lassen – Overpass sperrt dann
+ * die Server-IP, und die Suche fällt für alle aus. Eine lange Mehrtagestour braucht ~1500, das Kontingent
+ * reicht also für normale Nutzung bequem. Aus dem Cache ist alles unbegrenzt.
+ * Ist es aufgebraucht, antwortet der Server mit 429 und der Browser lädt selbst von Overpass (poiTiles.js).
+ */
+const overpassBudget = createLimiter({ windowMs: 60 * 60 * 1000, max: 5000 });
 
 /**
  * Verpflegungsstellen je Kachel und Datenebene: POST {tiles: [Kachelschlüssel], layers?, cacheOnly?}
@@ -51,16 +62,24 @@ async function handlePois(req, res) {
     return json(res, 400, { error: 'Ungültige Datenebene' });
   }
   const t0 = Date.now();
+  const ip = clientIp(req);
   try {
-    const { tiles, stats, missing } = await getTiles([...new Set(keys)], {
+    const result = await getTiles([...new Set(keys)], {
       layers: [...new Set(layers)], cacheOnly: cacheOnly === true, log: msg => console.log(msg),
+      allowFetch: n => overpassBudget.fits(ip, n) && (overpassBudget.add(ip, n), true),
     });
+    if (result.limited) {
+      console.log(`/api/pois [${layers.join(',')}]: Overpass-Kontingent für einen Nutzer erschöpft (${result.limited} Kacheln fehlen)`);
+      return json(res, 429, { error: 'Zu viele neue Kacheln – bitte direkt bei Overpass laden.' }, { 'Retry-After': '3600' });
+    }
+    const { tiles, stats, missing } = result;
     console.log(`/api/pois [${layers.join(',')}]: ${keys.length} Kacheln (${stats.cached} Cache, ${stats.stale} abgelaufen, `
       + `${stats.fetched} neu) in ${Date.now() - t0} ms`);
     json(res, 200, { tiles, missing });
   } catch (e) {
+    // Details nur ins Log – die Antwort verrät keine Interna (Overpass-Adressen, Pfade …)
     console.error('/api/pois:', e.message);
-    json(res, 502, { error: e.message });
+    json(res, 502, { error: 'Verpflegungsdaten sind gerade nicht abrufbar.' });
   }
 }
 
@@ -112,6 +131,7 @@ async function handleWarmRoute(req, res) {
 const PUBLIC = [/^\/index\.html$/, /^\/manifest\.webmanifest$/, /^\/(js|css|profiles|assets)\/[\w./-]+$/];
 
 createServer(async (req, res) => {
+  setSecurityHeaders(req, res);
   const url = new URL(req.url, 'http://localhost');
   let path;
   try { path = decodeURIComponent(url.pathname); } catch { res.writeHead(400).end(); return; }
@@ -127,6 +147,7 @@ createServer(async (req, res) => {
   }
   try {
     const body = await readFile(file);
+    if (extname(file) === '.html') res.setHeader('Content-Security-Policy', contentSecurityPolicy(body.toString('utf8'), req));
     res.writeHead(200, { 'Content-Type': TYPES[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(body);
   } catch {

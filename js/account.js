@@ -59,7 +59,16 @@ export async function deleteAccount(password) {
   account.user = null;
 }
 
-export const fetchSettings = () => api('GET', 'settings');
+/** Passwort ändern – meldet alle anderen Geräte ab. → Anzahl beendeter Sitzungen */
+export async function changePassword(password, newPassword) {
+  return (await api('POST', 'account/password', { password, newPassword })).count;
+}
+/** Alle anderen Sitzungen beenden. → Anzahl */
+export async function logoutOthers() {
+  return (await api('POST', 'account/logout-others', {})).count;
+}
+
+export const fetchSettings =() => api('GET', 'settings');
 export const pushSettings = data => api('PUT', 'settings', { data });
 
 export const listRoutes = async () => (await api('GET', 'routes')).routes;
