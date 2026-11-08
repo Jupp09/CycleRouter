@@ -47,11 +47,21 @@ function named(marker, name) {
   marker.once('add', () => marker.getElement()?.setAttribute('aria-label', name));
   return marker;
 }
+const DASH = { dashed: '8 12', dotted: '0 11' };
 const KIND_NAME = { start: 'Start', end: 'Ziel', via: 'Wegpunkt', manual: 'Zwischenstopp' };
+
+/**
+ * „Bewegung reduzieren“ im System: Kartensprünge (Route einpassen, zu einem Ort springen) ohne
+ * Flug-Animation. Bei jedem Aufruf neu abgefragt, damit eine Änderung der Systemeinstellung sofort gilt.
+ */
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const motion = () => ({ animate: !reduceMotion.matches });
 
 export function createMap(el, { onClick, onMarkerDrag }) {
   const view = storage.get('view', { center: [51.1657, 10.4515], zoom: 6 });
-  const map = L.map(el, { zoomControl: false }).setView(view.center, view.zoom);
+  // Auch Zoomen per Mausrad/Knopf springt dann, statt zu animieren (gilt ab dem nächsten Laden der Seite)
+  const calm = reduceMotion.matches ? { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false } : {};
+  const map = L.map(el, { zoomControl: false, ...calm }).setView(view.center, view.zoom);
   L.control.zoom({ position: 'topright' }).addTo(map);
   L.control.scale({ imperial: false, position: 'bottomright' }).addTo(map);
 
@@ -113,9 +123,15 @@ export function createMap(el, { onClick, onMarkerDrag }) {
         return;
       }
       let run = null;
-      const flush = () => run && L.polyline(latlngs.slice(run.from, run.to + 1), {
-        ...line, color: CATEGORIES[colorBy][run.key].color, weight: 6, opacity: 1,
-      }).addTo(routeLayer);
+      const flush = () => {
+        if (!run) return;
+        const cat = CATEGORIES[colorBy][run.key];
+        // Gestrichelt/gepunktet: In den Lücken scheint der weiße Halo durch. Mit runden Enden wird jeder
+        // Strich um die Linienbreite länger – daher die kurzen Strich- und langen Lückenwerte.
+        L.polyline(latlngs.slice(run.from, run.to + 1), {
+          ...line, color: cat.color, weight: 6, opacity: 1, dashArray: DASH[cat.dash],
+        }).addTo(routeLayer);
+      };
       for (const s of segments) {
         if (run && run.key === s[colorBy]) { run.to = s.to; continue; }
         flush();
@@ -161,7 +177,7 @@ export function createMap(el, { onClick, onMarkerDrag }) {
     openStay(id) {
       const m = stayMarkers.get(id);
       if (!m) return;
-      map.setView(m.getLatLng(), Math.max(map.getZoom(), 14));
+      map.setView(m.getLatLng(), Math.max(map.getZoom(), 14), motion());
       m.openPopup();
     },
 
@@ -185,7 +201,7 @@ export function createMap(el, { onClick, onMarkerDrag }) {
     openSearchResult(id) {
       const m = searchMarkers.get(id);
       if (!m) return;
-      map.setView(m.getLatLng(), Math.max(map.getZoom(), 15));
+      map.setView(m.getLatLng(), Math.max(map.getZoom(), 15), motion());
       m.openPopup();
     },
 
@@ -194,18 +210,18 @@ export function createMap(el, { onClick, onMarkerDrag }) {
     openStop(id) {
       const m = stopMarkers.get(id);
       if (!m) return;
-      map.setView(m.getLatLng(), Math.max(map.getZoom(), 14));
+      map.setView(m.getLatLng(), Math.max(map.getZoom(), 14), motion());
       m.openPopup();
     },
 
     fitRoute(coords) {
       const bounds = L.latLngBounds(coords.map(c => [c[0], c[1]]));
       const mobile = window.matchMedia('(max-width: 800px)').matches;
-      map.fitBounds(bounds, { padding: mobile ? [20, 20] : [50, 50] });
+      map.fitBounds(bounds, { padding: mobile ? [20, 20] : [50, 50], ...motion() });
     },
 
     flyTo(point, zoom = 13) {
-      map.setView([point.lat, point.lon], Math.max(map.getZoom(), zoom));
+      map.setView([point.lat, point.lon], Math.max(map.getZoom(), zoom), motion());
     },
 
     showHover(point) {

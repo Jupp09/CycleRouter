@@ -1,24 +1,27 @@
 // Einteilung der Route nach Untergrund und Wegtyp.
 // Ein Routenabschnitt ist {from, to, surface, waytype, estimated} mit Indizes in route.coords.
 
+// Farben nach der Okabe-Ito-Palette: auch bei Rot-Grün-Schwäche (Protanopie, Deuteranopie) unterscheidbar
+// (simuliert nach Machado 2009, kleinster Abstand ΔE ≈ 18). Unbefestigtes ist zusätzlich gestrichelt
+// (`dash`), die Fähre gepunktet – so trägt nicht die Farbe allein die Information.
 export const CATEGORIES = {
   surface: {
     asphalt: { label: 'Asphalt/Beton', color: '#64748b' },
-    paving: { label: 'Pflaster', color: '#b45309' },
-    fine_gravel: { label: 'Feiner Schotter', color: '#eab308' },
-    gravel: { label: 'Schotter', color: '#f97316' },
-    natural: { label: 'Naturweg', color: '#65a30d' },
+    paving: { label: 'Pflaster', color: '#882255' },
+    fine_gravel: { label: 'Feiner Schotter', color: '#e6c300', dash: 'dashed' },
+    gravel: { label: 'Schotter', color: '#d55e00', dash: 'dashed' },
+    natural: { label: 'Naturweg', color: '#009e73', dash: 'dashed' },
     unknown: { label: 'Unbekannt', color: '#cbd5e1' },
   },
   waytype: {
-    cycleway: { label: 'Radweg', color: '#2563eb' },
-    roadlane: { label: 'Straße mit Radspur', color: '#06b6d4' },
-    main: { label: 'Hauptstraße', color: '#dc2626' },
-    minor: { label: 'Nebenstraße', color: '#f59e0b' },
+    cycleway: { label: 'Radweg', color: '#0072b2' },
+    roadlane: { label: 'Straße mit Radspur', color: '#56b4e9' },
+    main: { label: 'Hauptstraße', color: '#d55e00' },
+    minor: { label: 'Nebenstraße', color: '#e69f00' },
     residential: { label: 'Wohn-/Anliegerstraße', color: '#94a3b8' },
-    track: { label: 'Wirtschafts-/Feldweg', color: '#a16207' },
-    path: { label: 'Pfad/Fußweg', color: '#16a34a' },
-    ferry: { label: 'Fähre', color: '#a855f7' },
+    track: { label: 'Wirtschafts-/Feldweg', color: '#8c5a2b', dash: 'dashed' },
+    path: { label: 'Pfad/Fußweg', color: '#009e73', dash: 'dashed' },
+    ferry: { label: 'Fähre', color: '#882255', dash: 'dotted' },
     other: { label: 'Sonstiges', color: '#cbd5e1' },
   },
 };

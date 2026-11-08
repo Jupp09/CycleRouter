@@ -72,7 +72,8 @@ function renderBreakdown() {
   $('#breakdown-legend').replaceChildren(...items.map(it => {
     const li = document.createElement('li');
     const dot = document.createElement('i');
-    dot.style.background = it.color;
+    dot.style.setProperty('--c', it.color);
+    if (it.dash) dot.className = it.dash;
     const cell = (cls, text) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = text; return s; };
     li.append(dot, cell('', it.label), cell('km', formatKm(it.distance)), cell('pct', `${Math.round(it.share * 100)} %`));
     return li;

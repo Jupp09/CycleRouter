@@ -70,10 +70,10 @@ html, body { height: 100%; margin: 0; }
 
 body {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 22.5rem 1fr;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 0.875rem/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
 button, input, select { font: inherit; color: inherit; }
@@ -91,14 +91,14 @@ button, input, select { font: inherit; color: inherit; }
 }
 
 .brand { display: flex; align-items: center; gap: 10px; }
-.brand h1 { flex: 1; margin: 0; font-size: 20px; letter-spacing: -.01em; }
+.brand h1 { flex: 1; margin: 0; font-size: 1.25rem; letter-spacing: -.01em; }
 .brand-icon { width: 30px; height: 30px; fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
 
 .group { display: flex; flex-direction: column; gap: 10px; }
 
 .field { display: flex; flex-direction: column; gap: 4px; }
 .field.inline { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
-.field .label, .field.inline > span { font-size: 12px; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.field .label, .field.inline > span { font-size: 0.75rem; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 6px; }
 .field output { color: var(--text); font-weight: 600; }
 
 input[type="text"], input[type="password"], input[type="number"], select {
@@ -158,9 +158,9 @@ h2.label { margin: 0; }
   box-shadow: var(--shadow); z-index: 1000; max-height: 280px; overflow-y: auto;
 }
 .suggestions li { padding: 7px 8px; border-radius: 6px; cursor: pointer; }
-.suggestions li small { display: block; color: var(--muted); font-size: 12px; }
+.suggestions li small { display: block; color: var(--muted); font-size: 0.75rem; }
 .suggestions li:hover, .suggestions li.active { background: var(--accent-soft); }
-.suggestions li.notice { color: var(--muted); font-size: 12px; }
+.suggestions li.notice { color: var(--muted); font-size: 0.75rem; }
 
 button {
   padding: 8px 12px;
@@ -190,10 +190,10 @@ button.primary:hover { background: var(--accent-hover); }
 .actions { display: flex; gap: 8px; }
 .actions button { flex: 1; }
 
-.hint { margin: 0; font-size: 12px; color: var(--muted); }
+.hint { margin: 0; font-size: 0.75rem; color: var(--muted); }
 .hint a { color: var(--accent-text); }
 
-.status { padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); font-size: 13px; display: flex; gap: 8px; align-items: center; }
+.status { padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); font-size: 0.8125rem; display: flex; gap: 8px; align-items: center; }
 .status.error { background: var(--error-bg); color: var(--error-text); }
 .status.loading::before {
   content: ""; width: 14px; height: 14px; flex: none; border-radius: 50%;
@@ -204,20 +204,23 @@ button.primary:hover { background: var(--accent-hover); }
 .results { padding-top: 12px; border-top: 1px solid var(--border); }
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .stats > div { background: var(--surface); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; }
-.stats .k { font-size: 12px; color: var(--muted); }
-.stats .v { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stats .k { font-size: 0.75rem; color: var(--muted); }
+.stats .v { font-size: 1.125rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .breakdown { display: flex; flex-direction: column; gap: 8px; }
-.segmented.small button { padding: 5px 8px; font-size: 13px; }
+.segmented.small button { padding: 5px 8px; font-size: 0.8125rem; }
 .bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--surface); }
 .bar > span { height: 100%; min-width: 2px; }
 .bar > span + span { border-left: 1px solid var(--panel); }
-.legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 0.8125rem; }
 .legend li { display: grid; grid-template-columns: 12px 1fr auto 42px; gap: 8px; align-items: center; font-variant-numeric: tabular-nums; }
-.legend i { width: 12px; height: 12px; border-radius: 3px; }
+/* Farbfeld wie die Kartenlinie: gestrichelt bzw. gepunktet, wo die Linie es auch ist (surfaces.js) */
+.legend i { width: 12px; height: 12px; border-radius: 3px; background: var(--c); forced-color-adjust: none; }
+.legend i.dashed { background: repeating-linear-gradient(90deg, var(--c) 0 4px, transparent 4px 6px); border-radius: 1px; }
+.legend i.dotted { background: radial-gradient(circle, var(--c) 0 2.5px, transparent 3px) 0 0 / 6px 6px; }
 .legend .km { color: var(--muted); }
 .legend .pct { text-align: right; font-weight: 600; }
-.check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; cursor: pointer; }
 .check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
 
 .supply-options { display: flex; flex-direction: column; gap: 8px; padding-left: 24px; }
@@ -227,17 +230,17 @@ input[type="datetime-local"] {
 }
 
 .stops { display: flex; flex-direction: column; gap: 6px; }
-.stops > .label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.stops > .label { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
 .stop-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.stop-list li { border-radius: 8px; background: var(--surface); font-size: 13px; }
+.stop-list li { border-radius: 8px; background: var(--surface); font-size: 0.8125rem; }
 .stop-list .row { grid-template-columns: 26px 1fr auto; gap: 8px; padding: 6px 8px; }
 .stop-list li:hover { background: var(--accent-soft); }
-.stop-list .ico { font-size: 18px; text-align: center; }
+.stop-list .ico { font-size: 1.125rem; text-align: center; }
 .stop-list .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stop-list small { display: block; color: var(--muted); font-size: 12px; }
+.stop-list small { display: block; color: var(--muted); font-size: 0.75rem; }
 .stop-list small.warn, .hint.warn { color: var(--warn-text); }
 .hint.holiday, .holiday-notes li {
-  padding: 6px 8px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-text); font-size: 12px;
+  padding: 6px 8px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-text); font-size: 0.75rem;
 }
 .holiday-notes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .stop-list .when { text-align: right; font-variant-numeric: tabular-nums; }
@@ -247,48 +250,48 @@ input[type="datetime-local"] {
 .via-list { display: flex; flex-direction: column; gap: 6px; }
 .via-list:empty { display: none; }
 .via-row .label .num {
-  display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%;
-  background: var(--route); color: #fff; font-size: 10px; font-weight: 700;
+  display: inline-grid; place-items: center; min-width: 1.5em; height: 1.5em; border-radius: 999px;
+  background: var(--route); color: #fff; font-size: 0.75rem; font-weight: 700;
 }
 .link-btn {
-  align-self: flex-start; padding: 2px 0; background: none; border: none; color: var(--accent-text); font-weight: 600; font-size: 13px;
+  align-self: flex-start; padding: 2px 0; background: none; border: none; color: var(--accent-text); font-weight: 600; font-size: 0.8125rem;
 }
 .link-btn:hover { text-decoration: underline; }
 .link-btn.inline { display: inline; padding: 0; font-size: inherit; }
 
 /* Entlang der Route finden */
 .along { display: flex; flex-direction: column; gap: 6px; }
-.along > .label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.along > .label { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chips button { padding: 4px 10px; border-radius: 999px; font-size: 13px; }
+.chips button { padding: 4px 10px; border-radius: 999px; font-size: 0.8125rem; }
 .chips button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
 .along-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
 .along-list li {
   display: grid; grid-template-columns: 1fr 30px; gap: 8px; align-items: center;
-  padding-right: 6px; border-radius: 8px; background: var(--surface); font-size: 13px;
+  padding-right: 6px; border-radius: 8px; background: var(--surface); font-size: 0.8125rem;
 }
 .along-list .row { grid-template-columns: 1fr auto; gap: 8px; padding: 5px 0 5px 8px; }
 .along-list li:hover { background: var(--accent-soft); }
 .along-list .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .along-list small.warn { color: var(--warn-text); }
-.along-list small { display: block; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.along-list .km { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+.along-list small { display: block; color: var(--muted); font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.along-list .km { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.75rem; }
 .along-list .add { width: 30px; height: 30px; padding: 0; font-weight: 700; }
 
 /* Mehrtagestouren */
 .stages { display: flex; flex-direction: column; gap: 8px; }
 #stages-body { display: flex; flex-direction: column; gap: 8px; }
 .stage-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.stage-list > li { background: var(--surface); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.stage-list > li { background: var(--surface); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; font-size: 0.8125rem; }
 .stage-list .day { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
 .stage-list .day small { font-weight: 400; color: var(--muted); }
 .stage-list .night { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
 .stage-list .night select { width: 100%; }
-.stage-list .night .meta { color: var(--muted); font-size: 12px; }
+.stage-list .night .meta { color: var(--muted); font-size: 0.75rem; }
 .stage-list .night .meta.over { color: var(--warn-text); }
-.stage-list .night .links { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; align-items: baseline; }
+.stage-list .night .links { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.75rem; align-items: baseline; }
 .stage-list .night .links > * { white-space: nowrap; }
-.stage-list .night .links .link-btn { font-size: 12px; }
+.stage-list .night .links .link-btn { font-size: 0.75rem; }
 .stage-list .night .links a { color: var(--accent-text); }
 .stay-settings { display: flex; flex-direction: column; gap: 6px; }
 .stay-settings input[type="number"] { width: 90px; }
@@ -300,7 +303,7 @@ input[type="datetime-local"] {
 
 /* Konto */
 .account { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
-.account > .label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.account > .label { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
 .account-form { display: flex; flex-direction: column; gap: 6px; }
 .account-in { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .account .hint.error { color: var(--error-text); }
@@ -312,15 +315,15 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
 .route-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
 .route-list li {
   display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center;
-  padding-right: 6px; border-radius: 8px; background: var(--surface); font-size: 13px;
+  padding-right: 6px; border-radius: 8px; background: var(--surface); font-size: 0.8125rem;
 }
 .route-list .row { padding: 6px 0 6px 10px; }
 .route-list li:hover { background: var(--accent-soft); }
 .route-list li.current { outline: 2px solid var(--accent); outline-offset: -2px; }
 .route-list .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.route-list small { display: block; color: var(--muted); font-size: 12px; }
+.route-list small { display: block; color: var(--muted); font-size: 0.75rem; }
 .route-list .tools { display: flex; gap: 2px; }
-.route-list .tools button { width: 30px; height: 30px; padding: 0; background: transparent; border-color: transparent; font-size: 14px; }
+.route-list .tools button { width: 30px; height: 30px; padding: 0; background: transparent; border-color: transparent; font-size: 0.875rem; }
 .route-list .tools button:hover { border-color: var(--border); background: var(--panel); }
 
 .panel-footer { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); }
@@ -350,9 +353,9 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
   width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
   background: #fff; border: 2px dashed #6b7280; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); font-size: 13px; line-height: 1;
 }
-.stop-popup button { margin-top: 6px; padding: 4px 10px; font-size: 13px; }
-.stop-popup { font: 13px/1.4 system-ui, sans-serif; min-width: 180px; }
-.stop-popup b { font-size: 14px; }
+.stop-popup button { margin-top: 6px; padding: 4px 10px; font-size: 0.8125rem; }
+.stop-popup { font: 0.8125rem/1.4 system-ui, sans-serif; min-width: 180px; }
+.stop-popup b { font-size: 0.875rem; }
 .stop-popup .muted { color: #6b6878; }
 .stop-popup a { color: #6d28d9; }
 
@@ -363,19 +366,19 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
 .elevation-chart .area { fill: var(--accent-soft); }
 .elevation-chart .line { fill: none; stroke: var(--route); stroke-width: 2; }
 .elevation-chart .grid { stroke: var(--border); stroke-width: 1; }
-.elevation-chart .axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.elevation-chart .axis { fill: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .elevation-chart .cursor { stroke: var(--text); stroke-width: 1; stroke-dasharray: 3 3; }
 .elevation-tip {
   position: absolute; top: 0; pointer-events: none; transform: translateX(-50%);
   padding: 3px 7px; border-radius: 6px; background: var(--text); color: var(--panel);
-  font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums;
+  font-size: 0.75rem; white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Dialog ---------- */
 dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text); padding: 20px; width: min(420px, calc(100vw - 32px)); box-shadow: var(--shadow); }
 dialog::backdrop { background: rgba(10, 8, 20, .4); }
 dialog form { display: flex; flex-direction: column; gap: 12px; }
-dialog h2 { margin: 0; font-size: 18px; }
+dialog h2 { margin: 0; font-size: 1.125rem; }
 
 [hidden] { display: none !important; }
 
@@ -396,7 +399,7 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
 
 @media (pointer: coarse) {
   /* iOS zoomt beim Antippen in Felder mit < 16 px Schrift – deshalb auf Touch-Geräten 16 px */
-  input, select, textarea { font-size: 16px; }
+  input, select, textarea { font-size: max(16px, 1rem); }
   /* Tippflächen mind. 44 px (Apple-Richtlinie) */
   .icon-btn { width: 44px; min-height: 44px; }
   .route-list .tools button, .along-list .add { width: 44px; height: 44px; }
@@ -418,4 +421,31 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
   .panel { border-right: none; border-top: 1px solid var(--border); overflow: visible; }
   /* Gummiband-Effekt der Seite nicht an die Karte weitergeben */
   html, body { overscroll-behavior-y: none; }
+}
+
+/* ---------- Kontrastmodus, weniger Bewegung (am Ende, damit sie die Regeln oben überschreiben) ---------- */
+/* Windows-Kontrastmodus: Hintergründe und Schatten werden durch Systemfarben ersetzt – der gewählte Knopf
+   eines Umschalters wäre sonst nicht mehr zu erkennen. Farbbalken und Legende behalten ihre Farben,
+   weil sie Information tragen. */
+@media (forced-colors: active) {
+  /* Fläche statt Rahmen: Der Rahmen ist schon der Tastaturfokus */
+  .segmented button[aria-checked="true"], .tabs button[aria-checked="true"] {
+    forced-color-adjust: none; background: Highlight; color: HighlightText;
+  }
+  .segmented button:focus-visible, .tabs button:focus-visible { outline-color: CanvasText; outline-offset: 1px; }
+  .chips button[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -1px; }
+  .route-list li.current { outline-color: Highlight; }
+  .bar > span, .elevation-chart rect { forced-color-adjust: none; }
+  /* Marker: Start grün, Ziel rot usw. – auf der (ohnehin farbigen) Karte unverändert lassen */
+  .marker-pin, .via-pin, .stop-pin, .stay-pin, .search-pin { forced-color-adjust: none; }
+  .elevation-chart .line { stroke: CanvasText; }
+  .elevation-chart .area { fill: Canvas; }
+  .elevation-chart .axis { fill: CanvasText; }
+  .status.loading::before { border-color: CanvasText; border-right-color: transparent; }
+}
+
+/* „Bewegung reduzieren“: der Ladekreisel dreht nur noch langsam (er zeigt, dass noch etwas läuft);
+   Kartensprünge ohne Animation regelt js/map.js. */
+@media (prefers-reduced-motion: reduce) {
+  .status.loading::before { animation-duration: 3s; }
 }

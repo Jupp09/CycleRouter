@@ -36,10 +36,32 @@ export function setStatus(text, kind) {
   if (text) announce(text, { urgent: kind === 'error' });
 }
 
-/** Kurzer Hinweis in der Statuszeile, der nach einigen Sekunden verschwindet (wenn nichts anderes läuft). */
+/** Mindestdauer, die ein Hinweis aus flashStatus() sichtbar bleibt */
+const FLASH_MIN_MS = 4000;
+let endFlash = null;
+
+/**
+ * Kurzer Hinweis in der Statuszeile (z. B. „Route gespeichert“). Er verschwindet nicht nach einer festen
+ * Zeit, sondern erst, wenn man weiterarbeitet (nächster Klick, Tipp oder Tastendruck), frühestens nach
+ * FLASH_MIN_MS – wer langsamer liest oder kurz wegschaut, verpasst ihn so nicht. Hat inzwischen etwas
+ * anderes die Statuszeile übernommen, bleibt diese unberührt.
+ */
 export function flashStatus(text) {
+  endFlash?.();
   setStatus(text);
-  setTimeout(() => { if (ui.status.textContent === text) setStatus(null); }, 10000);
+  const shown = Date.now();
+  const onInput = () => {
+    if (Date.now() - shown < FLASH_MIN_MS) return;
+    endFlash();
+    if (ui.status.textContent === text && !ui.status.classList.contains('loading')) setStatus(null);
+  };
+  document.addEventListener('pointerdown', onInput, true);
+  document.addEventListener('keydown', onInput, true);
+  endFlash = () => {
+    document.removeEventListener('pointerdown', onInput, true);
+    document.removeEventListener('keydown', onInput, true);
+    endFlash = null;
+  };
 }
 
 // ---------- Elemente ----------

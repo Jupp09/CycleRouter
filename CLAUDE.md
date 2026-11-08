@@ -31,6 +31,11 @@ npm run extract:build    # build the extract locally (Linux/macOS with curl + os
   - Things users only see happen are spoken via `announce()` ([js/announce.js](js/announce.js)). `setStatus()` already does this; `run()` announces the finished route. Don't add announcements for automatic refreshes.
   - Map markers get a name (`title`, which `map.js` also sets as `aria-label`). Inputs get a real `<label for>` or `aria-label`, not just a placeholder. The place search follows the combobox pattern (`geocode.js`).
   - Colours: text links and focus outlines use `--accent-text`, white-on-accent buttons use `--accent`. Body text needs ≥ 4.5:1, focus outlines and other UI parts ≥ 3:1, in both schemes.
+  - Colour never carries information alone. The `CATEGORIES` palette in `surfaces.js` is Okabe-Ito based and checked for protanopia/deuteranopia; unpaved categories have `dash`, which the map line (`dashArray`) and the legend swatch both show. Check a new category against the existing colours under colour-blindness simulation.
+  - Font sizes are in `rem` (the browser's base font size counts), never below `0.75rem` (12 px). Exceptions: emoji inside map markers, whose Leaflet icons have a fixed pixel size.
+  - The elevation profile is a `role="slider"` (arrow keys, Page ↑/↓, Home/End) with a text summary (`elevationSummary`) as description; the SVG itself is `aria-hidden`.
+  - `prefers-reduced-motion`: map jumps pass `motion()` (`map.js`), so add it to any new `setView`/`fitBounds`/`flyTo`. `forced-colors`: the selected switch button gets `Highlight`; the blocks for both media queries are at the **end** of `style.css` so they override the normal rules.
+  - `flashStatus()` messages stay until the user's next click or key press (at least 4 s), not for a fixed time.
 
 ## Architecture
 
