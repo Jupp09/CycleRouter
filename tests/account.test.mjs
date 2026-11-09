@@ -18,7 +18,32 @@ const routeRow = text => `[...document.querySelectorAll('#my-routes-list li')].f
 
 export default async function (t) {
   await devices(t);
+  await expiredSession(t);
   await iphone(t);
+}
+
+/** Sitzung abgelaufen (hier: von einem anderen Gerät abgemeldet) → „Meine Routen“ bekommt 401, die App zeigt „abgemeldet“. */
+async function expiredSession({ app, page: newPage, check, step, sleep }) {
+  step('Sitzung abgelaufen');
+  const a = await newPage({ accounts: true });
+  await a.open(app, { view: BONN });
+  check('Konto angelegt', await register(a, 'sess_user'));
+  await a.ev(`document.querySelector('#settings-dialog').close(); true`);
+  await a.clickMapAt(0.3, 0.3); await sleep(800);
+  await a.clickMapAt(0.6, 0.6);
+  await a.waitFor(HAS_ROUTE);
+  check('Gespeichert', await saveRoute(a, 'Sitzungstest'));
+
+  const b = await newPage({ accounts: true });
+  await b.open(app);
+  const post = (path, body) => `fetch('/api/account/${path}', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(${JSON.stringify(body)}) })`;
+  await b.ev(`${post('login', { username: 'sess_user', password: 'geheim1234' })}.then(() => ${post('logout-others', {})}).then(r => r.status)`);
+
+  // A lädt „Meine Routen“ neu (wie beim Start) und bekommt 401
+  await a.ev(`(async () => { (await import('/js/app/state.js')).emit('account'); return true; })()`);
+  check('Als abgemeldet angezeigt', await a.waitFor(`document.querySelector('#my-routes').hidden && !document.querySelector('#account-out').hidden && document.querySelector('#account-in').hidden`, 5000));
+  check('Speichern-Knöpfe weg, Hinweis zum Anmelden', await a.ev(`document.querySelector('#save-actions').hidden && document.querySelector('#save-hint').textContent.includes('anmelden')`));
+  check('Bezug zur gespeicherten Route verworfen', await a.ev(`(async () => (await import('/js/app/state.js')).state.saved === null)()`));
 }
 
 async function devices({ app, page: newPage, check, step, sleep }) {
