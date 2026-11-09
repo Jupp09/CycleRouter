@@ -86,7 +86,7 @@ Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Pr
 
 ### Tests
 
-`npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
+`npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Zoomgrenzen der Kartenstile, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
 
 ## Routing
 

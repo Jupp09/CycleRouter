@@ -7,7 +7,9 @@ const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenS
 
 const BASE_LAYERS = {
   'CyclOSM': L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {
-    maxZoom: 20, attribution: `${OSM_ATTR} · Stil: <a href="https://www.cyclosm.org">CyclOSM</a>`,
+    // Ab Stufe 19 rendert der Server fast jede Kachel erst auf Anfrage (2–4 s je Kachel) – der Bildschirm
+    // bliebe lange grau. Stufe 19 zeigt daher die Kacheln von 18 vergrößert (maxNativeZoom).
+    maxNativeZoom: 18, maxZoom: 19, attribution: `${OSM_ATTR} · Stil: <a href="https://www.cyclosm.org">CyclOSM</a>`,
   }),
   'OpenStreetMap': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: OSM_ATTR,
@@ -22,7 +24,8 @@ const BASE_LAYERS = {
 
 const OVERLAYS = {
   'Radrouten (Waymarked Trails)': L.tileLayer('https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png', {
-    maxZoom: 18, opacity: 0.7, attribution: '<a href="https://cycling.waymarkedtrails.org">Waymarked Trails</a>',
+    // Der Server liefert bis 18; auf Stufe 19 vergrößert statt ausgeblendet
+    maxNativeZoom: 18, maxZoom: 19, opacity: 0.7, attribution: '<a href="https://cycling.waymarkedtrails.org">Waymarked Trails</a>',
   }),
 };
 
@@ -243,7 +246,8 @@ export function createMap(el, { onClick, onMarkerDrag }) {
     fitRoute(coords) {
       const bounds = L.latLngBounds(coords.map(c => [c[0], c[1]]));
       const mobile = window.matchMedia('(max-width: 800px)').matches;
-      map.fitBounds(bounds, { padding: mobile ? [20, 20] : [50, 50], ...motion() });
+      // Kurze Routen nicht bis in die höchste Stufe einpassen
+      map.fitBounds(bounds, { padding: mobile ? [20, 20] : [50, 50], maxZoom: 16, ...motion() });
     },
 
     flyTo(point, zoom = 13) {
