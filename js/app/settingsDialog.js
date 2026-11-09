@@ -1,5 +1,6 @@
 /**
- * Einstellungsdialog (Zahnrad): Darstellung, ORS-Schlüssel, Heimatadresse, Durchschnittsgeschwindigkeit, Pausenstil, Mehrtagestour
+ * Einstellungsdialog (Zahnrad): Darstellung, sichtbare Fahrradtypen und Routenarten, ORS-Schlüssel, Heimatadresse,
+ * Durchschnittsgeschwindigkeit, Pausenstil, Mehrtagestour
  * und Konto. Die Abschnitte füllen und speichern ihre Felder selbst (homeView, stagesView, accountView);
  * hier wird nur beim Öffnen gefüllt und beim Speichern entschieden, was neu berechnet werden muss.
  */
@@ -11,6 +12,7 @@ import { renderStaySettings, saveStaySettings } from './stagesView.js';
 import { openHomeSettings, saveHomeSettings, warmNewHome } from './homeView.js';
 import { savedTheme, applyTheme, saveTheme } from './theme.js';
 import { STYLES } from '../stops.js';
+import { syncUi, selectBike, selectMode } from './controls.js';
 
 // ---------- Durchschnittsgeschwindigkeit ----------
 // Gespeichert als km/h oder null (= Standard je Fahrradtyp). Grundlage für Fahrzeit und Ankunftszeiten.
@@ -77,6 +79,42 @@ $('#supply-style-switch').addEventListener('click', e => {
   renderStyle();
 });
 
+// ---------- Auswahl anpassen ----------
+// Welche Fahrradtypen und Routenarten die Umschalter zeigen (synchronisiert über visibleBikes/visibleModes).
+
+const VISIBLE = { bike: '#visible-bikes', mode: '#visible-modes' };
+const checkedIn = sel => [...document.querySelectorAll(`${sel} input:checked`)].map(cb => cb.value);
+
+/** Das letzte Häkchen einer Gruppe lässt sich nicht entfernen (mindestens eins bleibt sichtbar). */
+function lockLast(sel) {
+  const boxes = [...document.querySelectorAll(`${sel} input`)];
+  const on = boxes.filter(cb => cb.checked);
+  for (const cb of boxes) cb.disabled = on.length === 1 && cb.checked;
+}
+
+function renderVisible() {
+  for (const [sel, list] of [[VISIBLE.bike, state.visibleBikes], [VISIBLE.mode, state.visibleModes]]) {
+    for (const cb of document.querySelectorAll(`${sel} input`)) cb.checked = list.includes(cb.value);
+    lockLast(sel);
+  }
+}
+for (const sel of Object.values(VISIBLE)) $(sel).addEventListener('change', () => lockLast(sel));
+
+/**
+ * Auswahl speichern. Ist der aktive Fahrradtyp bzw. die aktive Routenart nicht mehr dabei, wird auf den
+ * ersten sichtbaren Wert gewechselt (mit Neuberechnung) – sonst bliebe ein unsichtbarer Wert aktiv.
+ */
+function saveVisible() {
+  const bikes = checkedIn(VISIBLE.bike), modes = checkedIn(VISIBLE.mode);
+  if (bikes.length) { state.visibleBikes = bikes; storage.set('visibleBikes', bikes); }
+  if (modes.length) { state.visibleModes = modes; storage.set('visibleModes', modes); }
+  syncUi();
+  return {
+    bike: state.visibleBikes.includes(state.bike) ? null : state.visibleBikes[0],
+    mode: state.visibleModes.includes(state.mode) ? null : state.visibleModes[0],
+  };
+}
+
 // ---------- Öffnen und Speichern ----------
 
 const dialog = $('#settings-dialog');
@@ -90,6 +128,7 @@ $('#btn-settings').addEventListener('click', () => {
   renderSpeed();
   pendingStyle = state.supply.style in STYLES ? state.supply.style : 'fast';
   renderStyle();
+  renderVisible();
   renderStaySettings();
   openHomeSettings();
   dialog.showModal();
@@ -123,4 +162,8 @@ dialog.addEventListener('close', () => {
   const newHome = saveHomeSettings();
   if (state.provider === 'ors') recalc();
   if (newHome) warmNewHome(newHome);
+  // Aktiver Typ bzw. aktive Routenart ausgeblendet → auf den ersten sichtbaren wechseln (rechnet selbst neu)
+  const fallback = saveVisible();
+  if (fallback.mode) selectMode(fallback.mode);
+  if (fallback.bike) selectBike(fallback.bike);
 });

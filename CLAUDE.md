@@ -146,8 +146,10 @@ Be gentle with the public services. The server sends at most 2 parallel Overpass
 
 ## Things to keep in sync
 
-- [js/shared.js](js/shared.js) holds the values that the browser and the server share: `SYNC_KEYS` (synced settings; the server drops any other key), `MODES` (`ab | distance | loop`) and `BIKES` (`road | gravel | trekking`). Like `poiSource.js`, it is loaded by Node, so it must not use browser APIs. Add a new synced setting there and nowhere else.
-- Client code also uses the `mode`/`bike` values as keys in `PROFILES`, `DEFAULT_SPEED`, `MODE_LABELS`, etc. A new mode or bike type needs entries in those maps as well as in `MODES`/`BIKES`.
+- [js/shared.js](js/shared.js) holds the values that the browser and the server share: `SYNC_KEYS` (synced settings; the server drops any other key), `MODES` (`ab | distance | loop`) and `BIKES` (`road | gravel | trekking | ebike`). Like `poiSource.js`, it is loaded by Node, so it must not use browser APIs. Add a new synced setting there and nowhere else.
+- Client code also uses the `mode`/`bike` values as keys in `PROFILES` (brouter.js, ors.js), `BICYCLE_TYPE` (valhalla.js), `DEFAULT_SPEED`/`CLIMB_RATE` (utils.js), `BIKE_LABELS`/`MODE_LABELS` (state.js) and the switch buttons and "Auswahl anpassen" checkboxes in index.html. A new mode or bike type needs entries in all of those as well as in `MODES`/`BIKES`.
+- **E-Bike** routes with BRouter's `trekking` profile plus `PARAMS.ebike` (brouter.js): profile parameters go into the URL as `profile:<name>=<value>`, which also works for uploaded EuroVelo profiles. Booleans must be `0`/`1`; brouter.de doesn't answer `false`.
+- `visibleBikes`/`visibleModes` (state.js, synced) choose which buttons the switches show. `showOnly()` in controls.js keeps the active value visible and hides a switch with fewer than two buttons; the radiogroup keyboard handling in dom.js skips hidden buttons.
 - [README.md](README.md) (German) documents features, setup and the module overview. Update it when behaviour that users see changes.
 
 ## Notes

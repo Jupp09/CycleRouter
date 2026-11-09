@@ -115,10 +115,11 @@ export function indexAtDistance(r, along) {
 // ---------- Fahrzeit ----------
 
 /** Standard-Durchschnittsgeschwindigkeit in der Ebene (km/h) je Fahrradtyp. */
-export const DEFAULT_SPEED = { road: 27, gravel: 20, trekking: 18 };
+// E-Bike: knapp unter der 25-km/h-Grenze der Unterstützung; Anstiege nimmt der Motor zum großen Teil ab
+export const DEFAULT_SPEED = { road: 27, gravel: 20, trekking: 18, ebike: 22 };
 export const SPEED_MIN = 10, SPEED_MAX = 35;
 /** Höhenmeter, die etwa eine Stunde Zusatzzeit kosten, je Fahrradtyp. */
-const CLIMB_RATE = { road: 1200, gravel: 1000, trekking: 800 };
+const CLIMB_RATE = { road: 1200, gravel: 1000, trekking: 800, ebike: 2500 };
 
 let speedSetting = null; // vom Nutzer eingestellt (km/h) oder null = Standard je Fahrradtyp
 

@@ -51,6 +51,7 @@
         <button role="radio" data-value="road">Rennrad</button>
         <button role="radio" data-value="gravel">Gravel</button>
         <button role="radio" data-value="trekking" title="Trekking-, Touren- und Alltagsrad">Fahrrad</button>
+        <button role="radio" data-value="ebike" title="Pedelec mit Unterstützung bis 25 km/h – Anstiege werden kaum gemieden">E-Bike</button>
       </div>
       <label class="field inline" id="traffic-field">
         <span>Verkehr meiden</span>
@@ -298,6 +299,23 @@
           <button type="button" role="radio" data-value="light">Hell</button>
           <button type="button" role="radio" data-value="dark">Dunkel</button>
         </div>
+      </div>
+      <div class="field">
+        <span class="label">Auswahl anpassen</span>
+        <fieldset class="choice-set" id="visible-bikes">
+          <legend>Fahrradtypen</legend>
+          <label class="check"><input type="checkbox" value="road"> Rennrad</label>
+          <label class="check"><input type="checkbox" value="gravel"> Gravel</label>
+          <label class="check"><input type="checkbox" value="trekking"> Fahrrad</label>
+          <label class="check"><input type="checkbox" value="ebike"> E-Bike</label>
+        </fieldset>
+        <fieldset class="choice-set" id="visible-modes">
+          <legend>Routenarten</legend>
+          <label class="check"><input type="checkbox" value="ab"> A → B</label>
+          <label class="check"><input type="checkbox" value="distance"> Distanz</label>
+          <label class="check"><input type="checkbox" value="loop"> Rundkurs</label>
+        </fieldset>
+        <p class="hint">Nur Gewähltes erscheint in den Umschaltern; mindestens eins bleibt. Ist nur eins gewählt, entfällt der Umschalter.</p>
       </div>
       <div class="field">
         <label class="label" for="home-input">Heimatadresse</label>

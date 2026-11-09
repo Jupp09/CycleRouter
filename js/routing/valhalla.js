@@ -7,7 +7,9 @@ import { haversine } from '../utils.js';
 const ENDPOINT = 'https://valhalla1.openstreetmap.de';
 
 // Fahrradtyp → Valhalla bicycle_type; „Road“ meidet Unbefestigtes von selbst, „Cross“ ≈ Gravel
-const BICYCLE_TYPE = { road: 'Road', gravel: 'Cross', trekking: 'Hybrid' };
+const BICYCLE_TYPE = { road: 'Road', gravel: 'Cross', trekking: 'Hybrid', ebike: 'Hybrid' };
+/** Bereitschaft für Anstiege (0–1, Valhalla-Standard 0,5) – E-Bike: Steigungen kaum scheuen. */
+const USE_HILLS = { ebike: 1 };
 // Verkehr (nur Rennrad): Bereitschaft, auf Straßen zu fahren (0 … 1, Standard 0,5)
 const USE_ROADS = { normal: 0.5, low: 0.25, verylow: 0.1 };
 const ELEVATION_INTERVAL = 30; // m zwischen zwei Höhenwerten
@@ -130,7 +132,10 @@ export const valhalla = {
 
   async route(points, { bike, traffic }, signal) {
     const costing = 'bicycle';
-    const costingOptions = { bicycle: { bicycle_type: BICYCLE_TYPE[bike] || 'Hybrid', use_roads: USE_ROADS[traffic] ?? 0.5 } };
+    const costingOptions = { bicycle: {
+      bicycle_type: BICYCLE_TYPE[bike] || 'Hybrid', use_roads: USE_ROADS[traffic] ?? 0.5,
+      ...(USE_HILLS[bike] != null && { use_hills: USE_HILLS[bike] }),
+    } };
     const data = await post('route', {
       locations: points.map(p => ({ lat: p.lat, lon: p.lon })),
       costing, costing_options: costingOptions, directions_type: 'none', elevation_interval: ELEVATION_INTERVAL,

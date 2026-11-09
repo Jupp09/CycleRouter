@@ -306,6 +306,10 @@ input[type="datetime-local"] {
 .stay-settings { display: flex; flex-direction: column; gap: 6px; }
 .stay-settings input[type="number"] { width: 90px; }
 .stay-types { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+/* Einstellungen „Auswahl anpassen“: Fahrradtypen und Routenarten als Häkchen */
+.choice-set { border: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.choice-set legend { padding: 0; margin-bottom: 4px; font-size: 0.8125rem; color: var(--muted); }
+.choice-set + .choice-set { margin-top: 8px; }
 .stay-pin {
   width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
   background: #fff; border: 2px solid var(--route); box-shadow: 0 1px 4px rgba(0, 0, 0, .45); font-size: 16px; line-height: 1;

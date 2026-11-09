@@ -15,6 +15,8 @@ export function syncUi() {
   };
   check('#bike-switch button', 'aria-checked', 'value', state.bike);
   check('#mode-tabs button', 'aria-checked', 'mode', state.mode);
+  showOnly('#bike-switch', 'value', state.visibleBikes, state.bike);
+  showOnly('#mode-tabs', 'mode', state.visibleModes, state.mode);
   check('#breakdown-switch button', 'aria-checked', 'value', state.breakdown);
   for (const n of document.querySelectorAll('[data-show]')) n.hidden = !n.dataset.show.split(' ').includes(state.mode);
 
@@ -40,6 +42,36 @@ export function syncUi() {
   hint.textContent = 'OpenRouteService hat kein Gravel-Profil – es wird das allgemeine Fahrrad-Profil verwendet. Für echte Gravel-Routen BRouter wählen.';
 }
 
+/**
+ * Nur die in den Einstellungen gewählten Knöpfe eines Umschalters zeigen. Der aktive Wert bleibt sichtbar,
+ * auch wenn er ausgeblendet ist (z. B. eine geteilte Route mit anderem Fahrradtyp). Bleibt nur ein Knopf,
+ * entfällt der ganze Umschalter – es gibt nichts zu wählen.
+ */
+function showOnly(sel, key, visible, active) {
+  const group = $(sel);
+  let shown = 0;
+  for (const b of group.querySelectorAll('[role="radio"]')) {
+    b.hidden = !visible.includes(b.dataset[key]) && b.dataset[key] !== active;
+    if (!b.hidden) shown++;
+  }
+  group.hidden = shown < 2;
+}
+
+/** Fahrradtyp wählen (Umschalter oder Einstellungsdialog) und ggf. neu berechnen. */
+export function selectBike(value) {
+  if (value && value !== state.bike) setRoutingOption('bike', value);
+}
+
+/** Routenart wählen: verwirft die Route; im A→B-Modus wird mit vorhandenem Start/Ziel gleich neu berechnet. */
+export function selectMode(mode) {
+  if (!mode || mode === state.mode) return;
+  state.mode = mode;
+  storage.set('mode', mode);
+  syncUi();
+  clearRoute();
+  if (mode === 'ab') calcAB();
+}
+
 /** Einstellung übernehmen, speichern und – falls schon eine Route da ist – neu berechnen. */
 function setRoutingOption(key, value) {
   state[key] = value;
@@ -48,24 +80,12 @@ function setRoutingOption(key, value) {
   recalc();
 }
 
-$('#bike-switch').addEventListener('click', e => {
-  const value = e.target.closest('button')?.dataset.value;
-  if (value && value !== state.bike) setRoutingOption('bike', value);
-});
+$('#bike-switch').addEventListener('click', e => selectBike(e.target.closest('button')?.dataset.value));
 $('#traffic').addEventListener('change', e => setRoutingOption('traffic', e.target.value));
 $('#eurovelo').addEventListener('change', e => setRoutingOption('eurovelo', e.target.value));
 $('#provider').addEventListener('change', e => setRoutingOption('provider', e.target.value));
 
-// Moduswechsel verwirft die Route; im A→B-Modus wird mit vorhandenem Start/Ziel gleich neu berechnet
-$('#mode-tabs').addEventListener('click', e => {
-  const mode = e.target.closest('button')?.dataset.mode;
-  if (!mode || mode === state.mode) return;
-  state.mode = mode;
-  storage.set('mode', mode);
-  syncUi();
-  clearRoute();
-  if (mode === 'ab') calcAB();
-});
+$('#mode-tabs').addEventListener('click', e => selectMode(e.target.closest('button')?.dataset.mode));
 
 // Richtung gilt nur für die nächste Erzeugung und wird nicht gespeichert
 $('#direction').addEventListener('change', e => { state.direction = e.target.value; });

@@ -1,6 +1,6 @@
 # CycloRouter
 
-Routenplaner für **Rennrad**, **Gravelbike** und **Fahrrad** (Trekking-/Alltagsrad) auf Basis von OpenStreetMap.
+Routenplaner für **Rennrad**, **Gravelbike**, **Fahrrad** (Trekking-/Alltagsrad) und **E-Bike** (Pedelec bis 25 km/h) auf Basis von OpenStreetMap. In den Einstellungen lässt sich festlegen, welche Fahrradtypen und Routenarten die Umschalter zeigen.
 
 - **A → B** – Route zwischen Start und Ziel
 - **Distanz** – Start + Wunschdistanz, das Ziel wird automatisch gewählt
@@ -86,10 +86,10 @@ Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Pr
 
 ## Routing
 
-| Dienst | Rennrad | Gravel | Fahrrad (Trekking/Alltag) | Hinweise |
-| --- | --- | --- | --- | --- |
-| **BRouter** (Standard) | `fastbike`, `fastbike-lowtraffic`, `fastbike-verylowtraffic` | `gravel` | `trekking` | kein Key nötig |
-| **OpenRouteService** | `cycling-road` | `cycling-regular` | `cycling-regular` | kostenloser API-Key ([Registrierung](https://openrouteservice.org/dev/#/signup)), Eingabe über das Zahnrad; Rundkurse nativ über `round_trip` |
+| Dienst | Rennrad | Gravel | Fahrrad (Trekking/Alltag) | E-Bike | Hinweise |
+| --- | --- | --- | --- | --- | --- |
+| **BRouter** (Standard) | `fastbike`, `fastbike-lowtraffic`, `fastbike-verylowtraffic` | `gravel` | `trekking` | `trekking` ohne Höhenmeter-Scheu (`profile:consider_elevation=0`) | kein Key nötig |
+| **OpenRouteService** | `cycling-road` | `cycling-regular` | `cycling-regular` | `cycling-electric` | kostenloser API-Key ([Registrierung](https://openrouteservice.org/dev/#/signup)), Eingabe über das Zahnrad; Rundkurse nativ über `round_trip` |
 
 **Wenn BRouter ausgelastet ist:** Die App versucht es nach 2 und 5 Sekunden erneut und zeigt das in der Statuszeile. Klappt es dann noch nicht, rechnet sie mit [Valhalla](https://valhalla1.openstreetmap.de) (öffentlicher Server der FOSSGIS, ohne Key) und weist im Ergebnis darauf hin – Valhalla bewertet Wege etwas anders und kennt keine EuroVelo-Bevorzugung. Routen werden Teilstück für Teilstück (zwischen zwei Wegpunkten) berechnet und für die Sitzung gemerkt; kommen Verpflegungsstopps oder Übernachtungen hinzu, werden nur die geänderten Teilstücke neu angefragt.
 

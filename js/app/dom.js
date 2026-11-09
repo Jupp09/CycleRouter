@@ -166,13 +166,14 @@ export function span(className, text = '') {
  * der Code (syncUi), zieht ein MutationObserver die Tab-Reihenfolge nach.
  */
 function radioGroup(group) {
-  const buttons = () => [...group.querySelectorAll('[role="radio"]')];
+  // Ausgeblendete Knöpfe (Einstellungen „Auswahl anpassen“) überspringen
+  const buttons = () => [...group.querySelectorAll('[role="radio"]')].filter(b => !b.hidden);
   const sync = () => {
     const bs = buttons();
     const checked = bs.find(b => b.getAttribute('aria-checked') === 'true') || bs[0];
     for (const b of bs) b.tabIndex = b === checked ? 0 : -1;
   };
-  new MutationObserver(sync).observe(group, { subtree: true, attributes: true, attributeFilter: ['aria-checked'] });
+  new MutationObserver(sync).observe(group, { subtree: true, attributes: true, attributeFilter: ['aria-checked', 'hidden'] });
   sync();
   group.addEventListener('keydown', e => {
     const bs = buttons();

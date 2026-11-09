@@ -8,7 +8,16 @@ const PROFILES = {
   road: { normal: 'fastbike', low: 'fastbike-lowtraffic', verylow: 'fastbike-verylowtraffic' },
   gravel: { normal: 'gravel', low: 'gravel', verylow: 'gravel' },
   trekking: { normal: 'trekking', low: 'trekking', verylow: 'trekking' }, // Trekking-/Alltagsrad
+  ebike: { normal: 'trekking', low: 'trekking', verylow: 'trekking' },    // E-Bike: Trekking mit PARAMS
 };
+
+/**
+ * Profilparameter je Fahrradtyp, die BRouter in der URL übernimmt (`profile:<name>=<wert>`; Wahrheitswerte als
+ * 0/1 – „false“ beantwortet brouter.de nicht). Gilt auch für hochgeladene EuroVelo-Profile.
+ * E-Bike: Höhenmeter nicht scheuen – der Motor nimmt die Steigung ab, statt Umwegen um Hügel lieber kürzer.
+ * Gemessen Köln → Remagen: 70,0 statt 71,3 km, 890 statt 832 m Anstieg.
+ */
+const PARAMS = { ebike: { consider_elevation: 0 } };
 
 /** Antwort, die nur „zu viel los“ bedeutet – ein neuer Versuch oder ein anderer Dienst kann helfen. */
 const BUSY_TEXT = /retry later|watchdog|timeout|timed out|too many|busy|overload/i;
@@ -108,9 +117,10 @@ async function customProfile(name, penalty, signal, force = false) {
 }
 
 /** Eine Anfrage → {ok, text, busy}. `busy`: ausgelastet bzw. nicht erreichbar (neuer Versuch sinnvoll). */
-async function requestOnce(points, profile, signal) {
+async function requestOnce(points, profile, signal, params = {}) {
   const lonlats = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join('|');
-  const url = `${ENDPOINT}?lonlats=${encodeURIComponent(lonlats)}&profile=${profile}&alternativeidx=0&format=geojson`;
+  const extra = Object.entries(params).map(([k, v]) => `&profile:${k}=${encodeURIComponent(v)}`).join('');
+  const url = `${ENDPOINT}?lonlats=${encodeURIComponent(lonlats)}&profile=${profile}${extra}&alternativeidx=0&format=geojson`;
   let res;
   try {
     res = await fetch(url, { signal });
@@ -129,9 +139,9 @@ async function requestOnce(points, profile, signal) {
  * 5 s klappt es meist; erst danach gilt die Anfrage als gescheitert (und index.js weicht auf Valhalla aus).
  * `retries: false` (BRouter gerade als ausgelastet bekannt): nur ein Versuch.
  */
-async function request(points, profile, signal, retries = true) {
+async function request(points, profile, signal, retries = true, params = {}) {
   for (let attempt = 0; ; attempt++) {
-    const r = await requestOnce(points, profile, signal);
+    const r = await requestOnce(points, profile, signal, params);
     if (r.ok || !r.busy || !retries || attempt >= RETRY_DELAYS.length) return r;
     routingNotice(`BRouter ist ausgelastet – neuer Versuch in ${RETRY_DELAYS[attempt] / 1000} s …`);
     await sleep(RETRY_DELAYS[attempt], signal);
@@ -153,12 +163,13 @@ export const brouter = {
   async route(points, { bike, traffic, eurovelo = 'off', retries = true }, signal) {
     const base = PROFILES[bike][traffic] || PROFILES[bike].normal;
     const penalty = EUROVELO_PENALTY[eurovelo];
+    const params = PARAMS[bike] || {};
     let profile = penalty ? await customProfile(base, penalty, signal) : base;
-    let { ok, text, busy } = await request(points, profile, signal, retries);
+    let { ok, text, busy } = await request(points, profile, signal, retries, params);
     // Abgelaufenes eigenes Profil → einmal neu hochladen
     if (!ok && !busy && penalty && /profile/i.test(text)) {
       profile = await customProfile(base, penalty, signal, true);
-      ({ ok, text, busy } = await request(points, profile, signal, retries));
+      ({ ok, text, busy } = await request(points, profile, signal, retries, params));
     }
     if (!ok) throw Object.assign(new Error(translateError(text)), { busy });
 

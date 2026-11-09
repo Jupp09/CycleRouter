@@ -12,13 +12,21 @@
  */
 import { providers } from '../routing/index.js';
 import { storage, newSeed, toDateTimeLocal } from '../utils.js';
+import { BIKES, MODES } from '../shared.js';
 
 export const MODE_LABELS = { ab: 'Route', distance: 'Strecke', loop: 'Rundkurs' };
-export const BIKE_LABELS = { road: 'Rennrad', gravel: 'Gravel', trekking: 'Fahrrad' };
+export const BIKE_LABELS = { road: 'Rennrad', gravel: 'Gravel', trekking: 'Fahrrad', ebike: 'E-Bike' };
+
+/** Gespeicherte Auswahl sichtbarer Werte (Einstellungen) – unbekannte verwerfen, leer = alle. */
+const visibleOf = (key, all) => {
+  const v = storage.get(key, null);
+  const list = Array.isArray(v) ? all.filter(x => v.includes(x)) : [];
+  return list.length ? list : [...all];
+};
 
 export const state = {
   // Routing
-  bike: storage.get('bike', 'road'),              // 'road' | 'gravel' | 'trekking'
+  bike: storage.get('bike', 'road'),              // 'road' | 'gravel' | 'trekking' | 'ebike'
   traffic: storage.get('traffic', 'normal'),      // nur Rennrad mit BRouter
   eurovelo: storage.get('eurovelo', 'off'),       // 'off' | 'prefer' | 'strong'
   provider: storage.get('provider', 'brouter'),   // Schlüssel in providers
@@ -26,6 +34,10 @@ export const state = {
   distanceKm: storage.get('distanceKm', 60),      // Wunschdistanz für Distanz/Rundkurs
   direction: 'random',                            // Himmelsrichtung in Grad oder 'random'
   seed: newSeed(),                                // „Neu würfeln“ erzeugt eine neue Saat
+
+  // In den Umschaltern angezeigte Fahrradtypen und Routenarten (Einstellungen, übersichtlichere Oberfläche)
+  visibleBikes: visibleOf('visibleBikes', BIKES),
+  visibleModes: visibleOf('visibleModes', MODES),
 
   // Anzeige
   breakdown: storage.get('breakdown', 'surface'), // 'surface' | 'waytype'
