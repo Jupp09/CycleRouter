@@ -9,6 +9,7 @@ import { fetchPois } from './poiTiles.js';
 import { withTypicalHours } from './chainHours.js';
 import { nearestSample } from './routeGeometry.js';
 import { layerOfType } from './poiSource.js';
+import { withTimeout } from './shared.js';
 
 const PHOTON = 'https://photon.komoot.io/api/';
 
@@ -107,9 +108,7 @@ async function searchPhoton(r, category, samples, known, { maxOffset, signal }) 
       const bbox = boxes[next++];
       try {
         // Zeitlimit je Abschnitt, damit ein hängender Server die Suche nicht blockiert
-        const timed = AbortSignal.any && AbortSignal.timeout
-          ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT)].filter(Boolean)) : signal;
-        const res = await fetch(`${PHOTON}?include=${cat.include}&bbox=${bbox}&limit=50&lang=de`, { signal: timed });
+        const res = await fetch(`${PHOTON}?include=${cat.include}&bbox=${bbox}&limit=50&lang=de`, { signal: withTimeout(signal, TIMEOUT) });
         if (!res.ok) throw new Error(`Photon ${res.status}`);
         features.push(...(await res.json()).features);
       } catch (e) {

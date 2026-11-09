@@ -1,4 +1,5 @@
 import { debounce } from './utils.js';
+import { withTimeout } from './shared.js';
 import { announce } from './announce.js';
 
 /**
@@ -17,14 +18,12 @@ const PHOTON_RETRY_AFTER = 2 * 60 * 1000;
 let photonDownSince = 0;
 const photonDown = () => Date.now() - photonDownSince < PHOTON_RETRY_AFTER;
 
-const timeout = ms => (AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined);
-
 /** Photon aufrufen; markiert Photon bei Netzwerkfehlern/Zeitüberschreitung für eine Weile als ausgefallen. */
 async function photon(path) {
   if (photonDown()) throw Object.assign(new Error('Photon nicht erreichbar'), { unavailable: true });
   let res;
   try {
-    res = await fetch(`${PHOTON}${path}`, { signal: timeout(PHOTON_TIMEOUT) });
+    res = await fetch(`${PHOTON}${path}`, { signal: withTimeout(null, PHOTON_TIMEOUT) });
   } catch (e) {
     photonDownSince = Date.now();
     throw Object.assign(new Error('Photon nicht erreichbar'), { unavailable: true, cause: e });
@@ -45,7 +44,7 @@ function nominatim(path) {
     const wait = nominatimLast + 1100 - Date.now();
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
     try {
-      const res = await fetch(`${NOMINATIM}${path}`, { signal: timeout(10000) });
+      const res = await fetch(`${NOMINATIM}${path}`, { signal: withTimeout(null, 10000) });
       if (!res.ok) throw new Error(`Nominatim ${res.status}`);
       return await res.json();
     } finally { nominatimLast = Date.now(); }

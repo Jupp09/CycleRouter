@@ -1,6 +1,7 @@
 /**
- * Gemeinsame Werte für Browser (js/account.js) und Server (server/accountApi.mjs) – eine Quelle, damit beide
- * Seiten nicht auseinanderlaufen. Wird auch von Node geladen, daher ohne Abhängigkeiten zu Browser-APIs.
+ * Gemeinsame Werte und Helfer für Browser und Server (server/accountApi.mjs, über js/poiSource.js auch der
+ * POI-Cache) – eine Quelle, damit beide Seiten nicht auseinanderlaufen. Wird auch von Node geladen, daher ohne
+ * Abhängigkeiten zu Browser-APIs.
  */
 
 /**
@@ -16,3 +17,13 @@ export const MODES = ['ab', 'distance', 'loop'];
 
 /** Fahrradtypen: Rennrad, Gravel, Trekking-/Alltagsrad, E-Bike (Pedelec bis 25 km/h). */
 export const BIKES = ['road', 'gravel', 'trekking', 'ebike'];
+
+/**
+ * Abbruch durch den Aufrufer (`signal`, optional) oder nach `ms` (dann TimeoutError) – jede Anfrage an einen
+ * fremden Dienst bekommt so ein Zeitlimit, damit ein hängender Server nichts blockiert.
+ */
+export function withTimeout(signal, ms) {
+  if (!AbortSignal.timeout) return signal; // sehr alte Browser: ohne Zeitlimit
+  if (!signal) return AbortSignal.timeout(ms);
+  return AbortSignal.any ? AbortSignal.any([signal, AbortSignal.timeout(ms)]) : signal;
+}

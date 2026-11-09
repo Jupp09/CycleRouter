@@ -18,10 +18,6 @@ import { withTypicalHours } from './chainHours.js';
 import { timeline } from './timeline.js';
 import { locateOnRoute, locateNearRoute, insertWaypoints } from './routeGeometry.js';
 
-/** Maximale Entfernung von der Route (Luftlinie, m) für Verpflegungsstopps. */
-const MAX_OFFSET = { supermarket: 1000, convenience: 800, fuel: 800, bakery: 600, cafe: 600, restaurant: 600 };
-/** Trinkwasser wird ohne Umweg angezeigt – daher nur Stellen nahe an der Route. */
-const WATER_OFFSET = 400;
 /** Wasserstellen, die entlang der Route näher als das beieinander liegen (z. B. mehrere Hähne auf einem Friedhof), zählen als eine. */
 const WATER_MERGE = 150;
 /** Ab so viel Strecke (m) ohne Trinkwasser gibt es einen Hinweis. */
@@ -49,15 +45,21 @@ export const styleOf = id => STYLES[id] || STYLES.fast;
 /** Größte Pause aller Stile – für die grobe Abschätzung der Ankunft in holidayContext. */
 const MAX_DWELL = Math.max(...Object.values(STYLES).map(s => s.dwell));
 
+/**
+ * Typen von Verpflegungsstellen. `maxOffset`: größte Entfernung von der Route (Luftlinie, m). Trinkwasser wird
+ * ohne Umweg nur angezeigt – daher nur Stellen nahe an der Route. Ein neuer Typ braucht außerdem einen
+ * `bias`-Eintrag in STYLES, sonst kommt er als Stopp nicht infrage.
+ */
 export const STOP_TYPES = {
-  water: { label: 'Trinkwasser', icon: '💧', gpxSym: 'Drinking Water' },
-  supermarket: { label: 'Supermarkt', icon: '🛒', gpxSym: 'Shopping Center' },
-  convenience: { label: 'Laden/Kiosk', icon: '🛒', gpxSym: 'Shopping Center' },
-  fuel: { label: 'Tankstelle', icon: '⛽', gpxSym: 'Gas Station' },
-  bakery: { label: 'Bäckerei', icon: '🥐', gpxSym: 'Shopping Center' },
-  cafe: { label: 'Café', icon: '☕', gpxSym: 'Restaurant' },
-  restaurant: { label: 'Restaurant', icon: '🍽️', gpxSym: 'Restaurant' },
+  water: { label: 'Trinkwasser', icon: '💧', gpxSym: 'Drinking Water', maxOffset: 400 },
+  supermarket: { label: 'Supermarkt', icon: '🛒', gpxSym: 'Shopping Center', maxOffset: 1000 },
+  convenience: { label: 'Laden/Kiosk', icon: '🛒', gpxSym: 'Shopping Center', maxOffset: 800 },
+  fuel: { label: 'Tankstelle', icon: '⛽', gpxSym: 'Gas Station', maxOffset: 800 },
+  bakery: { label: 'Bäckerei', icon: '🥐', gpxSym: 'Shopping Center', maxOffset: 600 },
+  cafe: { label: 'Café', icon: '☕', gpxSym: 'Restaurant', maxOffset: 600 },
+  restaurant: { label: 'Restaurant', icon: '🍽️', gpxSym: 'Restaurant', maxOffset: 600 },
 };
+const maxOffset = poi => STOP_TYPES[poi.type].maxOffset;
 
 /** Anzeige des Zustands einer Stelle bei Ankunft (siehe evaluate bzw. waterState). */
 export const STATE_LABELS = {
@@ -175,7 +177,7 @@ function plan(r, candidates, { interval, departure, bike, holidayFor, style, fix
       const holiday = holidayFor(c.along, t);
       const ev = evaluate(c.poi, t, holiday, style);
       if (!ev) continue;
-      const score = ev.tier * 10 - 2 * (c.along - lo) / (hi - lo) + c.offset / MAX_OFFSET[c.poi.type];
+      const score = ev.tier * 10 - 2 * (c.along - lo) / (hi - lo) + c.offset / maxOffset(c.poi);
       if (!best || score < best.score) best = { ...c, ...ev, eta: t, holiday, score };
     }
     if (best) { stops.push(best); pos = best.along; }
@@ -197,7 +199,7 @@ function pausesBefore(eta, stops, fixed, along) {
  * `pausesBefore(along)`: Stopps desselben Tages vor dieser Position (für die Ankunftszeit).
  */
 function waterAlong(r, waters, eta, pausesBefore) {
-  const located = locateNearRoute(r, waters, () => WATER_OFFSET).sort((a, b) => a.along - b.along);
+  const located = locateNearRoute(r, waters, maxOffset).sort((a, b) => a.along - b.along);
   const out = [];
   for (const w of located) {
     const last = out.at(-1);
@@ -368,7 +370,7 @@ export async function addStops(base, { provider, opts, interval, departure, bike
 
   // Nur Typen, die der Pausenstil vorsieht (ohne Trinkwasser – das wird nur angezeigt)
   const candidates = withTypicalHours(pois).filter(p => style.bias[p.type] != null);
-  const located = locateNearRoute(base, candidates, poi => MAX_OFFSET[poi.type]);
+  const located = locateNearRoute(base, candidates, maxOffset);
   mark(`Orte zuordnen (${pois.length} Orte, ${located.length} nahe der Route)`);
   const { stops, gaps } = plan(base, located, { interval, departure, bike, holidayFor, style, fixed: fixedOn(base) });
   mark('Stopps planen');

@@ -6,6 +6,7 @@
  * Abhängigkeiten zu Browser-APIs. Overpass-Abfrage (`statements`) und Auszug (`filters`) müssen dieselben
  * Objekte erfassen; eingeordnet wird beides mit toPoi.
  */
+import { withTimeout } from './shared.js';
 
 const OVERPASS = [
   'https://overpass-api.de/api/interpreter',
@@ -136,12 +137,6 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
   const t = setTimeout(resolve, ms);
   signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Abgebrochen', 'AbortError')); }, { once: true });
 });
-
-/** Abbruch durch den Aufrufer oder nach `ms` (dann TimeoutError). */
-function withTimeout(signal, ms) {
-  if (!AbortSignal.any || !AbortSignal.timeout) return signal;
-  return signal ? AbortSignal.any([signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms);
-}
 
 /** `headers`: zusätzliche Header – der Server muss einen User-Agent mitschicken, sonst lehnt Overpass ab. */
 async function overpass(query, { signal, headers = {} } = {}) {
