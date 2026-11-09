@@ -4,3 +4,5 @@ node_modules/
 # Datenauszug lokal bauen (npm run extract:build)
 dist/
 tmp-extract/
+# Screenshots und Server-Log der Browsertests (npm test)
+tests/out/

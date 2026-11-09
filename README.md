@@ -84,6 +84,10 @@ Sicherheit: Passwörter werden mit scrypt gehasht (verbreitete Passwörter werde
 
 Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Proxy wie Caddy oder nginx). Dann `PUBLIC_URL=https://…` setzen: Das Cookie ist damit immer `Secure`, und der Server sendet HSTS. Hinter einem Proxy (z. B. Plesk/Passenger) einmal mit `DEBUG_IP=1` starten und im Log prüfen, ob die echten Nutzer-IPs erkannt werden – alle Begrenzungen hängen daran (siehe [.env.example](.env.example)).
 
+### Tests
+
+`npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
+
 ## Routing
 
 | Dienst | Rennrad | Gravel | Fahrrad (Trekking/Alltag) | E-Bike | Hinweise |
