@@ -24,7 +24,7 @@ import {
   createSession, destroySession, destroyOtherSessions, currentUser, limitReached, countAttempt, clientIp,
 } from './auth.mjs';
 import { SYNC_KEYS, MODES, BIKES } from '../js/shared.js';
-import { HttpError, sendJson, readBody } from './http.mjs';
+import { HttpError, sendJson, readJson as parseJson } from './http.mjs';
 
 // Konto-Antworten nie zwischenspeichern (enthalten persönliche Daten)
 const json = (res, status, data) => sendJson(res, status, data, { 'Cache-Control': 'no-store' });
@@ -34,8 +34,7 @@ async function readJson(req, limit) {
   if (!String(req.headers['content-type'] || '').startsWith('application/json')) {
     throw new HttpError(415, 'Erwartet JSON');
   }
-  const body = await readBody(req, limit);
-  try { return body ? JSON.parse(body) : {}; } catch { throw new HttpError(400, 'Ungültiges JSON'); }
+  return parseJson(req, limit);
 }
 
 /** JSON-Spalten: Der MariaDB-Treiber liefert sie je nach Version/Server als Text oder schon als Objekt. */

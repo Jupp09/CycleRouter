@@ -13,7 +13,7 @@ import { isTileKey, isLayer } from './js/poiSource.js';
 import { initDb } from './server/db.mjs';
 import { handleAccountApi } from './server/accountApi.mjs';
 import { clientIp } from './server/auth.mjs';
-import { sendJson as json, readBody } from './server/http.mjs';
+import { sendJson as json, readJson } from './server/http.mjs';
 import { initExtract } from './server/extract.mjs';
 import { setSecurityHeaders, contentSecurityPolicy } from './server/security.mjs';
 import { createLimiter } from './server/rateLimit.mjs';
@@ -53,9 +53,9 @@ async function handlePois(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Nur POST' });
   let keys, layers, cacheOnly;
   try {
-    ({ tiles: keys, layers = ['supply'], cacheOnly = false } = JSON.parse(await readBody(req)));
+    ({ tiles: keys, layers = ['supply'], cacheOnly = false } = await readJson(req));
   } catch (e) {
-    return json(res, 400, { error: e.message });
+    return json(res, e.status || 400, { error: e.message });
   }
   if (!Array.isArray(keys) || !keys.length || keys.length > 1000 || !keys.every(isTileKey)) {
     return json(res, 400, { error: 'Ungültige Kachelliste' });
@@ -99,9 +99,9 @@ async function handleRegions(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Nur POST' });
   let keys;
   try {
-    ({ keys } = JSON.parse(await readBody(req, 16 * 1024)));
+    ({ keys } = await readJson(req, 16 * 1024));
   } catch (e) {
-    return json(res, 400, { error: e.message });
+    return json(res, e.status || 400, { error: e.message });
   }
   if (!Array.isArray(keys) || !keys.length || keys.length > 200 || !keys.every(isRegionKey)) {
     return json(res, 400, { error: 'Ungültige Punktliste' });
@@ -137,11 +137,11 @@ async function handleWarm(req, res, url) {
       return json(res, 200, { radiusKm: RADIUS_KM, ...await warmStatus(lat, lon) });
     }
     if (req.method !== 'POST') return json(res, 405, { error: 'Nur GET oder POST' });
-    const { lat, lon } = JSON.parse(await readBody(req, 1024));
+    const { lat, lon } = await readJson(req, 1024);
     if (!validPoint(lat, lon)) return json(res, 400, { error: 'Ungültige Koordinaten' });
     json(res, 200, { radiusKm: RADIUS_KM, ...await requestWarm(lat, lon, clientIp(req)) });
   } catch (e) {
-    json(res, 400, { error: e.message });
+    json(res, e.status || 400, { error: e.message });
   }
 }
 
@@ -152,13 +152,13 @@ async function handleWarm(req, res, url) {
 async function handleWarmRoute(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Nur POST' });
   try {
-    const { tiles } = JSON.parse(await readBody(req, 32 * 1024));
+    const { tiles } = await readJson(req, 32 * 1024);
     if (!Array.isArray(tiles) || !tiles.length || tiles.length > 1000 || !tiles.every(isTileKey)) {
       return json(res, 400, { error: 'Ungültige Kachelliste' });
     }
     json(res, 200, await requestRouteWarm(tiles, clientIp(req)));
   } catch (e) {
-    json(res, 400, { error: e.message });
+    json(res, e.status || 400, { error: e.message });
   }
 }
 

@@ -19,3 +19,9 @@ export async function readBody(req, limit = 64 * 1024) {
   }
   return body;
 }
+
+/** Anfragekörper als JSON lesen; leer → {}. Ungültiges JSON → 400, zu groß → 413 (aus readBody). */
+export async function readJson(req, limit) {
+  const body = await readBody(req, limit);
+  try { return body ? JSON.parse(body) : {}; } catch { throw new HttpError(400, 'Ungültiges JSON'); }
+}
