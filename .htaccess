@@ -1,0 +1,22 @@
+# Zweites Sicherheitsnetz für Apache (z. B. Plesk), falls der Projektordner einmal direkt als Webseite
+# ausgeliefert wird statt über den Node-Server – etwa nach einem Umzug, bevor Node für die Domain eingerichtet ist.
+# Dann gälte die Freigabeliste in server.mjs (PUBLIC) nicht, und .env (Datenbank-Zugangsdaten), server/, cache/ …
+# wären abrufbar. Diese Regeln spiegeln PUBLIC: Bei einer Änderung dort hier mitziehen.
+#
+# Läuft Node (Passenger), schaden die Regeln nicht: Erlaubt ist genau das, was auch der Node-Server ausliefert,
+# dazu /api/… für seine Schnittstellen. Antwortet die ganze Seite nach dem Hochladen mit 500, erlaubt der Server
+# in .htaccess keine Zugriffsregeln (AllowOverride) – dann die Datei entfernen und den Hoster fragen.
+
+# Keine Verzeichnislisten
+Options -Indexes
+
+# Versteckte Dateien und Ordner (.env, .git, .github, diese Datei) nie ausliefern
+<FilesMatch "^\.">
+  Require all denied
+</FilesMatch>
+RedirectMatch 404 /\.
+
+# Nur freigegebene Pfade – alles andere (server/, cache/, scripts/, server.mjs, package.json, *.md …) sperren
+<If "%{REQUEST_URI} !~ m#^/(index\.html|manifest\.webmanifest)?$# && %{REQUEST_URI} !~ m#^/(js|css|profiles|assets)/[\w./-]+$# && %{REQUEST_URI} !~ m#^/api/#">
+  Require all denied
+</If>
