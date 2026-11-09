@@ -26,8 +26,8 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   const tTrek = await page.text('#stat-time');
   urls.length = 0;
   await ev(`document.querySelector('#bike-switch [data-value=ebike]').click(); true`);
-  check('Neu berechnet mit E-Bike', await waitFor(`(async () => ${STATE}.bike === 'ebike')()`, 5000) && await waitFor(idle, 90000));
-  await sleep(1500);
+  // Erst wenn die Fahrzeit das E-Bike-Tempo nennt, ist die neue Route angezeigt (vorher ist die Statuszeile auch ruhig)
+  check('Neu berechnet mit E-Bike', await waitFor(`document.querySelector('#stat-time').title.startsWith('Ø 22 km/h') && ${idle}`, 90000));
   const tE = await page.text('#stat-time');
   // Legs aus dem Cache bräuchten keine Anfrage – hier sind es neue (anderes Profil)
   check('BRouter-Anfrage mit E-Bike-Parameter', urls.some(u => u.includes('profile:consider_elevation=0')), urls[0]?.replace(/lonlats=[^&]*/, '…').slice(0, 120));

@@ -5,7 +5,9 @@
 //   DB_ALLOW_PUBLIC_KEY_RETRIEVAL  für MySQL 8 ohne TLS (Anmeldeverfahren caching_sha2_password);
 //                                  bei localhost automatisch an, sonst lieber DB_SSL verwenden
 // Ohne DB_HOST läuft CycloRouter wie bisher ohne Konten – die App blendet die Funktionen dann aus.
-import mariadb from 'mariadb';
+// Der Treiber wird erst in initDb geladen: Fehlt das Paket (z. B. „npm install“ nach einem Deploy vergessen),
+// läuft der Server ohne Konten weiter, statt beim Start abzustürzen.
+let mariadb = null;
 
 let pool = null;
 
@@ -100,6 +102,13 @@ function explain(e) {
 export async function initDb(log = console.log) {
   if (!process.env.DB_HOST) {
     log('Konten: keine Datenbank konfiguriert (DB_HOST fehlt) – Konten und gespeicherte Routen sind deaktiviert.');
+    return false;
+  }
+  try {
+    mariadb ??= (await import('mariadb')).default;
+  } catch (e) {
+    if (e.code !== 'ERR_MODULE_NOT_FOUND') throw e;
+    log('Konten: Paket „mariadb“ fehlt – im Projektordner „npm install“ ausführen. Konten sind deaktiviert.');
     return false;
   }
   const opts = connectionOptions();
