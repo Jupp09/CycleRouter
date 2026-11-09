@@ -72,6 +72,20 @@ export function selectMode(mode) {
   if (mode === 'ab') calcAB();
 }
 
+/**
+ * Routing-Einstellungen einer geöffneten (gespeicherten oder geteilten) Route übernehmen und speichern,
+ * ohne neu zu berechnen. Fehlende Werte (undefined, null, '') bleiben, wie sie sind.
+ */
+export function applyRouteSettings(settings) {
+  for (const key of ['mode', 'bike', 'traffic', 'eurovelo', 'provider']) {
+    const value = settings[key];
+    if (value == null || value === '') continue;
+    state[key] = value;
+    storage.set(key, value);
+  }
+  syncUi();
+}
+
 /** Einstellung übernehmen, speichern und – falls schon eine Route da ist – neu berechnen. */
 function setRoutingOption(key, value) {
   state[key] = value;

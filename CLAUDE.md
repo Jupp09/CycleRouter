@@ -55,10 +55,10 @@ npm run extract:build    # build the extract locally (Linux/macOS with curl + os
 | [controls.js](js/app/controls.js) | `syncUi()` (state → all switches and fields) and the routing controls (bike, mode, traffic, EuroVelo, provider, direction, distance) |
 | [waypoints.js](js/app/waypoints.js) | Start/end (search, map click, locate, swap, clear), manual intermediate stops (`state.vias`), marker dragging |
 | [resultsView.js](js/app/resultsView.js), [supplyView.js](js/app/supplyView.js), [alongView.js](js/app/alongView.js), [stagesView.js](js/app/stagesView.js) | Result panel (stats, surface/way-type breakdown, elevation); supply stops, regions and holiday hints; "find along the route"; multi-day stages and stay settings |
-| [exportView.js](js/app/exportView.js), [accountView.js](js/app/accountView.js), [homeView.js](js/app/homeView.js), [settingsDialog.js](js/app/settingsDialog.js) | GPX share/download; login, saved routes, share links and settings sync; home address and server warm-up; the settings dialog (speed, appearance, and deciding what to recalculate on save) |
+| [exportView.js](js/app/exportView.js), [routesView.js](js/app/routesView.js), [accountView.js](js/app/accountView.js), [homeView.js](js/app/homeView.js), [settingsDialog.js](js/app/settingsDialog.js) | GPX share/download; saved routes ("Meine Routen", save, share links, opening a saved or shared route via `restoreRoute`); login, password, account deletion and settings sync; home address and server warm-up; the settings dialog (speed, appearance, and deciding what to recalculate on save) |
 | [theme.js](js/app/theme.js) | Appearance `system` (default) / `light` / `dark`. A forced scheme sets `data-theme` on `<html>`, and `css/style.css` keeps the dark tokens twice (media query and `[data-theme="dark"]`), so keep both blocks in sync. An inline script in `index.html` applies the saved choice before first paint. Device-only, not in `SYNC_KEYS`. |
 
-Views don't call each other to refresh. `showRoute()`/`clearRoute()` emit `'route'` (route or `null`), and each view renders its own part. Other events: `'start'` (start point changed, e.g. holiday hint for the departure) and `'stages'` (multi-day state changed while no new route is shown). Direct imports between views exist only for actions (e.g. `alongView` → `addVia`).
+Views don't call each other to refresh. `showRoute()`/`clearRoute()` emit `'route'` (route or `null`), and each view renders its own part. Other events: `'start'` (start point changed, e.g. holiday hint for the departure), `'stages'` (multi-day state changed while no new route is shown) and `'account'` (signed in/out, account deleted, session expired: accountView redraws the account box, routesView the save buttons and "Meine Routen"; emit it *before* `renderAccount(message)`, because its handler redraws the box without a message). Direct imports between views exist only for actions (e.g. `alongView` → `addVia`).
 
 **Import cycles are intended** (e.g. `pipeline` ↔ `waypoints`, `controls` → `pipeline` → …). They are safe because cross-module exports are **function declarations** (hoisted), and modules only attach DOM listeners and `on()` handlers while loading. Calls to other `app/` modules happen inside handlers, never at module top level. The only exceptions are `state.js`, `dom.js` and `mapView.js`, which are not part of any cycle and can be used at top level. Keep it that way when adding a module, and don't export `const` arrow functions that other modules in a cycle call.
 
@@ -92,7 +92,7 @@ Views don't call each other to refresh. `showRoute()`/`clearRoute()` emit `'rout
 
 The route is shown after each step, so it is usable before the stop search finishes.
 
-**Loop detection depends on object identity:** `isLoop(r)` checks `waypoints[0] === waypoints[last]`. `restoreRoute` rebuilds that identity on purpose, and any code that copies waypoints must keep it.
+**Loop detection depends on object identity:** `isLoop(r)` checks `waypoints[0] === waypoints[last]`. `restoreRoute` (routesView.js) rebuilds that identity on purpose, and any code that copies waypoints must keep it.
 
 **Saved routes** contain only the origin route (coords, segments, manual waypoints) and `stayChoices` (OSM ids). Stops and stays are planned again when the route is opened.
 

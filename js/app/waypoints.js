@@ -38,6 +38,23 @@ export async function setPoint(which, point, { label, silent = false } = {}) {
   }
 }
 
+/**
+ * Start, Ziel und Zwischenstopps einer geöffneten Route setzen, ohne neu zu berechnen. Fehlende Namen
+ * werden per Rückwärtssuche nachgetragen; bis dahin stehen die Koordinaten im Feld.
+ */
+export function setRoutePoints(start, end, vias) {
+  state.start = start;
+  state.end = end;
+  state.vias = vias;
+  for (const [which, input] of [['start', ui.startInput], ['end', ui.endInput]]) {
+    const p = state[which];
+    input.value = p ? p.label || `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}` : '';
+    if (p && !p.label) reverse(p).then(l => { p.label = l; if (state[which] === p) input.value = l; });
+  }
+  renderVias();
+  emit('start');
+}
+
 attachSearch(ui.startInput, {
   getBias: () => map.center(),
   onSelect: place => { setPoint('start', place, { label: place.label }); if (state.mode !== 'ab' || !state.end) map.flyTo(place); },

@@ -1,268 +1,19 @@
 /**
- * Konto-Funktionen (nur mit Server-Datenbank, sonst ausgeblendet): Anmelden/Registrieren im
- * Einstellungsdialog, Routen speichern und per Link teilen, „Meine Routen“ und der Abgleich der
- * Einstellungen zwischen Geräten.
- *
- * state.saved:      die geöffnete eigene gespeicherte Route {id, name, shareToken} – „Speichern“ aktualisiert sie.
- * state.loadedName: Name einer geöffneten gespeicherten oder geteilten Route (bleibt bei Neuberechnung erhalten).
+ * Konto (nur mit Server-Datenbank, sonst ausgeblendet): Anmelden/Registrieren, Passwort, Konto löschen
+ * im Einstellungsdialog und der Abgleich der Einstellungen zwischen Geräten. Gespeicherte Routen und
+ * Teilen-Links: routesView.js – beide Seiten stimmen sich über das Ereignis 'account' ab.
  */
-import { providers, withStats } from '../routing/index.js';
 import {
   account, SYNC_KEYS, loadAccount, login, register, logout, deleteAccount, changePassword, logoutOthers,
   fetchSettings, pushSettings,
-  listRoutes, getRoute, createRoute, updateRoute, deleteRoute, shareRoute, unshareRoute, getSharedRoute, shareUrl,
 } from '../account.js';
-import { reverse } from '../geocode.js';
-import { storage, onStorageSet, debounce, formatKm, formatM, formatDate } from '../utils.js';
-import { state, on, emit, MODE_LABELS, originRoute, defaultName } from './state.js';
-import { $, ui, isMobile, setStatus, flashStatus, ask, externalLink, linkButton, rowButton, span } from './dom.js';
-import { map } from './mapView.js';
-import { syncUi } from './controls.js';
-import { run, showRoute, abortCalculation } from './pipeline.js';
-import { renderVias } from './waypoints.js';
-import { searchAlong } from './alongView.js';
+import { storage, onStorageSet, debounce } from '../utils.js';
+import { on, emit } from './state.js';
+import { $ } from './dom.js';
+import { openSharedFromUrl } from './routesView.js';
 
-on('route', renderSaveActions);
-
-// ---------- Route ↔ Datenbank ----------
-
-const round5 = v => Math.round(v * 1e5) / 1e5; // ~1 m genau
-const pointLabel = p => p.label || `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
-
-/**
- * Aktuelle Route für die Datenbank – ohne Verpflegungsstopps und Übernachtungen (die werden beim Öffnen
- * neu geplant; die gewählten Unterkünfte werden über `stayChoices` wieder übernommen).
- */
-function serializeRoute(name) {
-  const r = originRoute();
-  const wp = p => ({
-    lat: round5(p.lat), lon: round5(p.lon),
-    ...(p.label && { label: p.label }), ...(p.manual && { manual: true }), ...(p.icon && { icon: p.icon }),
-    ...(p.food && { food: true }), // fester Verpflegungs-Zwischenstopp
-  });
-  return {
-    name, mode: state.mode, bike: state.bike, distance: Math.round(r.distance), ascent: Math.round(r.ascent),
-    data: {
-      v: 1, traffic: state.traffic, eurovelo: state.eurovelo, provider: state.provider,
-      coords: r.coords.map(([lat, lon, ele]) => [round5(lat), round5(lon), ele == null ? null : Math.round(ele * 10) / 10]),
-      segments: r.segments || [],
-      waypoints: r.waypoints.filter(p => !p.stop && !p.stay).map(wp),
-      ...(state.multiDay && { multiDay: true, stayChoices: state.stayChoices }),
-    },
-  };
-}
-
-/** Gespeicherte oder geteilte Route öffnen – exakt wie gespeichert, ohne Neuberechnung. */
-function restoreRoute(saved, { own }) {
-  const d = saved.data;
-  abortCalculation();
-  searchAlong(null);
-  state.mode = saved.mode;
-  state.bike = saved.bike;
-  if (d.traffic) state.traffic = d.traffic;
-  if (d.eurovelo) state.eurovelo = d.eurovelo;
-  if (d.provider && providers[d.provider]) state.provider = d.provider;
-  for (const k of ['mode', 'bike', 'traffic', 'eurovelo', 'provider']) storage.set(k, state[k]);
-
-  const wps = d.waypoints.map(p => ({ ...p }));
-  const last = wps.length - 1;
-  // Rundkurs: Start und Ende müssen dasselbe Objekt sein, sonst wird er nicht als Rundkurs erkannt
-  if (saved.mode === 'loop' && last > 1 && wps[0].lat === wps[last].lat && wps[0].lon === wps[last].lon) wps[last] = wps[0];
-  state.start = wps[0];
-  state.end = saved.mode !== 'loop' && last > 0 ? wps[last] : null;
-  state.vias = saved.mode === 'ab' ? wps.slice(1, -1).filter(p => p.manual) : [];
-  ui.startInput.value = pointLabel(state.start);
-  ui.endInput.value = state.end ? pointLabel(state.end) : '';
-  for (const [p, input] of [[state.start, ui.startInput], [state.end, ui.endInput]]) {
-    if (p && !p.label) reverse(p).then(l => { p.label = l; input.value = l; });
-  }
-
-  state.saved = own ? { id: saved.id, name: saved.name, shareToken: saved.shareToken || null } : null;
-  state.loadedName = saved.name;
-  syncUi();
-  renderVias();
-  emit('start');
-  state.multiDay = !!d.multiDay;
-  state.stayChoices = d.stayChoices || [];
-  const r = withStats({ coords: d.coords, segments: d.segments }, wps);
-  showRoute(r);
-  // Übernachtungen (mit den gespeicherten Unterkünften) und Stopps auf die gespeicherte Route aufsetzen
-  if (state.multiDay || state.supply.enabled) run(async () => r, { fit: false, loadingText: 'Wird geplant …' });
-  renderMyRoutes();
-}
-
-// ---------- Speichern und Teilen ----------
-
-/** Speichern (bzw. die geöffnete eigene Route aktualisieren) → gespeicherte Route oder null. */
-async function saveCurrentRoute({ asNew = false } = {}) {
-  if (!state.route || !account.user) return null;
-  const name = ui.routeName.value.trim() || defaultName(state.route);
-  const payload = serializeRoute(name);
-  try {
-    if (state.saved && !asNew) {
-      await updateRoute(state.saved.id, payload);
-      state.saved.name = name;
-      flashStatus(`„${name}“ aktualisiert.`);
-    } else {
-      const { id } = await createRoute(payload);
-      state.saved = { id, name, shareToken: null };
-      flashStatus(`„${name}“ gespeichert – auf allen deinen Geräten unter „Meine Routen“.`);
-    }
-    state.loadedName = name;
-    renderSaveActions();
-    refreshMyRoutes();
-    return state.saved;
-  } catch (e) {
-    setStatus(e.message, 'error');
-    return null;
-  }
-}
-
-async function copyText(text) {
-  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
-}
-
-/** Teilen-Link erzeugen (speichert vorher den aktuellen Stand) und weitergeben bzw. kopieren. */
-async function shareCurrentRoute() {
-  const saved = await saveCurrentRoute();
-  if (!saved) return;
-  try {
-    saved.shareToken = await shareRoute(saved.id);
-  } catch (e) {
-    setStatus(e.message, 'error');
-    return;
-  }
-  const url = shareUrl(saved.shareToken);
-  renderSaveActions();
-  refreshMyRoutes();
-  if (isMobile && navigator.share) {
-    try { await navigator.share({ title: saved.name, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
-  }
-  flashStatus(await copyText(url) ? 'Link kopiert – wer ihn öffnet, sieht die Route samt Start und Ziel (auch ohne Konto).' : 'Link erstellt – siehe unten.');
-}
-
-async function revokeShareLink() {
-  try {
-    await unshareRoute(state.saved.id);
-    state.saved.shareToken = null;
-    flashStatus('Teilen-Link zurückgezogen – er funktioniert nicht mehr.');
-    renderSaveActions();
-    refreshMyRoutes();
-  } catch (e) { setStatus(e.message, 'error'); }
-}
-
-/** Knöpfe „Route speichern“/„Teilen“ und die Zeile darunter (Teilen-Link, als neue Route speichern). */
-function renderSaveActions() {
-  const loggedIn = account.enabled && !!account.user;
-  $('#save-actions').hidden = !(loggedIn && state.route);
-  $('#btn-save-route').textContent = state.saved ? 'Änderungen speichern' : 'Route speichern';
-
-  const hint = $('#save-hint');
-  hint.replaceChildren();
-  hint.hidden = true;
-  if (!state.route || !account.enabled) return;
-  if (!loggedIn) {
-    hint.hidden = false;
-    hint.textContent = 'Zum Speichern und Teilen unter Einstellungen (Zahnrad) anmelden.';
-    return;
-  }
-  if (!state.saved) return;
-  hint.hidden = false;
-  if (state.saved.shareToken) {
-    hint.append(externalLink('Teilen-Link', shareUrl(state.saved.shareToken)), ' aktiv (',
-      linkButton('zurückziehen', revokeShareLink), ') · ');
-  }
-  hint.append(linkButton('als neue Route speichern', () => saveCurrentRoute({ asNew: true })));
-}
-
-$('#btn-save-route').addEventListener('click', () => saveCurrentRoute());
-$('#btn-share-link').addEventListener('click', shareCurrentRoute);
-
-// ---------- Meine Routen ----------
-
-let myRoutes = [];
-
-async function refreshMyRoutes() {
-  const box = $('#my-routes');
-  box.hidden = !(account.enabled && account.user);
-  if (box.hidden) return;
-  try {
-    myRoutes = await listRoutes();
-  } catch (e) {
-    // Sitzung abgelaufen → als abgemeldet anzeigen
-    if (e.status === 401) { account.user = null; renderAccount(); renderSaveActions(); box.hidden = true; }
-    return;
-  }
-  renderMyRoutes();
-}
-
-function renderMyRoutes() {
-  $('#my-routes-count').textContent = myRoutes.length ? `(${myRoutes.length})` : '';
-  $('#my-routes-empty').hidden = myRoutes.length > 0;
-  $('#my-routes-list').replaceChildren(...myRoutes.map(r => {
-    const li = document.createElement('li');
-    const current = state.saved?.id === r.id;
-    if (current) li.className = 'current';
-    const meta = document.createElement('small');
-    meta.textContent = [formatKm(r.distance), `${formatM(r.ascent)} ↑`, MODE_LABELS[r.mode], formatDate(new Date(r.updatedAt))]
-      .join(' · ') + (r.shared ? ' · 🔗 geteilt' : '');
-    // Name und Angaben als Knopf „öffnen“ – vorher ein anklickbares <li>, das per Tastatur nicht erreichbar war
-    const open = rowButton([span('name', r.name), meta], () => openSaved(r.id));
-    if (current) open.setAttribute('aria-current', 'true');
-    const tools = document.createElement('div');
-    tools.className = 'tools';
-    const tool = (icon, title, fn) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = icon;
-      b.title = title;
-      b.setAttribute('aria-label', `„${r.name}“ ${title.toLowerCase()}`);
-      b.addEventListener('click', fn);
-      tools.append(b);
-    };
-    tool('✏️', 'Umbenennen', () => renameSaved(r));
-    tool('🗑️', 'Löschen', () => deleteSaved(r));
-    li.append(open, tools);
-    return li;
-  }));
-}
-
-async function openSaved(id) {
-  setStatus('Route wird geladen …', 'loading');
-  try {
-    const r = await getRoute(id);
-    setStatus(null);
-    restoreRoute(r, { own: true });
-  } catch (e) {
-    setStatus(e.message, 'error');
-  }
-}
-
-async function renameSaved(r) {
-  const name = (await ask({ title: 'Route umbenennen', input: r.name, ok: 'Umbenennen' }))?.trim();
-  if (!name || name === r.name) return;
-  try {
-    await updateRoute(r.id, { name });
-    if (state.saved?.id === r.id) {
-      state.saved.name = state.loadedName = ui.routeName.value = name;
-    }
-    refreshMyRoutes();
-  } catch (e) { setStatus(e.message, 'error'); }
-}
-
-async function deleteSaved(r) {
-  const sure = await ask({
-    title: `„${r.name}“ löschen?`,
-    text: r.shared ? 'Der Teilen-Link funktioniert danach nicht mehr.' : 'Das lässt sich nicht rückgängig machen.',
-    ok: 'Löschen', danger: true,
-  });
-  if (!sure) return;
-  try {
-    await deleteRoute(r.id);
-    if (state.saved?.id === r.id) { state.saved = null; renderSaveActions(); }
-    refreshMyRoutes();
-  } catch (e) { setStatus(e.message, 'error'); }
-}
+// Auch bei abgelaufener Sitzung, die routesView beim Laden von „Meine Routen“ bemerkt
+on('account', () => renderAccount());
 
 // ---------- Anmelden, Abmelden, Konto löschen (im Einstellungsdialog) ----------
 
@@ -292,20 +43,16 @@ async function authenticate(kind) {
     return;
   }
   $('#account-pass').value = '';
+  emit('account'); // vor der Meldung – der Handler zeichnet den Kontobereich neu
   renderAccount(kind === 'login' ? 'Angemeldet.' : 'Konto angelegt – deine Einstellungen werden ab jetzt abgeglichen.');
-  renderSaveActions();
   // Neues Konto: lokale Einstellungen hochladen; Anmeldung: Stand vom Konto übernehmen
   await syncSettings({ preferLocal: kind === 'register' });
-  refreshMyRoutes();
 }
 
-/** Nach Abmelden oder Löschen: Bezug zur gespeicherten Route und die Liste verwerfen. */
+/** Nach Abmelden oder Löschen: routesView verwirft Bezug zur gespeicherten Route und die Liste. */
 function signedOut(message) {
-  state.saved = null;
-  myRoutes = [];
+  emit('account');
   renderAccount(message);
-  renderSaveActions();
-  refreshMyRoutes();
 }
 
 $('#btn-login').addEventListener('click', () => authenticate('login'));
@@ -409,31 +156,11 @@ async function syncSettings({ preferLocal = false } = {}) {
 
 // ---------- Start ----------
 
-/** Geteilten Link (?route=…) öffnen. */
-async function openSharedFromUrl() {
-  const token = new URLSearchParams(location.search).get('route');
-  if (!token) return;
-  history.replaceState(null, '', location.pathname); // Link nicht beim Neuladen erneut öffnen
-  setStatus('Geteilte Route wird geladen …', 'loading');
-  try {
-    const r = await getSharedRoute(token);
-    setStatus(null);
-    restoreRoute(r, { own: false });
-    map.fitRoute(state.route.coords);
-    flashStatus(`Geteilte Route „${r.name}“${account.user ? ' – mit „Route speichern“ in deine Routen übernehmen.' : '.'}`);
-  } catch (e) {
-    setStatus(e.message, 'error');
-  }
-}
-
 /** Beim Start: Kontostatus laden, Einstellungen abgleichen, „Meine Routen“ und einen geteilten Link öffnen. */
 export async function initAccount() {
   await loadAccount();
-  renderAccount();
-  if (account.user) {
-    await syncSettings();
-    refreshMyRoutes();
-  }
-  renderSaveActions();
+  renderAccount(); // gleich zeigen, nicht erst nach dem Abgleich
+  if (account.user) await syncSettings();
+  emit('account'); // Kontobereich, Speichern-Knöpfe, „Meine Routen“
   await openSharedFromUrl();
 }

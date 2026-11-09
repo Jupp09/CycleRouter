@@ -9,6 +9,7 @@
  *   'route'  (route | null)  neue Route angezeigt bzw. Route gelöscht
  *   'start'  ()              Startort geändert (z. B. Feiertagshinweis zur Abfahrt aktualisieren)
  *   'stages' ()              Zustand der Mehrtagestour geändert (Suche läuft, Fehler, …)
+ *   'account' ()             Anmeldestand geändert (angemeldet, abgemeldet, gelöscht, Sitzung abgelaufen)
  */
 import { providers } from '../routing/index.js';
 import { storage, newSeed, toDateTimeLocal } from '../utils.js';

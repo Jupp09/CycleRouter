@@ -1,7 +1,7 @@
 /**
  * Einstieg der App. Die eigentliche Logik liegt in js/app/:
  *
- *   state.js          Zustand, abgeleitete Werte, Ereignisse ('route', 'start', 'stages')
+ *   state.js          Zustand, abgeleitete Werte, Ereignisse ('route', 'start', 'stages', 'account')
  *   dom.js            Elementzugriff, Statuszeile, Rückfrage-Dialog
  *   mapView.js        Karte, Höhenprofil, Routenlinie, Marker
  *   pipeline.js       Berechnungsablauf (Grundroute → Mehrtagestour → Verpflegungsstopps)
@@ -12,7 +12,8 @@
  *   alongView.js      „Entlang der Route finden“
  *   stagesView.js     Mehrtagestouren
  *   exportView.js     GPX teilen/herunterladen
- *   accountView.js    Konto, gespeicherte Routen, Teilen-Links, Einstellungs-Abgleich
+ *   routesView.js     gespeicherte Routen, „Meine Routen“, Teilen-Links
+ *   accountView.js    Anmelden, Passwort, Konto löschen, Einstellungs-Abgleich
  *   homeView.js       Heimatadresse und Vorrat auf dem Server
  *   settingsDialog.js Einstellungsdialog
  *
@@ -26,6 +27,7 @@ import './app/supplyView.js';
 import './app/alongView.js';
 import './app/stagesView.js';
 import './app/exportView.js';
+import './app/routesView.js';
 import { initAccount } from './app/accountView.js';
 import { initHome } from './app/homeView.js';
 import './app/settingsDialog.js';

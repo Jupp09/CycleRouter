@@ -118,7 +118,8 @@ js/app/                Oberfläche und Ablauf
   alongView.js         „Entlang der Route finden“
   stagesView.js        Mehrtagestouren und ihre Einstellungen
   exportView.js        GPX teilen/herunterladen
-  accountView.js       Konto, gespeicherte Routen, Teilen-Links, Einstellungs-Abgleich
+  routesView.js        Gespeicherte Routen, „Meine Routen“, Teilen-Links
+  accountView.js       Anmelden, Passwort, Konto löschen, Einstellungs-Abgleich
   homeView.js          Heimatadresse, Vorrat der Heimatregion auf dem Server
   settingsDialog.js    Einstellungsdialog
   theme.js             Darstellung: System (Standard), Hell oder Dunkel – nur auf diesem Gerät
