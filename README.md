@@ -9,7 +9,7 @@ Routenplaner für **Rennrad**, **Gravelbike**, **Fahrrad** (Trekking-/Alltagsrad
 - Höhenprofil, Höhenmeter, geschätzte Fahrzeit
 - Aufschlüsselung nach **Untergrund** (Asphalt, Pflaster, Schotter …) und **Wegtyp** (Radweg, Hauptstraße, Wirtschaftsweg …) mit km und %, optional als Einfärbung der Route und als Farbband im Höhenprofil ([js/surfaces.js](js/surfaces.js))
 - Marker verschiebbar – die Route wird neu berechnet
-- **Mehrtagestouren** auf Knopfdruck (sobald die Route länger als die eingestellten km pro Tag ist): Tagesetappen, je Nacht wählbare Unterkunft (Hotel, Pension, Hostel, Zeltplatz aus OpenStreetMap) mit geschätztem Preis gegen das Budget pro Nacht und „Preis prüfen“-Link mit Datum ([js/stays.js](js/stays.js))
+- **Mehrtagestouren** auf Knopfdruck (sobald die Route länger als die eingestellten km pro Tag ist): Tagesetappen, je Nacht wählbare Unterkunft (Hotel, Pension, Hostel, Zeltplatz aus OpenStreetMap) mit geschätztem Preis gegen das Budget pro Nacht und „Preis prüfen“-Link mit Datum ([js/stays.js](js/stays.js)). Jeder Tag lässt sich einzeln als GPX exportieren (Track von Unterkunft zu Unterkunft, mit den Wegpunkten dieses Tages), auf dem Handy alle Tage auf einmal über das Teilen-Menü
 - **Verpflegung unterwegs** ([js/stops.js](js/stops.js)):
   - Alle *x* km ein Stopp mit Essen (Supermarkt, Kiosk, Bäckerei, Café, Restaurant, Tankstelle), der bei der geschätzten Ankunft geöffnet hat – mit Feiertagen am Ort und typischen Öffnungszeiten von Ketten. Die Route führt durch die Stopps.
   - **Pausenstil** in den Einstellungen: *Zügig* (Supermarkt und Tankstelle, 10 min je Stopp) oder *Gemütlich* (Café, Bäckerei, Restaurant, keine Tankstellen, 30 min je Stopp).
@@ -116,7 +116,7 @@ js/app/                Oberfläche und Ablauf
   resultsView.js       Kennzahlen, Untergrund/Wegtyp, Routenname
   supplyView.js        Verpflegungsstopps, Trinkwasser, Regionen, Feiertage
   alongView.js         „Entlang der Route finden“
-  stagesView.js        Mehrtagestouren und ihre Einstellungen
+  stagesView.js        Mehrtagestouren, ihre Einstellungen und GPX je Tag
   exportView.js        GPX teilen/herunterladen
   routesView.js        Gespeicherte Routen, „Meine Routen“, Teilen-Links
   accountView.js       Anmelden, Passwort, Konto löschen, Einstellungs-Abgleich

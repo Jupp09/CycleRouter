@@ -1,21 +1,39 @@
+import { indexAtDistance } from './utils.js';
+import { locateOnRoute } from './routeGeometry.js';
+
 const escapeXml = s => s.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
 
 const hours = s => s.poi.tags.opening_hours
   || (s.poi.typical ? `${s.poi.typical.hours} (typisch für ${s.poi.typical.chain})` : '');
 
-export function toGpx(route, name) {
+/**
+ * GPX einer Route. `range` {from, to} (m ab Start): nur dieser Abschnitt, z. B. ein Tag einer Mehrtagestour –
+ * Track zugeschnitten, Wegpunkte nur aus dem Abschnitt (Übernachtungen an beiden Enden gehören dazu).
+ */
+export function toGpx(route, name, range = null) {
   const time = new Date().toISOString();
-  const points = route.coords.map(([lat, lon, ele]) =>
+  // 1 m Spielraum: Wegpunkte an der Tagesgrenze (Unterkunft) liegen sonst je nach Rundung knapp außerhalb
+  const inRange = along => !range || (along >= range.from - 1 && along <= range.to + 1);
+  const coords = range
+    ? route.coords.slice(indexAtDistance(route, range.from), indexAtDistance(route, range.to) + 1)
+    : route.coords;
+  const points = coords.map(([lat, lon, ele]) =>
     `      <trkpt lat="${lat.toFixed(6)}" lon="${lon.toFixed(6)}">${ele != null ? `<ele>${ele.toFixed(1)}</ele>` : ''}</trkpt>`,
   ).join('\n');
-  const vias = route.waypoints.filter(p => p.manual).map((p, i) =>
+  // Feste Zwischenstopps und Unterkünfte haben keine Position auf der Route – über die Wegpunkte verorten
+  const wpAlong = range ? locateOnRoute(route, route.waypoints) : [];
+  const alongOf = p => wpAlong[route.waypoints.indexOf(p)];
+  const vias = route.waypoints.filter(p => p.manual).map((p, i) => [p, i]).filter(([p]) => inRange(alongOf(p))).map(([p, i]) =>
     `  <wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}">
     <name>${escapeXml(p.label || `Zwischenstopp ${i + 1}`)}</name>
     <sym>Flag, Blue</sym>
   </wpt>
 `).join('');
-  // Übernachtungen einer Mehrtagestour
-  const stays = (route.stays?.nights || []).filter(n => n.chosen).map(n => {
+  // Übernachtungen einer Mehrtagestour: die Unterkünfte unterwegs sind Wegpunkte der Route (in derselben
+  // Reihenfolge wie die Nächte), die am Ziel liegt am Ende
+  const stayPoints = route.waypoints.filter(p => p.stay);
+  const stayAlong = n => (n.end ? route.distance : alongOf(stayPoints[route.stays.nights.filter(m => m.chosen && !m.end).indexOf(n)]));
+  const stays = (route.stays?.nights || []).filter(n => n.chosen && (!range || inRange(stayAlong(n)))).map(n => {
     const p = n.chosen.poi;
     return `  <wpt lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}">
     <name>${escapeXml(`Nacht ${n.index + 1}: ${p.name || 'Unterkunft'}`)}</name>
@@ -24,13 +42,13 @@ export function toGpx(route, name) {
 `;
   }).join('');
   // Trinkwasser an der Route (nur angezeigt, nicht angefahren) – auf dem Radcomputer nützlich
-  const water = (route.water || []).map(w => `  <wpt lat="${w.poi.lat.toFixed(6)}" lon="${w.poi.lon.toFixed(6)}">
+  const water = (route.water || []).filter(w => inRange(w.along)).map(w => `  <wpt lat="${w.poi.lat.toFixed(6)}" lon="${w.poi.lon.toFixed(6)}">
     <name>${escapeXml(`Trinkwasser${w.poi.name ? ': ' + w.poi.name : ''}`)}</name>${w.poi.tags.opening_hours ? `
     <desc>${escapeXml(w.poi.tags.opening_hours)}</desc>` : ''}
     <sym>Drinking Water</sym>
   </wpt>
 `).join('');
-  const wpts = vias + stays + water + (route.stops || []).map(s => {
+  const wpts = vias + stays + water + (route.stops || []).filter(s => inRange(s.along)).map(s => {
     const name = `${s.typeLabel}${s.poi.name ? ': ' + s.poi.name : ''}`;
     return `  <wpt lat="${s.poi.lat.toFixed(6)}" lon="${s.poi.lon.toFixed(6)}">
     <name>${escapeXml(name)}</name>${hours(s) ? `
@@ -60,8 +78,9 @@ ${points}
 const GPX_TYPE = 'application/gpx+xml';
 const fileName = name => name.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_') + '.gpx';
 
-export function downloadGpx(route, name) {
-  const blob = new Blob([toGpx(route, name)], { type: GPX_TYPE });
+/** GPX-Datei herunterladen; `range` wie bei toGpx. */
+export function downloadGpx(route, name, range = null) {
+  const blob = new Blob([toGpx(route, name, range)], { type: GPX_TYPE });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -87,13 +106,15 @@ export function canShareGpx() {
 }
 
 /**
- * GPX über das Teilen-Menü weitergeben. → 'shared' | 'cancelled'.
+ * GPX-Dateien über das Teilen-Menü weitergeben – eine oder mehrere in einem Vorgang (z. B. alle Tage einer
+ * Mehrtagestour). `files`: [{name, range?}]. → 'shared' | 'cancelled'.
  * Wirft, wenn das Teilen nicht möglich ist (der Aufrufer bietet dann den Download an).
  */
-export async function shareGpx(route, name) {
-  const file = new File([toGpx(route, name)], fileName(name), { type: GPX_TYPE });
+export async function shareGpx(route, files, title = files[0].name) {
+  const list = files.map(f => new File([toGpx(route, f.name, f.range)], fileName(f.name), { type: GPX_TYPE }));
+  if (navigator.canShare && !navigator.canShare({ files: list })) throw new Error('Diese Dateien lassen sich nicht teilen');
   try {
-    await navigator.share({ files: [file], title: name });
+    await navigator.share({ files: list, title });
     return 'shared';
   } catch (e) {
     if (e.name === 'AbortError') return 'cancelled'; // Menü geschlossen, ohne zu teilen

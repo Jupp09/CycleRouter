@@ -2,7 +2,7 @@
  * Mehrtagestouren – nur auf Knopfdruck: Ist die Route deutlich länger als die Tagesetappe, bietet
  * „Als Mehrtagestour planen“ die Aufteilung an. Dann werden je Nacht Unterkünfte vorgeschlagen (Auswahl
  * per Liste) und die Route durch die gewählten geführt. Dazu die Einstellungen im Zahnrad-Dialog
- * (km pro Tag, Budget, Unterkunftsarten, Übernachtung am Ziel).
+ * (km pro Tag, Budget, Unterkunftsarten, Übernachtung am Ziel). Jeder Tag lässt sich einzeln als GPX ausgeben.
  */
 import {
   STAY_TYPES, STAY_GROUPS, isMultiDayCandidate, priceLabel, priceLink, websiteOf,
@@ -15,9 +15,16 @@ import { $, textLines, externalLink, linkButton, flashStatus, osmLinks } from '.
 import { map } from './mapView.js';
 import { replanStops } from './pipeline.js';
 import { setDeparture } from './supplyView.js';
+import { exportGpx, gpxName } from './exportView.js';
 
 on('route', renderStages);
 on('stages', renderStages);
+
+/** GPX-Datei je Tag: Name „<Route> – Tag 2“, Abschnitt von der Vornacht bis zur nächsten Unterkunft. */
+const dayFile = s => ({ name: `${gpxName()} – Tag ${s.day}`, range: { from: s.from, to: s.to } });
+$('#btn-stages-gpx').addEventListener('click', () => {
+  if (state.route?.stays) exportGpx(stageStats(state.route, state.bike).map(dayFile));
+});
 
 const FIT_LABEL = { ok: 'im Budget', maybe: 'evtl. im Budget', over: 'über Budget' };
 
@@ -71,7 +78,12 @@ export function renderStages() {
     day.innerHTML = '<span></span><small></small>';
     day.firstChild.textContent = `Tag ${s.day} · ${formatDayDate(date)}`;
     day.lastChild.textContent = `${formatKm(s.distance)} · ${formatM(s.ascent)} ↑ · ca. ${formatDuration(s.time)}`;
-    li.append(day);
+    const gpx = linkButton('Als GPX', () => exportGpx([dayFile(s)]));
+    gpx.setAttribute('aria-label', `Tag ${s.day} als GPX exportieren`);
+    const actions = document.createElement('div');
+    actions.className = 'day-links';
+    actions.append(gpx);
+    li.append(day, actions);
     // Nacht nach diesem Tag (bzw. am Ziel nach dem letzten Tag)
     const night = plan.nights[i];
     if (night) li.append(renderNight(night));

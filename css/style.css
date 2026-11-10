@@ -295,6 +295,8 @@ input[type="datetime-local"] {
 .stage-list > li { background: var(--surface); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; font-size: 0.8125rem; }
 .stage-list .day { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
 .stage-list .day small { font-weight: 400; color: var(--muted); }
+.stage-list .day-links { font-size: 0.75rem; margin-top: -4px; }
+.stages-export { margin: 6px 0 0; font-size: 0.8125rem; }
 .stage-list .night { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
 .stage-list .night select { width: 100%; }
 .stage-list .night .meta { color: var(--muted); font-size: 0.75rem; }
