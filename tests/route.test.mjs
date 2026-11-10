@@ -1,6 +1,6 @@
 // Grundabläufe: A→B per Kartenklick, Aufschlüsselung, Höhenprofil, Café-Suche + Übernahme, Verpflegungsstopps,
 // Tempo, Löschen, Rundkurs, Heimat als Start.
-import { BONN, HAS_ROUTE, departNextWednesday } from './lib/app.mjs';
+import { BONN, HAS_ROUTE, IDLE, STATE, departNextWednesday } from './lib/app.mjs';
 
 export const title = 'A → B, Stopps, Tempo, Rundkurs';
 
@@ -85,10 +85,13 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Rundkurs erzeugt', await waitFor(`!${q('#results')}.hidden && ${q('#route-name')}.value.startsWith('Rundkurs')`, 120000),
     `${await text('#stat-dist')} – ${await ev(`${q('#route-name')}.value`)}`);
   check('Rundkurs: nur Start-Marker', await ev(`document.querySelectorAll('.marker-pin.start').length === 1 && document.querySelectorAll('.marker-pin.end').length === 0`));
-  const d1 = await text('#stat-dist');
+  // Fingerabdruck des Wegs: Neu würfeln kann zufällig dieselbe Distanz (auf 0,1 km) ergeben
+  const shape = `(async () => { const c = ${STATE}.route?.coords || [];
+    return JSON.stringify([c.length, ...[0.2, 0.4, 0.6, 0.8, 1].map(f => c[Math.floor(f * (c.length - 1))]?.slice(0, 2))]); })()`;
+  const before = await ev(shape);
   await ev(`${q('#btn-reroll')}.click(); true`);
-  check('Neu würfeln', await waitFor(`${q('#stat-dist')}.textContent !== ${JSON.stringify(d1)} && !${q('#status')}.classList.contains('loading')`, 120000),
-    `${d1} → ${await text('#stat-dist')}`);
+  check('Neu würfeln: anderer Weg', await waitFor(`(async () => (await ${shape}) !== ${JSON.stringify(before)} && ${IDLE})()`, 120000),
+    `${await text('#stat-dist')}`);
   await page.shot('2-rundkurs');
 
   step('Heimat als Start beim Laden');
