@@ -27,6 +27,26 @@ export function locateOnRoute(r, points) {
 }
 
 /**
+ * Positionen (m, aufsteigend) einer Route auf eine andere übertragen: über den Ort, wenn die neue Route
+ * dort vorbeikommt (≤ maxOffset); nimmt sie dort einen anderen Weg (z. B. zu einer Unterkunft), anteilig
+ * nach der Länge. Ergebnis aufsteigend sortiert.
+ */
+export function transferPositions(from, to, positions, maxOffset = 500) {
+  let start = 0;
+  return positions.map(s => {
+    const [lat, lon] = from.coords[indexAtDistance(from, s)];
+    let best = Infinity, idx = start;
+    for (let j = start; j < to.coords.length; j++) {
+      const d = approxDist(lat, lon, to.coords[j][0], to.coords[j][1]);
+      if (d < best) { best = d; idx = j; } else if (best < 300 && d > best + 1000) break;
+    }
+    if (best > maxOffset) return Math.min(to.distance, s * to.distance / from.distance);
+    start = idx; // nur ein Treffer schiebt die Suche weiter (wichtig bei Rundkursen)
+    return to.cum[idx];
+  }).sort((x, y) => x - y);
+}
+
+/**
  * Nächster Punkt aus `samples` (siehe sampleRoute) zu einem Ort → {along, offset (m)}.
  * Der Breitengrad-Vorfilter spart bei vielen Orten die meisten Entfernungsberechnungen.
  */

@@ -16,7 +16,7 @@ import { route } from './routing/index.js';
 import { fetchPois } from './poiTiles.js';
 import { withTypicalHours } from './chainHours.js';
 import { timeline } from './timeline.js';
-import { locateOnRoute, locateNearRoute, insertWaypoints } from './routeGeometry.js';
+import { locateOnRoute, locateNearRoute, insertWaypoints, transferPositions } from './routeGeometry.js';
 
 /** Wasserstellen, die entlang der Route näher als das beieinander liegen (z. B. mehrere Hähne auf einem Friedhof), zählen als eine. */
 const WATER_MERGE = 150;
@@ -388,7 +388,9 @@ export async function addStops(base, { provider, opts, interval, departure, bike
 
   // Positionen und Ankunftszeiten auf der neuen Route bestimmen (Übernachtungen bleiben Tageswechsel)
   const along = locateOnRoute(routed, wps);
-  routed.stageStarts = wps.flatMap((p, i) => (p.stay ? [along[i]] : []));
+  // Alle Tagesgrenzen übertragen – auch Nächte ohne gefundene Unterkunft (Grenze am Etappenziel); nur die
+  // Unterkünfte zu nehmen, ließe solche Tage verschmelzen und verschöbe alle Ankunftszeiten danach
+  routed.stageStarts = transferPositions(base, routed, base.stageStarts || []);
   const eta = timeline(routed, departure, bike, style.dwell);
   const fixed = wps.flatMap((p, i) => (p.food ? [along[i]] : []));
   const finalStops = [];

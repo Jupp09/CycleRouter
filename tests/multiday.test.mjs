@@ -1,9 +1,14 @@
 // Mehrtagestour: Etappen, Unterkünfte, Preis-Links, Unterkunft wechseln, speichern und wieder öffnen.
-import { register, saveRoute } from './lib/app.mjs';
+import { register, saveRoute, departNextWednesday } from './lib/app.mjs';
 
 export const title = 'Etappen und Unterkünfte (Bremen → Hamburg)';
 
-export default async function ({ app, page: newPage, check, step, sleep }) {
+export default async function (t) {
+  await stagesAndStays(t);
+  await nightsWithoutStay(t);
+}
+
+async function stagesAndStays({ app, page: newPage, check, step, sleep }) {
   const page = await newPage({ accounts: true, height: 950 });
   const { ev, waitFor, text } = page;
   await page.open(app, { view: { center: [53.3, 9.4], zoom: 9 }, storage: { bike: 'trekking', mode: 'ab' } });
@@ -97,4 +102,49 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   await ev(`document.querySelector('#btn-multiday').click(); true`);
   check('Mehrtagestour aufgehoben', await waitFor(`document.querySelector('#stages-body').hidden && !document.querySelectorAll('.stay-pin').length`, 60000),
     `Knopf „${await text('#btn-multiday')}“`);
+}
+
+/**
+ * Nächte ohne passende Unterkunft: Die Tagesgrenze liegt dann am Etappenziel. Sie muss auch die Route durch
+ * die übrigen Unterkünfte und durch Verpflegungsstopps überstehen – früher verschmolzen solche Tage, sobald
+ * Stopps eingeplant waren, und alle Ankunftszeiten danach stimmten nicht mehr.
+ */
+async function nightsWithoutStay({ app, page: newPage, check, step, sleep }) {
+  const MAX_KM = 30;
+  const result = {};
+  for (const supply of [false, true]) {
+    step(`Nächte ohne Unterkunft – ${supply ? 'mit' : 'ohne'} Verpflegungsstopps`);
+    const page = await newPage({ height: 950 });
+    // Nur Hostels: Zwischen Bremen und Hamburg gibt es nicht für jede Nacht eins
+    await page.open(app, { view: { center: [53.3, 9.4], zoom: 9 }, storage: {
+      bike: 'trekking', mode: 'ab', stageMaxKm: MAX_KM, stayTypes: ['hostel'], endStay: false,
+      supplyEnabled: supply, supplyInterval: 25,
+    } });
+    await departNextWednesday(page);
+    await page.clickMap(53.064, 8.793); await sleep(800);
+    await page.clickMap(53.553, 10.0067);
+    await page.waitFor(`!document.querySelector('#results').hidden && document.querySelector('#stat-dist').textContent`, 120000);
+    await page.ev(`document.querySelector('#btn-multiday').click(); true`);
+    const ready = `!document.querySelector('#stages-body').hidden && !document.querySelector('#status').classList.contains('loading')
+      && document.querySelectorAll('#stage-list > li').length > 0` + (supply ? ` && !document.querySelector('#stops').hidden` : '');
+    check('Etappen geplant', await page.waitFor(ready, 180000));
+    await sleep(1500);
+    const r = await page.ev(`(async () => {
+      const { state } = await import('/js/app/state.js');
+      const { stageStats } = await import('/js/timeline.js');
+      const route = state.route, nights = route.stays.nights;
+      return { nights: nights.length, open: nights.filter(n => !n.chosen).length, stops: route.stops?.length ?? 0,
+        days: stageStats(route, state.bike).map((d, i) => ({ km: d.distance / 1000, stay: !!nights[i]?.chosen })),
+        rows: document.querySelectorAll('#stage-list > li').length, summary: document.querySelector('#stages-summary').textContent };
+    })()`);
+    result[supply] = r;
+    const kms = r.days.map(d => d.km.toFixed(1)).join(' · ');
+    check('Testaufbau: mindestens eine Nacht ohne Unterkunft', r.open > 0, `${r.open} von ${r.nights}${supply ? `, ${r.stops} Stopps` : ''}`);
+    check('Ein Tag mehr als Nächte', r.days.length === r.nights + 1, kms);
+    check('Liste und Zusammenfassung passen dazu', r.rows === r.days.length && r.summary.startsWith(`${r.days.length} Tage`), r.summary);
+    // Tage, die an einer Nacht ohne Unterkunft enden, halten die km pro Tag ein (die mit Unterkunft bestimmt diese)
+    check(`Tage ohne Unterkunft am Ende höchstens ${MAX_KM * 1.25} km`, r.days.slice(0, -1).every(d => d.stay || d.km <= MAX_KM * 1.25), kms);
+  }
+  check('Mit und ohne Stopps gleich viele Tage', result[true].days.length === result[false].days.length,
+    `${result[false].days.length} / ${result[true].days.length}`);
 }

@@ -11,7 +11,7 @@ import { sampleRoute } from './utils.js';
 import { route } from './routing/index.js';
 import { openState } from './openingHours.js';
 import { fetchPoisNear } from './poiTiles.js';
-import { insertWaypoints, locateOnRoute, nearestSample } from './routeGeometry.js';
+import { insertWaypoints, locateOnRoute, nearestSample, transferPositions } from './routeGeometry.js';
 
 export const STAY_TYPES = {
   hotel: { label: 'Hotel', icon: '🏨', gpxSym: 'Lodging' },
@@ -226,8 +226,10 @@ export async function routeThroughStays(origin, plan, { provider, opts, signal }
   const routed = await route(provider, wps, opts, signal);
   const along = locateOnRoute(routed, wps);
   routed.stageStarts = wps.flatMap((p, i) => (p.stay ? [along[i]] : []));
-  // Nächte ohne gefundene Unterkunft: Etappengrenze am Etappenziel
-  for (const n of plan.nights) if (!n.chosen && !n.end) routed.stageStarts.push(n.target);
+  // Nächte ohne gefundene Unterkunft: Etappengrenze am Etappenziel – das liegt auf der Route ohne
+  // Übernachtungen und wird über den Ort übertragen (die Umwege zu den Unterkünften verschieben es)
+  const open = plan.nights.filter(n => !n.chosen && !n.end).map(n => n.target);
+  routed.stageStarts.push(...transferPositions(origin, routed, open));
   routed.stageStarts.sort((a, b) => a - b);
   return { ...routed, origin, stays: plan };
 }
