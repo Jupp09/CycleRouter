@@ -72,7 +72,8 @@ Views don't call each other to refresh. `showRoute()`/`clearRoute()` emit `'rout
 | [stays.js](js/stays.js) | Multi-day trips: splits the route into stages, scores overnight stays per night (budget, stage length, detour) and estimates prices; links (price check, OSM note) |
 | [poiTiles.js](js/poiTiles.js) | Client side of the POI tile cache (memory → IndexedDB → server → Overpass): `fetchPois(route, …)`, `fetchPoisNear(points, …)`, `sessionPois()` |
 | [chainHours.js](js/chainHours.js) | Typical opening hours of a chain (from its other branches in the loaded tiles) for POIs without `opening_hours` |
-| [timeline.js](js/timeline.js) | ETAs along the route (`timeline`, `arrivalAt`; each new day starts at the departure time) and per-day stats (`stageStats`) |
+| [timeline.js](js/timeline.js) | ETAs along the route (`timeline`, `arrivalAt`; each new day starts at the departure time), per-day stats (`stageStats`) and per-day departure/arrival including stop pauses (`dayTimes`) |
+| [sun.js](js/sun.js) | Sunrise/sunset computed locally (`sunTimes`, no external service) and the daylight hints: `daylightNote` checks a day against the departure; `daylightToday` is the neutral line when no departure is visible (neither supply stops nor multi-day), because warning against "now" would be noise when planning in the evening. Single-day routes show it in resultsView, multi-day trips per day in stagesView |
 | [routeGeometry.js](js/routeGeometry.js) | Positions on/near the route (`locateOnRoute`, `nearestSample`, `locateNearRoute`) and `insertWaypoints` |
 | [poiSource.js](js/poiSource.js) | Overpass queries, tiling (`TILE = 0.1°`) and data layers. **Shared with the Node server**, so it must not use browser APIs |
 | [placeSearch.js](js/placeSearch.js) | "Find along the route": café, restaurant, etc. from the tile cache, falling back to Photon category search |

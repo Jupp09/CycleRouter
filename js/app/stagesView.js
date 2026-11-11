@@ -2,14 +2,16 @@
  * Mehrtagestouren – nur auf Knopfdruck: Ist die Route deutlich länger als die Tagesetappe, bietet
  * „Als Mehrtagestour planen“ die Aufteilung an. Dann werden je Nacht Unterkünfte vorgeschlagen (Auswahl
  * per Liste) und die Route durch die gewählten geführt. Dazu die Einstellungen im Zahnrad-Dialog
- * (km pro Tag, Budget, Unterkunftsarten, Übernachtung am Ziel). Jeder Tag lässt sich einzeln als GPX ausgeben.
+ * (km pro Tag, Budget, Unterkunftsarten, Übernachtung am Ziel). Jeder Tag lässt sich einzeln als GPX ausgeben
+ * und zeigt, ob er bei Tageslicht zu schaffen ist.
  */
 import {
   STAY_TYPES, STAY_GROUPS, isMultiDayCandidate, priceLabel, priceLink, websiteOf,
   AVAILABILITY_LABEL, lastConfirmed,
 } from '../stays.js';
-import { stageStats } from '../timeline.js';
-import { storage, formatKm, formatM, formatDuration, formatDayDate, osmNoteUrl } from '../utils.js';
+import { stageStats, dayTimes } from '../timeline.js';
+import { daylightNote } from '../sun.js';
+import { storage, indexAtDistance, formatKm, formatM, formatDuration, formatDayDate, osmNoteUrl } from '../utils.js';
 import { state, on, departureDate, originRoute } from './state.js';
 import { $, textLines, externalLink, linkButton, flashStatus, osmLinks } from './dom.js';
 import { map } from './mapView.js';
@@ -70,6 +72,7 @@ export function renderStages() {
     + (missing ? ` · für ${missing} ${missing === 1 ? 'Nacht' : 'Nächte'} keine passende Unterkunft gefunden` : '');
 
   const start = departureDate();
+  const times = dayTimes(r, start, state.bike);
   $('#stage-list').replaceChildren(...stats.map((s, i) => {
     const li = document.createElement('li');
     const day = document.createElement('div');
@@ -83,7 +86,16 @@ export function renderStages() {
     const actions = document.createElement('div');
     actions.className = 'day-links';
     actions.append(gpx);
-    li.append(day, actions);
+    li.append(day);
+    // Tageslicht: Sonnenaufgang am Start des Tages, Sonnenuntergang an seinem Ziel
+    const light = daylightNote(times[i], r.coords[indexAtDistance(r, s.from)], r.coords[indexAtDistance(r, s.to)]);
+    if (light) {
+      const sun = document.createElement('small');
+      sun.className = 'sun' + (light.warn ? ' warn' : '');
+      sun.textContent = light.text;
+      li.append(sun);
+    }
+    li.append(actions);
     // Nacht nach diesem Tag (bzw. am Ziel nach dem letzten Tag)
     const night = plan.nights[i];
     if (night) li.append(renderNight(night));

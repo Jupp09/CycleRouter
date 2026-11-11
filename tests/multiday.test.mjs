@@ -52,6 +52,8 @@ async function stagesAndStays({ app, page: newPage, check, step, sleep }) {
     true`);
   const days = await ev(`document.querySelectorAll('#stage-list > li').length`);
   check('„Als GPX“ in jeder Tageszeile', await ev(`document.querySelectorAll('#stage-list .day-links button').length`) === days);
+  const suns = await ev(`[...document.querySelectorAll('#stage-list .sun')].map(e => e.textContent)`);
+  check('Tageslicht-Hinweis in jeder Tageszeile', suns.length === days && suns.every(x => /Sonnen(auf|unter)gang/.test(x)), suns[0]);
   const label = await ev(`document.querySelectorAll('#stage-list .day-links button')[1].getAttribute('aria-label')`);
   check('Name für Screenreader', label === 'Tag 2 als GPX exportieren', label);
   await ev(`document.querySelectorAll('#stage-list .day-links button')[1].click(); true`);

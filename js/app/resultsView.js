@@ -1,10 +1,12 @@
 /**
- * Ergebnis-Panel: Kennzahlen (Distanz, Höhenmeter, Fahrzeit), Anteil auf Radfernwegen, Routenname,
+ * Ergebnis-Panel: Kennzahlen (Distanz, Höhenmeter, Fahrzeit), Tageslicht, Anteil auf Radfernwegen, Routenname,
  * Höhenprofil und die Aufschlüsselung nach Untergrund bzw. Wegtyp (samt Einfärbung der Routenlinie).
  */
 import { summarize, estimatedShare, longDistanceShare } from '../surfaces.js';
 import { storage, estimateTime, averageSpeed, formatKm, formatM, formatDuration } from '../utils.js';
-import { state, on, defaultName } from './state.js';
+import { dayTimes } from '../timeline.js';
+import { daylightNote, daylightToday } from '../sun.js';
+import { state, on, defaultName, departureDate } from './state.js';
 import { $, ui } from './dom.js';
 import { elevation, drawRouteLine } from './mapView.js';
 import { syncUi } from './controls.js';
@@ -18,6 +20,7 @@ on('route', r => {
   elevation.show(r, state.breakdown);
   renderBreakdown();
   renderStats(r);
+  renderDaylight(r);
   // Name einer geöffneten gespeicherten/geteilten Route beibehalten
   ui.routeName.value = state.loadedName ?? defaultName(r);
   ui.results.hidden = false;
@@ -59,6 +62,22 @@ function renderStats(r) {
     + (ld.eurovelo ? `, davon direkt als EuroVelo erfasst: ${pct(ld.eurovelo)} %` : '');
   evEl.title = 'In Deutschland verläuft EuroVelo meist über nationale D-Routen und ist in OpenStreetMap oft nur über diese erfasst – '
     + 'deshalb werden beide zusammen gezählt.';
+}
+
+/**
+ * Tageslicht bei Touren an einem Tag (Mehrtagestouren: je Tag in der Tagesliste, stagesView.js). Ist die Abfahrt
+ * sichtbar festgelegt (Verpflegungsstopps oder Mehrtagestour), wird gegen sie geprüft; sonst nur der helle Tag heute.
+ */
+function renderDaylight(r) {
+  const el = $('#daylight');
+  const first = r.coords[0], last = r.coords.at(-1);
+  const note = r.stageStarts?.length ? null
+    : state.supply.enabled || state.multiDay ? daylightNote(dayTimes(r, departureDate(), state.bike)[0], first, last)
+    : daylightToday(first, estimateTime(r.distance, r.ascent, state.bike));
+  el.hidden = !note;
+  if (!note) return;
+  el.textContent = note.text;
+  el.classList.toggle('warn', note.warn);
 }
 
 /** Balken und Legende „Untergrund“ bzw. „Wegtyp“ mit km und Anteil. */

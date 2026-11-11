@@ -5,6 +5,7 @@
  * zur selben Uhrzeit wie die Abfahrt am ersten Tag.
  */
 import { estimateTime, indexAtDistance, cumulativeAscent } from './utils.js';
+import { locateOnRoute } from './routeGeometry.js';
 
 /**
  * Ankunftszeit-Funktion für eine Route: `eta(along, pausesToday)` → Date.
@@ -40,5 +41,22 @@ export function stageStats(r, bike) {
     const to = bounds[i + 1];
     const ascent = Math.round((asc[indexAtDistance(r, to)] || 0) - (asc[indexAtDistance(r, from)] || 0));
     return { day: i + 1, from, to, distance: to - from, ascent, time: estimateTime(to - from, ascent, bike) };
+  });
+}
+
+/**
+ * Abfahrt und Ankunft je Tag: [{day, from, to, start, end}] (Date). Die Ankunft enthält die Pausen an den
+ * Verpflegungsstopps des Tages (`r.dwellMin` je Stopp, auch an fest übernommenen) – wie die Zeiten in der Stoppliste.
+ */
+export function dayTimes(r, departure, bike) {
+  const eta = timeline(r, departure, bike, r.dwellMin || 0);
+  const along = locateOnRoute(r, r.waypoints);
+  const pauses = r.waypoints.flatMap((p, i) => (p.stop || p.food ? [along[i]] : []));
+  const bounds = [0, ...(r.stageStarts || []), r.distance];
+  return bounds.slice(0, -1).map((from, i) => {
+    const to = bounds[i + 1];
+    // 1 m vor der Grenze: Genau an der Grenze beginnt für die Zeitachse schon der nächste Tag
+    const end = eta(Math.max(from, to - 1), pauses.filter(a => a >= from && a < to).length);
+    return { day: i + 1, from, to, start: eta(from), end };
   });
 }
