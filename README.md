@@ -8,6 +8,7 @@ Routenplaner für **Rennrad**, **Gravelbike**, **Fahrrad** (Trekking-/Alltagsrad
 - **GPX-Export** inkl. Höhendaten
 - Höhenprofil, Höhenmeter, geschätzte Fahrzeit
 - **Tageslicht:** Sonnenauf- und -untergang am Start und Ziel, lokal berechnet ([js/sun.js](js/sun.js)). Mit festgelegter Abfahrt (Verpflegungsstopps oder Mehrtagestour) warnt die App, wenn ein Teil der Fahrt im Dunkeln liegt – bei Mehrtagestouren je Tag; sonst zeigt sie den hellen Tag heute
+- **Wetter und Wind** entlang der Route zur geschätzten Ankunftszeit ([js/weather.js](js/weather.js), Daten von [Open-Meteo](https://open-meteo.com/)): Temperatur, Regenwahrscheinlichkeit und ob der Wind von vorn oder hinten kommt – als Zusammenfassung (bei Mehrtagestouren je Tag) und je Abschnitt von etwa 10 km. Ohne festgelegte Abfahrt gilt „jetzt“; die Vorhersage reicht 16 Tage. Der Wind ändert die geschätzte Fahrzeit nicht. An Open-Meteo gehen nur auf 0,1° gerundete Orte
 - Aufschlüsselung nach **Untergrund** (Asphalt, Pflaster, Schotter …) und **Wegtyp** (Radweg, Hauptstraße, Wirtschaftsweg …) mit km und %, optional als Einfärbung der Route und als Farbband im Höhenprofil ([js/surfaces.js](js/surfaces.js))
 - Marker verschiebbar – die Route wird neu berechnet
 - **Mehrtagestouren** auf Knopfdruck (sobald die Route länger als die eingestellten km pro Tag ist): Tagesetappen, je Nacht wählbare Unterkunft (Hotel, Pension, Hostel, Zeltplatz aus OpenStreetMap) mit geschätztem Preis gegen das Budget pro Nacht und „Preis prüfen“-Link mit Datum ([js/stays.js](js/stays.js)). Jeder Tag lässt sich einzeln als GPX exportieren (Track von Unterkunft zu Unterkunft, mit den Wegpunkten dieses Tages), auf dem Handy alle Tage auf einmal über das Teilen-Menü
@@ -87,7 +88,7 @@ Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Pr
 
 ### Tests
 
-`npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Tageslicht, Zoomgrenzen der Kartenstile, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
+`npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Tageslicht, Wetter, Zoomgrenzen der Kartenstile, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
 
 ## Routing
 
@@ -114,7 +115,8 @@ js/app/                Oberfläche und Ablauf
   pipeline.js          Berechnung: Grundroute → Mehrtagestour → Verpflegungsstopps
   controls.js          Fahrrad, Modus, Dienst, Richtung, Distanz
   waypoints.js         Start/Ziel, Zwischenstopps, Kartenklick, Marker verschieben
-  resultsView.js       Kennzahlen, Untergrund/Wegtyp, Routenname
+  resultsView.js       Kennzahlen, Tageslicht, Untergrund/Wegtyp, Routenname
+  weatherView.js       Wetter und Wind entlang der Route
   supplyView.js        Verpflegungsstopps, Trinkwasser, Regionen, Feiertage
   alongView.js         „Entlang der Route finden“
   stagesView.js        Mehrtagestouren, ihre Einstellungen und GPX je Tag
@@ -140,6 +142,7 @@ js/poiSource.js        Overpass-Abfragen und Datenebenen (auch vom Server genutz
 js/chainHours.js       Typische Öffnungszeiten von Ketten
 js/timeline.js         Ankunftszeiten und Tagesetappen
 js/sun.js              Sonnenauf- und -untergang, Tageslicht-Hinweise
+js/weather.js          Wetter und Wind entlang der Route (Open-Meteo)
 js/routeGeometry.js    Positionen auf/neben der Route, Wegpunkte einfügen
 js/openingHours.js     opening_hours-Auswertung
 js/holidays.js         Feiertage (date.nager.at)

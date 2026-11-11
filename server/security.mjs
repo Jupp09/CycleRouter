@@ -12,6 +12,7 @@ const CONNECT = [
   'https://overpass-api.de', 'https://overpass.kumi.systems',
   'https://photon.komoot.io', 'https://nominatim.openstreetmap.org', 'https://date.nager.at',
   'https://valhalla1.openstreetmap.de', // Ausweichdienst für BRouter (js/routing/valhalla.js)
+  'https://api.open-meteo.com', // Wetter entlang der Route (js/weather.js)
 ];
 /** Kartenkacheln (BASE_LAYERS/OVERLAYS in js/map.js); cdnjs für die Bilder aus leaflet.css */
 const IMAGES = [

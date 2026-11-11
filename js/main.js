@@ -7,7 +7,8 @@
  *   pipeline.js       Berechnungsablauf (Grundroute → Mehrtagestour → Verpflegungsstopps)
  *   controls.js       Fahrrad, Modus, Dienst, Distanz …
  *   waypoints.js      Start/Ziel, Zwischenstopps, Kartenklick, Marker verschieben
- *   resultsView.js    Kennzahlen, Untergrund/Wegtyp, Routenname
+ *   resultsView.js    Kennzahlen, Tageslicht, Untergrund/Wegtyp, Routenname
+ *   weatherView.js    Wetter und Wind entlang der Route
  *   supplyView.js     Verpflegungsstopps, Regionen, Feiertage
  *   alongView.js      „Entlang der Route finden“
  *   stagesView.js     Mehrtagestouren
@@ -23,6 +24,7 @@
 import { syncUi } from './app/controls.js';
 import './app/waypoints.js';
 import './app/resultsView.js';
+import './app/weatherView.js';
 import './app/supplyView.js';
 import './app/alongView.js';
 import './app/stagesView.js';

@@ -45,18 +45,23 @@ export function stageStats(r, bike) {
 }
 
 /**
- * Abfahrt und Ankunft je Tag: [{day, from, to, start, end}] (Date). Die Ankunft enthält die Pausen an den
- * Verpflegungsstopps des Tages (`r.dwellMin` je Stopp, auch an fest übernommenen) – wie die Zeiten in der Stoppliste.
+ * Ankunftszeit an jeder Position einschließlich der Pausen an den Verpflegungsstopps desselben Tages
+ * (`r.dwellMin` je Stopp, auch an fest übernommenen) – wie die Zeiten in der Stoppliste. `at(along)` → Date.
  */
-export function dayTimes(r, departure, bike) {
+export function pausedTimeline(r, departure, bike) {
   const eta = timeline(r, departure, bike, r.dwellMin || 0);
   const along = locateOnRoute(r, r.waypoints);
   const pauses = r.waypoints.flatMap((p, i) => (p.stop || p.food ? [along[i]] : []));
+  return pos => eta(pos, pauses.filter(a => a < pos && eta.dayOf(a) === eta.dayOf(pos)).length);
+}
+
+/** Abfahrt und Ankunft je Tag, mit Pausen (`pausedTimeline`): [{day, from, to, start, end}] (Date). */
+export function dayTimes(r, departure, bike) {
+  const at = pausedTimeline(r, departure, bike);
   const bounds = [0, ...(r.stageStarts || []), r.distance];
   return bounds.slice(0, -1).map((from, i) => {
     const to = bounds[i + 1];
     // 1 m vor der Grenze: Genau an der Grenze beginnt für die Zeitachse schon der nächste Tag
-    const end = eta(Math.max(from, to - 1), pauses.filter(a => a >= from && a < to).length);
-    return { day: i + 1, from, to, start: eta(from), end };
+    return { day: i + 1, from, to, start: at(from), end: at(Math.max(from, to - 1)) };
   });
 }
