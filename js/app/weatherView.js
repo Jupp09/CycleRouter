@@ -3,11 +3,12 @@
  * und eine aufklappbare Liste je Abschnitt. Lädt nach der Anzeige der Route; die Berechnung wartet nicht darauf.
  * Keine Ansage: Es ist eine automatische Aktualisierung.
  */
-import { weatherAlong, weatherSummary, windLabel, FORECAST_DAYS } from '../weather.js';
+import { weatherAlong, weatherSummary, windLabel, windAdvice, FORECAST_DAYS } from '../weather.js';
 import { dayTimes, pausedTimeline } from '../timeline.js';
 import { formatClock, formatDate, formatDayDate, formatWeekday } from '../utils.js';
-import { state, on, departureDate, defaultDeparture } from './state.js';
-import { $ } from './dom.js';
+import { state, on, departureDate, defaultDeparture, provider } from './state.js';
+import { $, linkButton } from './dom.js';
+import { generate } from './pipeline.js';
 
 let controller = null;
 
@@ -64,6 +65,8 @@ async function renderWeather(r) {
   summary.replaceChildren(...(multi
     ? days.filter(d => ofDay(d).length).map(d => hint(`${dayLabel(d)}: ${weatherSummary(ofDay(d))}`))
     : [hint(`Wetter bei Abfahrt ${start}: ${weatherSummary(sections)}`)]));
+  const advice = !multi && adviceLine(sections);
+  if (advice) summary.append(advice);
 
   const km = m => Math.round(m / 1000);
   $('#weather-list').replaceChildren(...days.flatMap(d => {
@@ -81,4 +84,28 @@ async function renderWeather(r) {
   }));
   details.hidden = false;
   box.hidden = false;
+}
+
+/**
+ * Vorschlag, Rundkurs oder Strecke anders in den Wind zu legen (windAdvice) – mit Knopf, der die Richtung setzt
+ * und neu erzeugt. Nicht bei ORS-Rundkursen (der Dienst wählt die Lage selbst) und nicht, wenn die Richtung
+ * schon so gewählt ist.
+ */
+function adviceLine(sections) {
+  if (state.mode === 'loop' && provider().roundTrip) return null;
+  const advice = windAdvice(sections, state.mode);
+  if (!advice || advice.direction === state.direction) return null;
+  const loop = state.mode === 'loop';
+  const p = hint(`Der Wind kommt aus ${advice.from}. ` + (loop
+    ? 'Liegt der Rundkurs in dieser Richtung, hast du ihn auf dem Rückweg im Rücken. '
+    : `Mit dem Ziel in Richtung ${advice.target} hast du ihn im Rücken. `));
+  p.id = 'weather-advice';
+  const button = linkButton(`${loop ? 'Rundkurs' : 'Ziel'} Richtung ${advice.target} legen`, () => {
+    state.direction = advice.direction;
+    $('#direction').value = advice.direction;
+    generate();
+  });
+  button.classList.add('inline');
+  p.append(button);
+  return p;
 }

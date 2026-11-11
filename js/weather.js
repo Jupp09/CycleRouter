@@ -78,7 +78,7 @@ export function headwind(speed, windFrom, heading) {
 /**
  * Abschnitte der Route mit dem Wetter zur Ankunftszeit. `days`: [{day, from, to}] (vgl. `dayTimes`) – Abschnitte
  * reichen nie über eine Tagesgrenze; `eta(along)` → Date. Ergebnis: [{day, from, to, time, temp, rainProb, rain,
- * wind, gust, head}]; Abschnitte ohne Vorhersage fehlen.
+ * wind, dir, gust, head}] (`dir`: woher der Wind kommt, Grad); Abschnitte ohne Vorhersage fehlen.
  */
 export async function weatherAlong(route, days, eta, signal) {
   const step = Math.max(STEP, route.distance / MAX_SECTIONS);
@@ -99,7 +99,7 @@ export async function weatherAlong(route, days, eta, signal) {
     if (!w) return [];
     return [{
       day: s.day, from: s.from, to: s.to, time: s.time, temp: w.temp, rainProb: w.rainProb ?? 0, rain: w.rain ?? 0,
-      wind: w.wind, gust: w.gust, head: headwind(w.wind, w.dir, s.heading),
+      wind: w.wind, dir: w.dir, gust: w.gust, head: headwind(w.wind, w.dir, s.heading),
     }];
   });
 }
@@ -143,4 +143,33 @@ export function weatherSummary(sections) {
   const gust = Math.max(...sections.map(s => s.gust ?? 0));
   if (gust >= 30) parts.push(`Böen bis ${Math.round(gust)} km/h`);
   return parts.join(' · ');
+}
+
+const COMPASS = ['Norden', 'Nordosten', 'Osten', 'Südosten', 'Süden', 'Südwesten', 'Westen', 'Nordwesten'];
+const octant = deg => ((Math.round(deg / 45) % 8) + 8) % 8;
+
+/**
+ * Vorschlag, die Route anders in den Wind zu legen – für Rundkurs (`loop`) und Start + Distanz (`distance`), deren
+ * Lage die App selbst wählt. Rundkurs: Den Umlaufsinn umzudrehen bringt nichts, denn bei gleichmäßigem Wind fährt
+ * man in beiden Richtungen zuerst gegen ihn oder zuerst mit ihm. Entscheidend ist, wo die Runde liegt: in der
+ * Richtung, aus der der Wind kommt, hat man ihn auf dem Rückweg im Rücken. Start + Distanz: Ziel mit dem Wind.
+ * Nur bei spürbarem Wind (Mittel ≥ 10 km/h) und wenn der Rückweg bzw. die Strecke tatsächlich Gegenwind hat.
+ * → {direction: '315' (Wert des Felds „Richtung“), target: 'Nordwesten', from: 'Nordwesten'} oder null.
+ */
+export function windAdvice(sections, mode) {
+  if ((mode !== 'loop' && mode !== 'distance') || !sections.length) return null;
+  // Vektormittel: Wind aus wechselnden Richtungen hebt sich auf
+  const x = sections.reduce((sum, s) => sum + s.wind * Math.sin(s.dir * RAD), 0) / sections.length;
+  const y = sections.reduce((sum, s) => sum + s.wind * Math.cos(s.dir * RAD), 0) / sections.length;
+  if (Math.hypot(x, y) < 10) return null;
+  const from = (Math.atan2(x, y) / RAD + 360) % 360;
+
+  const half = (sections[0].from + sections.at(-1).to) / 2;
+  const part = mode === 'loop' ? sections.filter(s => (s.from + s.to) / 2 >= half) : sections;
+  const length = part.reduce((sum, s) => sum + s.to - s.from, 0);
+  const head = part.reduce((sum, s) => sum + s.head * (s.to - s.from), 0) / length;
+  if (!(head >= 3)) return null;
+
+  const target = octant(mode === 'loop' ? from : from + 180);
+  return { direction: String(target * 45), target: COMPASS[target], from: COMPASS[octant(from)] };
 }

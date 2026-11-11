@@ -14,6 +14,17 @@ const openGpx = (page, text, name = 'tour.gpx') => page.ev(`(() => {
   return true;
 })()`);
 
+/** Datei auf die Karte ziehen → wurde das Ablegen angenommen (dragover verhindert)? */
+const dropGpx = (page, text, name) => page.ev(`(() => {
+  const dt = new DataTransfer();
+  dt.items.add(new File([${JSON.stringify(text)}], ${JSON.stringify(name)}));
+  const map = document.querySelector('#map');
+  const over = new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true });
+  map.dispatchEvent(over);
+  map.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+  return over.defaultPrevented;
+})()`);
+
 /** Anteil der importierten Punkte, die in der aktuellen Route noch vorkommen (auf 5 Stellen – so genau wird gespeichert); dazu Kennzahlen. */
 const KEPT = `(async () => { const s = ${STATE}, r = s.route;
   const key = c => c[0].toFixed(5) + ',' + c[1].toFixed(5);
@@ -100,13 +111,43 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Zwischenstopp nach dem Öffnen noch da', await page.ev(`(async () => ${STATE}.route.waypoints.filter(p => p.manual).map(p => p.label).join())()`) === 'Abstecher');
   check('Wieder ohne Stützpunkt-Marker', k.viaPins === 0 && k.mode === 'ab');
 
-  step('Runde und Datei ohne Höhen');
+  step('Dienst, der am Stück rechnet (wie OpenRouteService)');
+  const whole = await page.ev(`(async () => { const { route, trackRoute } = await import('/js/routing/index.js');
+    const { insertWaypoints } = await import('/js/routeGeometry.js');
+    const coords = window.__imported, mid = coords[Math.floor(coords.length / 2)];
+    const track = trackRoute(coords, [{ lat: coords[0][0], lon: coords[0][1] }, { lat: coords.at(-1)[0], lon: coords.at(-1)[1] }]);
+    const wps = insertWaypoints(track, [{ along: track.distance / 2, point: { lat: mid[0] + 0.002, lon: mid[1], stop: true } }]);
+    const calls = [];
+    // Ohne perLeg bekäme dieser Dienst sonst alle Wegpunkte in einer Anfrage – und der Weg wäre weg
+    const fake = { id: 'test-ganz', name: 'Test', route: async points => { calls.push(points.length); return { coords: points.map(p => [p.lat, p.lon, null]), segments: [] }; } };
+    const r = await route(fake, wps, { bike: 'trekking', traffic: 'normal', eurovelo: 'off' }, new AbortController().signal);
+    const key = c => c[0].toFixed(5) + ',' + c[1].toFixed(5), now = new Set(r.coords.map(key));
+    return { calls: calls.join(), share: coords.filter(c => now.has(key(c))).length / coords.length, wps: wps.length }; })()`);
+  check('Nur die zwei Abstecher-Teilstücke angefragt', whole.calls === '2,2', `${whole.calls} bei ${whole.wps} Wegpunkten`);
+  check('Weg erhalten', whole.share >= 0.9, `${Math.round(whole.share * 100)} %`);
+
+  step('Mehrtagestour auf dem importierten Weg');
+  page = await newPage({ height: 950 });
+  await page.open(app, { view: BONN, storage: { bike: 'trekking', stageMaxKm: 12 } });
+  await page.ev(`(async () => { window.__imported = (await import('/js/gpx.js')).parseGpx(${JSON.stringify(src.gpx)}).coords; return true; })()`);
+  await openGpx(page, src.gpx);
+  check('Route angezeigt, Knopf für die Mehrtagestour da', await page.waitFor(`${HAS_ROUTE} && !document.querySelector('#stages').hidden`, 10000));
+  await page.ev(`document.querySelector('#btn-multiday').click(); true`);
+  check('Etappen geplant', await page.waitFor(`!document.querySelector('#stages-body').hidden && document.querySelectorAll('#stage-list > li').length >= 2 && ${IDLE}`, 180000),
+    await page.ev(`document.querySelector('#stages-summary').textContent`));
+  k = await page.ev(KEPT);
+  const nights = await page.ev(`(async () => { const p = ${STATE}.route.stays; return p.nights.filter(n => n.chosen && !n.end).length + ' von ' + p.nights.filter(n => !n.end).length; })()`);
+  check('Mindestens eine Unterkunft unterwegs', Number(nights.split(' ')[0]) >= 1, nights);
+  check('Weg bis auf die Abstecher zu den Unterkünften erhalten', k.share >= 0.8 && k.share < 1 && k.viaPins === 0, `${Math.round(k.share * 100)} %`);
+  await page.shot('3-mehrtagestour');
+
+  step('Runde und Datei ohne Höhen – auf die Karte gezogen');
   page = await newPage();
   await page.open(app, { view: BONN, storage: { bike: 'trekking' } });
   const loop = '<gpx><trk><name>Runde</name><trkseg>'
     + [[50.80, 7.00], [50.80, 7.03], [50.82, 7.03], [50.82, 7.00], [50.80, 7.00]].map(([la, lo]) => `<trkpt lat="${la}" lon="${lo}"/>`).join('')
     + '</trkseg></trk></gpx>';
-  await openGpx(page, loop, 'runde.gpx');
+  check('Ablegen auf der Karte angenommen', await dropGpx(page, loop, 'runde.gpx'));
   check('Route angezeigt', await page.waitFor(HAS_ROUTE, 10000));
   const round = await page.ev(`(async () => { const s = ${STATE}, r = s.route; const { insertWaypoints } = await import('/js/routeGeometry.js');
     return { mode: s.mode, up: document.querySelector('#stat-up').textContent, km: r.distance / 1000,
