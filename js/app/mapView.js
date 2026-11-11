@@ -40,7 +40,8 @@ const placeName = (kind, p) => (p?.label ? `${kind}: ${p.label.split(',')[0]}` :
 
 /**
  * Verschiebbare Marker setzen. Mit Route: aus deren Wegpunkten (`index` = Wegpunkt-Index für das
- * Verschieben); Verpflegungsstopps und Unterkünfte haben eigene, nicht verschiebbare Marker.
+ * Verschieben); Verpflegungsstopps und Unterkünfte haben eigene, nicht verschiebbare Marker, die
+ * Stützpunkte eines importierten Wegs gar keinen.
  * Ohne Route: Start, Ziel und schon gewählte Zwischenstopps.
  */
 export function updateMarkers() {
@@ -54,7 +55,7 @@ export function updateMarkers() {
       const kind = index === 0 ? 'start' : !loop && index === last ? 'end' : point.manual ? 'manual' : 'via';
       const title = kind === 'start' ? placeName('Start', state.start) : kind === 'end' ? placeName('Ziel', state.end) : undefined;
       return { point, index, kind, title, ...(kind === 'manual' && manualMarker(point, ++n)) };
-    }).filter(m => !m.point.stop && !m.point.stay));
+    }).filter(m => !m.point.stop && !m.point.stay && !m.point.anchor));
     return;
   }
   const markers = [];

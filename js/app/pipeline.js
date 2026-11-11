@@ -16,7 +16,8 @@ import { warmRoute } from '../poiTiles.js';
 import { announce } from '../announce.js';
 import { isMultiDayCandidate, planStays, routeThroughStays } from '../stays.js';
 import { seededRandom } from '../utils.js';
-import { state, emit, provider, routeOpts, departureDate, activeVias, originRoute } from './state.js';
+import { locateOnRoute, insertWaypoints } from '../routeGeometry.js';
+import { state, emit, provider, routeOpts, departureDate, activeVias, originRoute, activeTrack } from './state.js';
 import { setStatus } from './dom.js';
 import { map, relayout, drawRouteLine, updateMarkers } from './mapView.js';
 import { setPoint } from './waypoints.js';
@@ -70,7 +71,7 @@ export function showRoute(r, { fit = true } = {}) {
 export function clearRoute() {
   abortCalculation();
   Object.assign(state, {
-    route: null, saved: null, loadedName: null,
+    route: null, saved: null, loadedName: null, track: null,
     multiDay: false, stayChoices: [], staysLoading: false, staysError: null,
   });
   map.setRoute(null);
@@ -206,7 +207,19 @@ export function replanStops() {
 /** A→B: Route über Start, Zwischenstopps und Ziel (ohne Ziel nur die Marker aktualisieren). */
 export function calcAB() {
   if (!state.start || !state.end) { updateMarkers(); return; }
-  run(signal => route(provider(), [state.start, ...activeVias(), state.end], routeOpts(), signal));
+  const track = activeTrack();
+  const points = track ? alongTrack(track) : [state.start, ...activeVias(), state.end];
+  run(signal => route(provider(), points, routeOpts(), signal));
+}
+
+/**
+ * Wegpunkte entlang eines importierten Wegs: Start, Stützpunkte, Ziel – die Zwischenstopps dort einsortiert, wo
+ * der Weg ihnen am nächsten kommt. Berechnet werden so nur die Abstecher zu den Zwischenstopps.
+ */
+function alongTrack(track) {
+  const vias = activeVias();
+  const along = locateOnRoute(track, vias);
+  return insertWaypoints({ ...track, waypoints: [state.start, state.end] }, vias.map((point, i) => ({ along: along[i], point })));
 }
 
 /** Distanz/Rundkurs: Route mit Wunschlänge in der gewählten (oder gewürfelten) Richtung erzeugen. */

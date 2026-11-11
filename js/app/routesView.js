@@ -5,7 +5,7 @@
  * state.saved:      die geöffnete eigene gespeicherte Route {id, name, shareToken} – „Speichern“ aktualisiert sie.
  * state.loadedName: Name einer geöffneten gespeicherten oder geteilten Route (bleibt bei Neuberechnung erhalten).
  */
-import { providers, withStats } from '../routing/index.js';
+import { providers, withStats, trackRoute } from '../routing/index.js';
 import {
   account, listRoutes, getRoute, createRoute, updateRoute, deleteRoute, shareRoute, unshareRoute, getSharedRoute, shareUrl,
 } from '../account.js';
@@ -47,7 +47,9 @@ function serializeRoute(name) {
       v: 1, traffic: state.traffic, eurovelo: state.eurovelo, provider: state.provider,
       coords: r.coords.map(([lat, lon, ele]) => [round5(lat), round5(lon), ele == null ? null : Math.round(ele * 10) / 10]),
       segments: r.segments || [],
-      waypoints: r.waypoints.filter(p => !p.stop && !p.stay).map(wp),
+      waypoints: r.waypoints.filter(p => !p.stop && !p.stay && !p.anchor).map(wp),
+      // Importierter Weg (auch mit Abstechern): beim Öffnen wieder als solcher behandeln, Stützpunkte entstehen neu
+      ...((r.track || r.waypoints.some(p => p.trackAt)) && { track: true }),
       ...(state.multiDay && { multiDay: true, stayChoices: state.stayChoices }),
     },
   };
@@ -74,7 +76,8 @@ function restoreRoute(saved, { own }) {
 
   state.multiDay = !!d.multiDay;
   state.stayChoices = d.stayChoices || [];
-  const r = withStats({ coords: d.coords, segments: d.segments }, wps);
+  const r = d.track ? trackRoute(d.coords, wps, d.segments) : withStats({ coords: d.coords, segments: d.segments }, wps);
+  state.track = d.track ? r : null;
   showRoute(r);
   // Übernachtungen (mit den gespeicherten Unterkünften) und Stopps auf die gespeicherte Route aufsetzen
   if (state.multiDay || state.supply.enabled) run(async () => r, { fit: false, loadingText: 'Wird geplant …' });

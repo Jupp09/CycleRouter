@@ -90,10 +90,38 @@ export function locateNearRoute(r, pois, maxOffset, step = 100) {
  * ORS-Rundkurs hat aber nur den Startpunkt – dann Stützpunkte bei 25/50/75 % der Strecke.
  */
 function shapeAnchors(r) {
+  if (r.track) return trackAnchors(r);
   if (r.waypoints.length >= 2) return r.waypoints;
   const start = r.waypoints[0];
   const at = f => { const c = r.coords[indexAtDistance(r, r.distance * f)]; return { lat: c[0], lon: c[1] }; };
   return [start, at(0.25), at(0.5), at(0.75), start]; // gleiches Objekt am Anfang und Ende: bleibt ein Rundkurs
+}
+
+/** Abstand der Stützpunkte auf einem importierten Weg (m): So weit reicht höchstens der Abstecher zu einem Stopp. */
+const TRACK_ANCHOR_STEP = 1000;
+
+/**
+ * Importierter Weg (`trackRoute` in routing/index.js): seine Wegpunkte, dazwischen etwa jeden Kilometer ein
+ * Stützpunkt mit `trackAt` – zwischen zwei Stützpunkten bleibt der Weg, wie er ist. Stützpunkte (`anchor`)
+ * bekommen keinen Marker und werden nicht gespeichert.
+ */
+function trackAnchors(r) {
+  const located = locateOnRoute(r, r.waypoints);
+  // Start und Ziel kennen ihre Stelle – bei einer Runde fände die Suche das Ziel sonst am Start
+  const index = r.waypoints.map((p, k) => (p.trackAt?.coords === r.coords ? p.trackAt.i : indexAtDistance(r, located[k])));
+  const out = [];
+  r.waypoints.forEach((p, k) => {
+    out.push(p);
+    if (k === r.waypoints.length - 1) return;
+    let last = index[k];
+    for (let a = (Math.floor(r.cum[index[k]] / TRACK_ANCHOR_STEP) + 1) * TRACK_ANCHOR_STEP; a < r.cum[index[k + 1]]; a += TRACK_ANCHOR_STEP) {
+      const i = indexAtDistance(r, a);
+      if (i <= last || i >= index[k + 1]) continue;
+      last = i;
+      out.push({ lat: r.coords[i][0], lon: r.coords[i][1], anchor: true, trackAt: { coords: r.coords, segments: r.segments, i } });
+    }
+  });
+  return out;
 }
 
 /**
@@ -102,7 +130,8 @@ function shapeAnchors(r) {
  */
 export function insertWaypoints(base, items) {
   const anchors = shapeAnchors(base);
-  const anchorAlong = locateOnRoute(base, anchors);
+  const located = locateOnRoute(base, anchors);
+  const anchorAlong = anchors.map((p, k) => (p.trackAt?.coords === base.coords ? base.cum[p.trackAt.i] : located[k]));
   const wps = [];
   anchors.forEach((a, k) => {
     wps.push(a);

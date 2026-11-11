@@ -23,6 +23,33 @@ export function withStats(result, waypoints) {
 }
 
 /**
+ * Importierter Weg (GPX) als Route mit `track: true`. Er soll erhalten bleiben, auch wenn Stopps, Unterkünfte
+ * oder Zwischenstopps dazukommen: Start und Ziel merken sich ihre Stelle auf dem Weg (`trackAt`), ebenso die
+ * Stützpunkte, die `insertWaypoints` (routeGeometry.js) etwa jeden Kilometer setzt. Zwischen zwei solchen Punkten
+ * liefert `route()` den Ausschnitt des Wegs, ohne einen Dienst zu fragen – nur die Abstecher werden berechnet.
+ * Ohne `segments` gelten Untergrund und Wegtyp als unbekannt.
+ */
+export function trackRoute(coords, waypoints, segments = null) {
+  segments = segments?.length ? segments : [{ from: 0, to: coords.length - 1, surface: 'unknown', waytype: 'other' }];
+  waypoints[0].trackAt = { coords, segments, i: 0 };
+  waypoints.at(-1).trackAt = { coords, segments, i: coords.length - 1 };
+  return { ...withStats({ coords, segments }, waypoints), track: true };
+}
+
+/** Liegen beide Punkte in dieser Reihenfolge auf demselben importierten Weg? */
+const onTrack = (a, b) => !!a.trackAt && !!b.trackAt && a.trackAt.coords === b.trackAt.coords && b.trackAt.i > a.trackAt.i;
+
+/** Ausschnitt eines importierten Wegs als Teilstück (samt dem Teil seiner Segmente). */
+function trackLeg(a, b) {
+  const { coords, segments } = a.trackAt, from = a.trackAt.i, to = b.trackAt.i;
+  return {
+    coords: coords.slice(from, to + 1),
+    segments: segments.filter(s => s.to > from && s.from < to)
+      .map(s => ({ ...s, from: Math.max(s.from, from) - from, to: Math.min(s.to, to) - from })),
+  };
+}
+
+/**
  * Route durch `points`. Dienste mit `perLeg` (BRouter, Valhalla) werden Teilstück für Teilstück angefragt
  * (je zwei Wegpunkte), und jedes Teilstück wird für die Sitzung gemerkt: Kommt ein Verpflegungsstopp oder
  * eine Übernachtung hinzu, ändert sich das Tempo oder schaltet man eine Option hin und zurück, sind nur
@@ -30,7 +57,9 @@ export function withStats(result, waypoints) {
  * jede Anfrage das Tageskontingent des Nutzers belastet.
  */
 export async function route(provider, points, opts, signal) {
-  if (!provider.perLeg || points.length < 2) return withStats(await provider.route(points, opts, signal), points);
+  // Importierter Weg: immer Teilstück für Teilstück, auch bei ORS – sonst ginge der Weg verloren
+  const perLeg = provider.perLeg || points.some(p => p.trackAt);
+  if (!perLeg || points.length < 2) return withStats(await provider.route(points, opts, signal), points);
   const pairs = points.slice(1).map((p, i) => [points[i], p]);
   const legs = await mapLimit(pairs, LEG_CONCURRENCY, ([a, b]) => leg(provider, a, b, opts, signal));
   const result = withStats(joinLegs(legs), points);
@@ -105,6 +134,7 @@ function shared(key, factory, signal) {
 }
 
 async function leg(provider, a, b, opts, signal) {
+  if (onTrack(a, b)) return trackLeg(a, b);
   const key = legKey(provider, a, b, opts);
   const hit = cacheGet(key);
   if (hit) return hit;

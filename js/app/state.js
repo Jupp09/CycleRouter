@@ -74,6 +74,7 @@ export const state = {
   route: null,
   saved: null,                                    // geöffnete eigene gespeicherte Route {id, name, shareToken}
   loadedName: null,                               // Name einer geöffneten gespeicherten/geteilten Route
+  track: null,                                    // importierter Weg (GPX, trackRoute) – siehe activeTrack()
 };
 
 // ---------- Ereignisse ----------
@@ -114,6 +115,15 @@ export function defaultDeparture() {
 export function departureDate() {
   const d = new Date(state.supply.departure || defaultDeparture());
   return isNaN(d) ? new Date() : d;
+}
+
+/**
+ * Der importierte Weg, solange Start und Ziel noch seine sind: Dann führt eine A→B-Berechnung an ihm entlang
+ * (calcAB in pipeline.js), statt ihn durch eine neu berechnete Route zu ersetzen.
+ */
+export function activeTrack() {
+  const t = state.track;
+  return t && state.mode === 'ab' && state.start === t.waypoints[0] && state.end === t.waypoints.at(-1) ? t : null;
 }
 
 /** Rundkurs? Erkennung über Objekt-Identität von erstem und letztem Wegpunkt (siehe CLAUDE.md). */

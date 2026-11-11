@@ -1,4 +1,4 @@
-import { indexAtDistance } from './utils.js';
+import { indexAtDistance, approxDist } from './utils.js';
 import { locateOnRoute } from './routeGeometry.js';
 
 const escapeXml = s => s.replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
@@ -120,4 +120,40 @@ export async function shareGpx(route, files, title = files[0].name) {
     if (e.name === 'AbortError') return 'cancelled'; // Menü geschlossen, ohne zu teilen
     throw e;
   }
+}
+
+// ---------- Import ----------
+
+/** Punkte, die näher am vorigen liegen, fallen weg – aufgezeichnete Tracks haben oft einen Punkt pro Sekunde. */
+const MIN_SPACING = 10;
+
+/**
+ * GPX-Text lesen → {coords: [[lat, lon, ele | null]], name}. Genommen werden die Track-Punkte aller Tracks
+ * in Dateireihenfolge, ersatzweise die Routen-Punkte. Wirft einen Fehler mit Text für die Statuszeile.
+ */
+export function parseGpx(text) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.querySelector('parsererror') || doc.documentElement?.localName !== 'gpx') throw new Error('Die Datei ist kein gültiges GPX.');
+  const all = name => [...doc.getElementsByTagNameNS('*', name)];
+  const child = (el, name) => [...el.children].find(c => c.localName === name)?.textContent.trim();
+  let points = all('trkpt');
+  if (points.length < 2) points = all('rtept');
+
+  const coords = [];
+  let last = null;
+  for (const p of points) {
+    if (!p.hasAttribute('lat') || !p.hasAttribute('lon')) continue;
+    const lat = Number(p.getAttribute('lat')), lon = Number(p.getAttribute('lon'));
+    if (!(Math.abs(lat) <= 90) || !(Math.abs(lon) <= 180)) continue;
+    const ele = child(p, 'ele');
+    last = [lat, lon, ele && Number.isFinite(Number(ele)) ? Number(ele) : null];
+    const prev = coords.at(-1);
+    if (!prev || approxDist(prev[0], prev[1], lat, lon) >= MIN_SPACING) coords.push(last);
+  }
+  // Das Ziel bleibt genau, auch wenn der letzte Punkt dem Abstand zum Opfer fiel
+  if (last && coords.at(-1) !== last) coords.push(last);
+  if (coords.length < 2) throw new Error('In der Datei ist keine Strecke.');
+
+  const named = [...all('trk'), ...all('rte'), ...all('metadata')].map(el => child(el, 'name')).find(Boolean);
+  return { coords, name: named || '' };
 }
