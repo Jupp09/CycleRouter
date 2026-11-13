@@ -15,13 +15,17 @@ import { locateOnRoute } from './routeGeometry.js';
 export function timeline(r, departure, bike, pauseMin = 0) {
   const asc = cumulativeAscent(r.coords);
   const starts = [0, ...(r.stageStarts || [])];
+  // Abfahrt an Tag d: Kalendertag weiterzählen, nicht 24 h addieren – sonst startet der Tag nach der
+  // Zeitumstellung (letzter Sonntag im März/Oktober) eine Stunde zu früh oder zu spät
+  const dayStart = d => new Date(departure.getFullYear(), departure.getMonth(), departure.getDate() + d,
+    departure.getHours(), departure.getMinutes(), departure.getSeconds());
   const dayOf = along => { let d = 0; while (d + 1 < starts.length && starts[d + 1] <= along) d++; return d; };
   const eta = (along, pausesToday = 0) => {
     const d = dayOf(along);
     const from = starts[d];
     const i = indexAtDistance(r, along), i0 = indexAtDistance(r, from);
     const sec = estimateTime(along - from, (asc[i] || 0) - (asc[i0] || 0), bike) + pausesToday * pauseMin * 60;
-    return new Date(departure.getTime() + d * 86400000 + sec * 1000);
+    return new Date(dayStart(d).getTime() + sec * 1000);
   };
   eta.dayOf = dayOf;
   return eta;

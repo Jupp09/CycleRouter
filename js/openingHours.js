@@ -8,7 +8,9 @@
 const DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 const DAY = '(?:Mo|Tu|We|Th|Fr|Sa|Su|PH|SH)';
 const DAY_SPEC = new RegExp(`^(${DAY}(?:-${DAY})?(?:,${DAY}(?:-${DAY})?)*)(?:\\s+|$)`);
-const TIME = /^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})\+?$/;
+// Kein „+“ (offenes Ende, „12:30+“): Wann geschlossen wird, ist dann unbekannt – als Schluss um 12:30 gelesen,
+// hieße es ab dort „geschlossen“. So wird der ganze Wert „unbekannt“.
+const TIME = /^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/;
 
 const cache = new Map();
 

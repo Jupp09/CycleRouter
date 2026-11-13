@@ -78,7 +78,8 @@ export function priceLink(poi, night) {
   const place = poi.tags['addr:city'] || poi.tags['addr:place'] || '';
   const q = [poi.name, place].filter(Boolean).join(' ');
   if (poi.type === 'camp_site') return `https://www.google.com/search?q=${encodeURIComponent(`${q} Zeltplatz Preise`)}`;
-  const checkout = new Date(night.date.getTime() + 86400000);
+  // Kalendertag + 1, nicht + 24 h: In der Nacht der Zeitumstellung im Oktober wäre das noch derselbe Tag
+  const checkout = new Date(night.date.getFullYear(), night.date.getMonth(), night.date.getDate() + 1);
   const p = new URLSearchParams({ ss: q, checkin: ymd(night.date), checkout: ymd(checkout), group_adults: 1, no_rooms: 1 });
   return `https://www.booking.com/searchresults.html?${p}`;
 }

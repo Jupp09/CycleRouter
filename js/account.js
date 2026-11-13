@@ -7,9 +7,10 @@
  * Routen kommen aus dem Offline-Speicher (js/offlineStore.js). Gemerkt wird, was hier geöffnet wurde, dazu die
  * 20 zuletzt geänderten Routen (`prefetchRoutes`). Der Speicher wird geleert, sobald niemand mehr angemeldet
  * ist – auf einem geteilten Gerät soll nichts zurückbleiben. „Ohne Netz“ heißt: Der Server war nicht erreichbar
- * (status 0); eine Antwort mit Fehler zählt nicht dazu.
+ * (status 0, auch nach Ablauf des Zeitlimits); eine Antwort mit Fehler zählt nicht dazu.
  */
 import { offlineGet, offlinePut, offlineDelete, offlineKeys, offlineClear } from './offlineStore.js';
+import { withTimeout } from './shared.js';
 
 // Einstellungen, die zwischen Geräten abgeglichen werden – gemeinsam mit dem Server definiert (js/shared.js)
 export { SYNC_KEYS } from './shared.js';
@@ -20,6 +21,7 @@ export const account = { enabled: false, user: null, offline: false };
 
 /** So viele der zuletzt geänderten Routen werden für den Offline-Start vorgeladen. */
 const PREFETCH = 20;
+const READ_TIMEOUT = 8000, WRITE_TIMEOUT = 30000;
 const routeKey = id => `route:${id}`;
 
 async function api(method, path, body) {
@@ -30,6 +32,9 @@ async function api(method, path, body) {
       credentials: 'same-origin',
       headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      // Bei sehr schwachem Netz kommt oft weder Antwort noch Fehler – ohne Zeitlimit griffe der Offline-Stand
+      // erst nach Minuten. Schreibende Anfragen dürfen länger dauern (eine lange Route hat einige MB).
+      signal: withTimeout(null, method === 'GET' ? READ_TIMEOUT : WRITE_TIMEOUT),
     });
   } catch {
     throw Object.assign(new Error('Server nicht erreichbar.'), { status: 0 });

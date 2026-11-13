@@ -1,6 +1,21 @@
 import { classifyOsmTags, mergeSegments } from '../surfaces.js';
 import { haversine } from '../utils.js';
 import { routingNotice, sleep } from './notice.js';
+import { withTimeout } from '../shared.js';
+
+/** Hochladen eines Profils: Ohne Zeitlimit hinge bei einem hängenden brouter.de jede Berechnung mit EuroVelo. */
+const UPLOAD_TIMEOUT = 20000;
+
+/** Auf `p` warten, aber bei Abbruch von `signal` sofort aufgeben (`p` selbst läuft für andere weiter). */
+function abortable(p, signal) {
+  if (!signal) return p;
+  if (signal.aborted) return Promise.reject(new DOMException('Abgebrochen', 'AbortError'));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(new DOMException('Abgebrochen', 'AbortError'));
+    signal.addEventListener('abort', onAbort, { once: true });
+    p.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
 
 const ENDPOINT = 'https://brouter.de/brouter';
 
@@ -96,7 +111,7 @@ async function customProfile(name, penalty, signal, force = false) {
       const text = patchProfile(await loadSource(name), penalty);
       let res;
       try {
-        res = await fetch(`${ENDPOINT}/profile`, { method: 'POST', body: text });
+        res = await fetch(`${ENDPOINT}/profile`, { method: 'POST', body: text, signal: withTimeout(null, UPLOAD_TIMEOUT) });
       } catch {
         throw Object.assign(new Error('BRouter ist nicht erreichbar (Internetverbindung oder Server überlastet).'), { busy: true });
       }
@@ -111,9 +126,7 @@ async function customProfile(name, penalty, signal, force = false) {
     uploading.set(key, p);
     p.catch(() => {}).finally(() => uploading.delete(key));
   }
-  const id = await uploading.get(key);
-  if (signal?.aborted) throw new DOMException('Abgebrochen', 'AbortError');
-  return id;
+  return abortable(uploading.get(key), signal);
 }
 
 /** Eine Anfrage → {ok, text, busy}. `busy`: ausgelastet bzw. nicht erreichbar (neuer Versuch sinnvoll). */

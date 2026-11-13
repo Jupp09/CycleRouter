@@ -30,8 +30,19 @@ function profile(route) {
   if (!coords.some(c => c[2] != null)) {
     p = { ele: null, grade: null };
   } else {
-    let last = coords.find(c => c[2] != null)[2];
-    const ele = coords.map(c => (last = c[2] ?? last));
+    // Punkte ohne Höhe (kommt in GPX-Dateien vor): zwischen den Nachbarn mit Höhe interpolieren. Die letzte
+    // Höhe fortzuschreiben ergäbe ein Plateau und danach einen Sprung – kurze falsche Klassen im Profil.
+    const n = coords.length, ele = new Array(n);
+    let a = -1;
+    for (let i = 0; i < n; i++) {
+      if (coords[i][2] == null) continue;
+      for (let k = a + 1; k < i; k++) {
+        ele[k] = a < 0 ? coords[i][2] : coords[a][2] + (coords[i][2] - coords[a][2]) * (cum[k] - cum[a]) / ((cum[i] - cum[a]) || 1);
+      }
+      ele[i] = coords[i][2];
+      a = i;
+    }
+    for (let k = a + 1; k < n; k++) ele[k] = coords[a][2];
     const grade = new Array(coords.length);
     // Fenster um jeden Punkt: lo und hi wandern nur vorwärts
     for (let i = 0, lo = 0, hi = 0; i < coords.length; i++) {
