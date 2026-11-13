@@ -92,14 +92,34 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   // Erst jetzt auf Handybreite: Im schmalen Layout treffen die Kartenklicks oben nicht
   await page.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false }); await sleep(300);
   await page.ev(`document.querySelector('#btn-roadbook').click(); true`); await sleep(300);
-  const shown = await page.ev(`(() => { const d = document.querySelector('#roadbook-dialog'), v = d.querySelector('#roadbook-view');
-    return { open: d.open, printed: window.__printed || 0, title: v.querySelector('h1')?.textContent, days: v.querySelectorAll('.rb-day').length,
-      original: document.querySelector('#roadbook').parentElement === document.body, hint: d.querySelector('.hint').textContent,
-      cls: document.documentElement.classList.contains('print-roadbook'), width: v.scrollWidth <= v.clientWidth + 1 }; })()`);
+  const DIALOG = `(() => { const d = document.querySelector('#roadbook-dialog'), v = d.querySelector('#roadbook-view');
+    return { open: d.open, printed: window.__printed || 0, title: v.querySelector('header h2')?.textContent, days: v.querySelectorAll('.rb-day').length,
+      headings: [...d.querySelectorAll('h1, h2, h3, h4, h5, h6')].map(h => h.tagName).filter((t, i, a) => t !== a[i - 1]).join(' '),
+      untouched: !document.querySelector('#roadbook').children.length, hint: document.querySelector('#roadbook-hint').textContent,
+      cls: document.documentElement.classList.contains('print-roadbook'), width: v.scrollWidth <= v.clientWidth + 1 }; })()`;
+  const shown = await page.ev(DIALOG);
   check('Dialog mit dem Roadbook, kein Druckaufruf', shown.open && shown.printed === 0 && !shown.cls && shown.days === 1 && !!shown.title, JSON.stringify(shown));
-  check('Hinweis auf Safari, Druckvorlage bleibt an ihrem Platz', /^Drucken und als PDF sichern geht in Safari: .+ dort öffnen\.$/.test(shown.hint) && shown.original, shown.hint);
+  check('Überschriften in richtiger Reihenfolge', shown.headings === 'H2 H3', shown.headings);
+  // Ohne Server-Datenbank (wie im Test) gibt es keine Links: Der Hinweis sagt, dass die Route in Safari fehlt
+  check('Hinweis auf Safari, Druckvorlage unberührt', /^Drucken und als PDF sichern geht nur in Safari; dort muss die Route neu geplant werden\.$/.test(shown.hint) && shown.untouched, shown.hint);
   check('Passt in die Breite des Handys', shown.width);
+  const axe = await (await fetch('https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js')).text();
+  await page.ev(axe + '; true');
+  const violations = await page.ev(`axe.run(document.querySelector('#roadbook-dialog'), { resultTypes: ['violations'] })
+    .then(r => r.violations.map(v => v.id + ' (' + v.nodes.length + '×)'))`);
+  check('axe: 0 Verstöße im Dialog', Array.isArray(violations) && !violations.length, JSON.stringify(violations));
   await page.shot('3-iphone-app');
+
+  // Stopps und Unterkünfte kommen oft erst nach dem Öffnen: Eine neue Route baut den offenen Dialog neu
+  // (Den Namen zu ändern taugt dafür nicht: Beim Ereignis route setzt routesView das Namensfeld zurück.)
+  const rebuilt = await page.ev(`(async () => { document.querySelector('#roadbook-view header').dataset.alt = '1';
+    const { emit, state } = await import('/js/app/state.js'); emit('route', state.route);
+    const h = document.querySelector('#roadbook-view header'); return !!h && !h.dataset.alt; })()`);
+  check('Neue Route baut den offenen Dialog neu', rebuilt);
+  await page.ev(`(async () => { const { emit } = await import('/js/app/state.js'); emit('route', null); return true; })()`);
+  check('Ohne Route schließt sich der Dialog', !(await page.ev(DIALOG)).open);
+
+  await page.ev(`document.querySelector('#btn-roadbook').click(); true`); await sleep(300);
   await page.ev(`document.querySelector('#roadbook-dialog button[value=close]').click(); true`); await sleep(200);
   const closed = await page.ev(`({ open: document.querySelector('#roadbook-dialog').open, empty: !document.querySelector('#roadbook-view').children.length })`);
   check('Schließen leert den Dialog', !closed.open && closed.empty, JSON.stringify(closed));

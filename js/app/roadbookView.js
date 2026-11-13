@@ -4,9 +4,11 @@
  *
  * Gedruckt wird über den Druckdialog des Browsers (dort auch „Als PDF speichern“). Die Übersicht steht in
  * `#roadbook`, das auf dem Bildschirm nie sichtbar ist; solange `html.print-roadbook` gesetzt ist, zeigt der
- * Druck nur sie (css/style.css). Ohne Route druckt Strg+P die Seite wie bisher. In der installierten App auf
- * iPhone/iPad gibt es keinen Druckdialog; dort zeigt der Knopf die Übersicht stattdessen am Bildschirm (unten). Karte und Höhenprofil fehlen
+ * Druck nur sie (css/style.css). Ohne Route druckt Strg+P die Seite wie bisher. Karte und Höhenprofil fehlen
  * bewusst (Kacheln drucken unzuverlässig), ebenso das Wetter (auf dem Papier schnell veraltet).
+ *
+ * Die installierte App auf iPhone/iPad hat keinen Druckdialog; dort zeigt der Knopf die Übersicht im Dialog
+ * `#roadbook-dialog` (siehe `standalone` am Ende der Datei).
  */
 import { STATE_LABELS } from '../stops.js';
 import { STAY_TYPES, priceLabel, websiteOf } from '../stays.js';
@@ -15,7 +17,8 @@ import { daylightNote } from '../sun.js';
 import { findClimbs } from '../climbs.js';
 import { locateOnRoute } from '../routeGeometry.js';
 import { indexAtDistance, formatKm, formatM, formatDuration, formatClock, formatDayDate, formatDate } from '../utils.js';
-import { state, departureDate, BIKE_LABELS } from './state.js';
+import { account } from '../account.js';
+import { state, departureDate, BIKE_LABELS, on } from './state.js';
 import { $ } from './dom.js';
 import { gpxName } from './exportView.js';
 
@@ -54,9 +57,9 @@ function waypointsOf(r, at) {
   return items.sort((a, b) => a.along - b.along);
 }
 
-function dayBlock(r, stat, times, items, night, fixed, last) {
+function dayBlock(r, stat, times, items, night, fixed, last, top) {
   const block = el('section', '', 'rb-day');
-  const head = el('h2', `${times ? `Tag ${stat.day} · ${formatDayDate(times.start)}` : `Tag ${stat.day}`}`);
+  const head = el(`h${top + 1}`,`${times ? `Tag ${stat.day} · ${formatDayDate(times.start)}` : `Tag ${stat.day}`}`);
   block.append(head, el('p', `${formatKm(stat.distance)} · ${formatM(stat.ascent)} Anstieg · Fahrzeit ca. ${formatDuration(stat.time)} · km ${km(stat.from)}–${km(stat.to)}`, 'rb-facts'));
   if (fixed) {
     block.append(el('p', `Abfahrt ${formatClock(times.start)} · Ankunft ca. ${formatClock(times.end)}${r.stops?.length ? ' (mit Pausen an den Stopps)' : ''}`));
@@ -96,7 +99,7 @@ function dayBlock(r, stat, times, items, night, fixed, last) {
   if (night) {
     const c = night.chosen;
     const stay = el('div', '', 'rb-stay');
-    stay.append(el('h3', night.end ? 'Übernachtung am Ziel' : `Übernachtung nach Tag ${stat.day}`));
+    stay.append(el(`h${top + 2}`, night.end ? 'Übernachtung am Ziel' : `Übernachtung nach Tag ${stat.day}`));
     if (!c) {
       stay.append(el('p', 'Keine Unterkunft gewählt.'));
     } else {
@@ -110,9 +113,12 @@ function dayBlock(r, stat, times, items, night, fixed, last) {
   return block;
 }
 
-/** Übersicht für die aktuelle Route aufbauen → true, wenn es etwas zu drucken gibt. */
-export function buildRoadbook() {
-  const r = state.route, box = $('#roadbook');
+/**
+ * Übersicht für die aktuelle Route in `box` aufbauen → true, wenn es etwas zu zeigen gibt. `top` ist die Ebene
+ * der obersten Überschrift (Routenname): 1 im Druck, 2 im Dialog unter dessen eigener Überschrift.
+ */
+export function buildRoadbook(box = $('#roadbook'), top = 1) {
+  const r = state.route;
   if (!r) { box.replaceChildren(); return false; }
   // Zeiten nur, wenn die Abfahrt sichtbar festgelegt ist (Verpflegungsstopps oder Mehrtagestour)
   const fixed = state.supply.enabled || state.multiDay;
@@ -123,7 +129,7 @@ export function buildRoadbook() {
   const nights = r.stays?.nights || [];
 
   const header = el('header');
-  header.append(el('h1', gpxName()));
+  header.append(el(`h${top}`, gpxName()));
   const period = !fixed ? '' : stats.length > 1 ? `${formatDayDate(times[0].start)} – ${formatDayDate(times.at(-1).start)}` : formatDayDate(times[0].start);
   header.append(el('p', [BIKE_LABELS[state.bike], formatKm(r.distance), `${formatM(r.ascent)} Anstieg`,
     `Fahrzeit ca. ${formatDuration(stats.reduce((sum, s) => sum + s.time, 0))}`, stats.length > 1 ? `${stats.length} Tage` : '', period]
@@ -131,7 +137,7 @@ export function buildRoadbook() {
   if (r.dwellMin && r.stops?.length) header.append(el('p', `Ankunftszeiten inkl. ${r.dwellMin} min Pause je Stopp.`, 'rb-muted'));
 
   box.replaceChildren(header,
-    ...stats.map((s, i) => dayBlock(r, s, times?.[i], items, nights[i], fixed, i === stats.length - 1)),
+    ...stats.map((s, i) => dayBlock(r, s, times?.[i], items, nights[i], fixed, i === stats.length - 1, top)),
     el('footer', `Erstellt mit CycloRouter am ${formatDate(new Date())}. Daten © OpenStreetMap-Mitwirkende. Öffnungszeiten und Preise ohne Gewähr.`));
   return true;
 }
@@ -142,25 +148,34 @@ window.addEventListener('beforeprint', () => root.classList.toggle('print-roadbo
 window.addEventListener('afterprint', () => root.classList.remove('print-roadbook'));
 
 // Die installierte App auf iPhone/iPad (vom Home-Bildschirm, navigator.standalone gibt es nur dort) hat keinen
-// Druckdialog: window.print() tut nichts, ohne Fehler. Dort zeigt der Knopf das Roadbook in einem Dialog – eine
-// Kopie, damit #roadbook für den Druck direkt unter <body> bleibt (die Druckregeln setzen das voraus).
+// Druckdialog: window.print() tut nichts, ohne Fehler (auf dem iPhone geprüft). Dort zeigt der Knopf das Roadbook
+// im Dialog, gebaut in #roadbook-view; #roadbook bleibt für den Druck unberührt direkt unter <body>.
+// Die App hat ihren eigenen Speicher, getrennt von Safari: Die Route kommt nur über einen Link oder „Meine
+// Routen“ dorthin, das sagt der Hinweis.
 const standalone = navigator.standalone === true;
 const button = $('#btn-roadbook'), dialog = $('#roadbook-dialog'), view = $('#roadbook-view');
 if (standalone) {
   button.textContent = 'Roadbook anzeigen';
   button.title = 'Übersicht: je Tag Zeiten, Stopps mit Öffnungszeiten und Unterkunft – drucken lässt sie sich in Safari';
-  $('#roadbook-host').textContent = location.host;
 }
 dialog.addEventListener('close', () => view.replaceChildren());
+// Stopps, Unterkünfte und Feiertage kommen oft erst nach dem Öffnen: dann neu bauen
+on('route', r => {
+  if (!dialog.open) return;
+  if (r) buildRoadbook(view, 2); else dialog.close();
+});
 
 button.addEventListener('click', () => {
-  if (!buildRoadbook()) return;
   if (standalone) {
-    view.replaceChildren(...[...$('#roadbook').childNodes].map(n => n.cloneNode(true)));
+    if (!buildRoadbook(view, 2)) return;
+    $('#roadbook-hint').textContent = account.enabled
+      ? 'Drucken und als PDF sichern geht nur in Safari. Dorthin kommt die Route über „Link teilen“ oder über „Meine Routen“, wenn du in Safari angemeldet bist.'
+      : 'Drucken und als PDF sichern geht nur in Safari; dort muss die Route neu geplant werden.';
     dialog.showModal();
     dialog.scrollTop = 0;
     return;
   }
+  if (!buildRoadbook()) return;
   root.classList.add('print-roadbook');
   window.print();
 });

@@ -424,6 +424,26 @@ dialog::backdrop { background: rgba(10, 8, 20, .4); }
 dialog form { display: flex; flex-direction: column; gap: 12px; }
 dialog h2 { margin: 0; font-size: 1.125rem; }
 
+/* Roadbook am Bildschirm: nur in der installierten App auf iPhone/iPad, die keinen Druckdialog hat. Die Kopfzeile
+   reicht über den Innenabstand des Dialogs bis an den Rand, sonst scheint beim Scrollen Text daneben durch. */
+#roadbook-dialog { width: min(760px, calc(100vw - 16px)); padding-top: 0; }
+#roadbook-dialog .roadbook-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 -20px; padding: 12px 20px 8px; background: var(--panel); border-bottom: 1px solid var(--border); }
+#roadbook-view { font-size: 0.9375rem; line-height: 1.4; }
+#roadbook-view h2 { font-size: 1.25rem; margin: 0 0 4px; }
+#roadbook-view h3 { font-size: 1.0625rem; margin: 0 0 4px; }
+#roadbook-view h4 { font-size: 1rem; margin: 0 0 2px; }
+#roadbook-view p { margin: 0 0 4px; }
+#roadbook-view header { padding-bottom: 8px; border-bottom: 2px solid var(--text); margin-bottom: 8px; }
+#roadbook-view .rb-facts, #roadbook-view .rb-name, #roadbook-view .rb-warn { font-weight: 600; }
+#roadbook-view .rb-warn::before { content: "Achtung: "; }
+#roadbook-view .rb-muted, #roadbook-view footer { color: var(--muted); }
+#roadbook-view .rb-day { padding: 8px 0; border-bottom: 1px solid var(--border); }
+#roadbook-view table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 0.8125rem; }
+#roadbook-view th, #roadbook-view td { text-align: left; vertical-align: top; padding: 3px 6px 3px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+#roadbook-view td:nth-child(1), #roadbook-view td:nth-child(2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#roadbook-view .rb-stay { margin-top: 6px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; }
+#roadbook-view footer { font-size: 0.75rem; margin-top: 8px; }
+
 [hidden] { display: none !important; }
 
 /* ---------- iPhone/iPad: Notch, Home-Leiste, Touch ---------- */
@@ -467,29 +487,6 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
   html, body { overscroll-behavior-y: none; }
 }
 
-/* ---------- Kontrastmodus, weniger Bewegung (am Ende, damit sie die Regeln oben überschreiben) ---------- */
-/* Windows-Kontrastmodus: Hintergründe und Schatten werden durch Systemfarben ersetzt – der gewählte Knopf
-   eines Umschalters wäre sonst nicht mehr zu erkennen. Farbbalken und Legende behalten ihre Farben,
-   weil sie Information tragen. */
-/* Roadbook am Bildschirm: nur in der installierten App auf iPhone/iPad, die keinen Druckdialog hat */
-#roadbook-dialog { width: min(760px, calc(100vw - 16px)); padding-top: 0; }
-#roadbook-dialog .roadbook-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0 8px; background: var(--panel); border-bottom: 1px solid var(--border); }
-#roadbook-view { font-size: 0.9375rem; line-height: 1.4; }
-#roadbook-view h1 { font-size: 1.25rem; margin: 0 0 4px; }
-#roadbook-view h2 { font-size: 1.0625rem; margin: 0 0 4px; }
-#roadbook-view h3 { font-size: 1rem; margin: 0 0 2px; }
-#roadbook-view p { margin: 0 0 4px; }
-#roadbook-view header { padding-bottom: 8px; border-bottom: 2px solid var(--text); margin-bottom: 8px; }
-#roadbook-view .rb-facts, #roadbook-view .rb-name, #roadbook-view .rb-warn { font-weight: 600; }
-#roadbook-view .rb-warn::before { content: "Achtung: "; }
-#roadbook-view .rb-muted, #roadbook-view footer { color: var(--muted); }
-#roadbook-view .rb-day { padding: 8px 0; border-bottom: 1px solid var(--border); }
-#roadbook-view table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 0.8125rem; }
-#roadbook-view th, #roadbook-view td { text-align: left; vertical-align: top; padding: 3px 6px 3px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
-#roadbook-view td:nth-child(1), #roadbook-view td:nth-child(2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
-#roadbook-view .rb-stay { margin-top: 6px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; }
-#roadbook-view footer { font-size: 0.75rem; margin-top: 8px; }
-
 /* Roadbook drucken (js/app/roadbookView.js): Solange html.print-roadbook gesetzt ist, zeigt der Druck nur die
    Übersicht – schwarz auf weiß, unabhängig von der Darstellung. Ohne die Klasse druckt die Seite wie am Bildschirm. */
 @media print {
@@ -518,6 +515,10 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
   @page { margin: 15mm; }
 }
 
+/* ---------- Kontrastmodus, weniger Bewegung (am Ende, damit sie die Regeln oben überschreiben) ---------- */
+/* Windows-Kontrastmodus: Hintergründe und Schatten werden durch Systemfarben ersetzt – der gewählte Knopf
+   eines Umschalters wäre sonst nicht mehr zu erkennen. Farbbalken und Legende behalten ihre Farben,
+   weil sie Information tragen. */
 @media (forced-colors: active) {
   /* Fläche statt Rahmen: Der Rahmen ist schon der Tastaturfokus */
   .segmented button[aria-checked="true"], .tabs button[aria-checked="true"] {
