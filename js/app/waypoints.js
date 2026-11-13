@@ -13,6 +13,7 @@ import { state, emit, provider, routeOpts, isLoop, activeVias, originRoute } fro
 import { $, ui, setStatus } from './dom.js';
 import { map, setMapHandlers, updateMarkers } from './mapView.js';
 import { run, calcAB, generate, clearRoute } from './pipeline.js';
+import { checkpoint } from './history.js';
 
 // ---------- Start und Ziel ----------
 
@@ -57,14 +58,15 @@ export function setRoutePoints(start, end, vias) {
 
 attachSearch(ui.startInput, {
   getBias: () => map.center(),
-  onSelect: place => { setPoint('start', place, { label: place.label }); if (state.mode !== 'ab' || !state.end) map.flyTo(place); },
+  onSelect: place => { checkpoint('Start geändert'); setPoint('start', place, { label: place.label }); if (state.mode !== 'ab' || !state.end) map.flyTo(place); },
 });
 attachSearch(ui.endInput, {
   getBias: () => state.start || map.center(),
-  onSelect: place => { setPoint('end', place, { label: place.label }); if (!state.start) map.flyTo(place); },
+  onSelect: place => { checkpoint('Ziel geändert'); setPoint('end', place, { label: place.label }); if (!state.start) map.flyTo(place); },
 });
 
 $('#btn-swap').addEventListener('click', () => {
+  checkpoint('Start und Ziel getauscht');
   [state.start, state.end] = [state.end, state.start];
   state.vias.reverse();
   renderVias();
@@ -81,6 +83,7 @@ $('#btn-locate').addEventListener('click', () => {
     pos => {
       setStatus(null);
       const p = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      checkpoint('Start geändert');
       setPoint('start', p);
       map.flyTo(p);
     },
@@ -91,6 +94,7 @@ $('#btn-locate').addEventListener('click', () => {
 
 // „Löschen“: Route verwerfen; im A→B-Modus auch Ziel und Zwischenstopps (der Start bleibt)
 $('#btn-clear').addEventListener('click', () => {
+  checkpoint('Route gelöscht');
   if (state.mode === 'ab') { state.end = null; ui.endInput.value = ''; state.vias = []; renderVias(); }
   clearRoute();
   announce('Route gelöscht');
@@ -110,6 +114,7 @@ function bestInsertIndex(points, p) {
 
 /** Zwischenstopp hinzufügen – an der günstigsten Stelle der Route – und neu berechnen. */
 export function addVia(point, { label = '', icon = null, food = false } = {}) {
+  checkpoint('Zwischenstopp hinzugefügt');
   // `food`: Verpflegungsstelle (Café, Bäckerei …) – zählt bei der Stopp-Planung als Stopp (stops.js)
   const via = { lat: point.lat, lon: point.lon, label, icon, manual: true, ...(food && { food: true }) };
   if (!label) reverse(via).then(l => { via.label = l; renderVias(); updateMarkers(); });
@@ -138,6 +143,7 @@ export function addVia(point, { label = '', icon = null, food = false } = {}) {
 }
 
 function removeVia(i) {
+  checkpoint('Zwischenstopp entfernt');
   state.vias.splice(i, 1);
   renderVias();
   calcAB();
@@ -185,6 +191,7 @@ export function renderVias() {
       getBias: () => (via.lat != null ? via : state.start || map.center()),
       onSelect: place => {
         // Auswahl ersetzt den Stopp und sortiert ihn neu ein
+        checkpoint('Zwischenstopp geändert');
         state.vias.splice(i, 1);
         addVia(place, { label: place.label });
       },
@@ -205,6 +212,8 @@ $('#btn-add-via').addEventListener('click', () => {
 
 /** A→B: erst Start, dann Ziel, danach fügt jeder Klick einen Zwischenstopp ein. Sonst: Klick = Start. */
 function handleMapClick(point) {
+  const ab = state.mode === 'ab';
+  checkpoint(ab && state.start && state.end ? 'Zwischenstopp hinzugefügt' : ab && state.start ? 'Ziel gesetzt' : 'Start gesetzt');
   if (state.mode === 'ab') {
     if (state.start && state.end) addVia(point);
     else setPoint(state.start ? 'end' : 'start', point);
@@ -215,6 +224,7 @@ function handleMapClick(point) {
 
 /** Marker verschoben: `index` ist der Wegpunkt-Index der Route oder 'via<n>' (Zwischenstopp ohne Route). */
 function handleMarkerDrag(index, point) {
+  checkpoint('Marker verschoben');
   // Zwischenstopp ohne berechnete Route (Ziel fehlt noch)
   if (typeof index === 'string' && index.startsWith('via')) {
     const via = activeVias()[Number(index.slice(3))];

@@ -16,6 +16,7 @@ import { map } from './mapView.js';
 import { applyRouteSettings } from './controls.js';
 import { run, showRoute, abortCalculation } from './pipeline.js';
 import { setRoutePoints } from './waypoints.js';
+import { checkpoint } from './history.js';
 import { searchAlong } from './alongView.js';
 
 on('route', renderSaveActions);
@@ -58,6 +59,7 @@ function serializeRoute(name) {
 /** Gespeicherte oder geteilte Route öffnen – exakt wie gespeichert, ohne Neuberechnung. */
 function restoreRoute(saved, { own }) {
   const d = saved.data;
+  checkpoint('Route geöffnet');
   abortCalculation();
   searchAlong(null);
   applyRouteSettings({

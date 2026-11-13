@@ -22,6 +22,7 @@ import { setStatus } from './dom.js';
 import { map, relayout, drawRouteLine, updateMarkers } from './mapView.js';
 import { setPoint } from './waypoints.js';
 import { routeSummary } from './resultsView.js';
+import { checkpoint } from './history.js';
 
 let controller = null;
 
@@ -225,6 +226,7 @@ function alongTrack(track) {
 /** Distanz/Rundkurs: Route mit Wunschlänge in der gewählten (oder gewürfelten) Richtung erzeugen. */
 export function generate() {
   if (!state.start) { setStatus('Bitte zuerst einen Startort wählen.', 'error'); return; }
+  checkpoint('Route erzeugt'); // „Rückgängig“ führt zur vorigen Variante
   const bearing = state.direction === 'random' ? seededRandom(state.seed)() * 360 : Number(state.direction);
   const generator = state.mode === 'loop' ? generateLoop : generateOneWay;
   run(signal => generator({

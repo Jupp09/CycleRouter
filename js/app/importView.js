@@ -13,6 +13,7 @@ import { abortCalculation, showRoute, run } from './pipeline.js';
 import { applyRouteSettings } from './controls.js';
 import { setRoutePoints } from './waypoints.js';
 import { searchAlong } from './alongView.js';
+import { checkpoint } from './history.js';
 
 /** Größere Dateien sind kaum eine einzelne Tour; das Lesen würde den Browser spürbar blockieren. */
 const MAX_BYTES = 30 * 1024 * 1024;
@@ -47,6 +48,7 @@ async function openFile(file) {
   const { coords } = track;
   const name = track.name || file.name.replace(/\.[^.]+$/, '');
 
+  checkpoint('GPX-Datei geöffnet');
   abortCalculation();
   searchAlong(null);
   applyRouteSettings({ mode: 'ab' });

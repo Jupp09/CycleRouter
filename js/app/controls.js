@@ -7,6 +7,7 @@ import { storage, newSeed } from '../utils.js';
 import { state, provider, activeBreakdown } from './state.js';
 import { $, ui } from './dom.js';
 import { clearRoute, calcAB, generate, recalc } from './pipeline.js';
+import { checkpoint } from './history.js';
 
 /** Zustand → Bedienelemente (Schalter, Felder, Hinweise). */
 export function syncUi() {
@@ -115,4 +116,6 @@ ui.range.addEventListener('input', () => setDistance(ui.range.value));
 ui.num.addEventListener('change', () => setDistance(ui.num.value));
 
 $('#btn-generate').addEventListener('click', generate);
-$('#btn-reroll').addEventListener('click', () => { state.seed = newSeed(); generate(); });
+// Schnappschuss vor der neuen Saat: „Rückgängig“ soll auch die alte Saat zurückbringen (sonst erzeugte
+// „Route erstellen“ danach die gewürfelte Variante statt der wiederhergestellten)
+$('#btn-reroll').addEventListener('click', () => { checkpoint('Neu gewürfelt'); state.seed = newSeed(); generate(); });

@@ -14,6 +14,7 @@
  *   stagesView.js     Mehrtagestouren
  *   exportView.js     GPX teilen/herunterladen
  *   importView.js     GPX-Datei öffnen
+ *   history.js        Rückgängig und Wiederholen
  *   routesView.js     gespeicherte Routen, „Meine Routen“, Teilen-Links
  *   accountView.js    Anmelden, Passwort, Konto löschen, Einstellungs-Abgleich
  *   homeView.js       Heimatadresse und Vorrat auf dem Server
@@ -31,6 +32,7 @@ import './app/alongView.js';
 import './app/stagesView.js';
 import './app/exportView.js';
 import './app/importView.js';
+import './app/history.js';
 import './app/routesView.js';
 import { initAccount } from './app/accountView.js';
 import { initHome } from './app/homeView.js';

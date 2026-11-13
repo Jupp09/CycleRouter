@@ -275,6 +275,8 @@ input[type="datetime-local"] {
   align-self: flex-start; padding: 2px 0; background: none; border: none; color: var(--accent-text); font-weight: 600; font-size: 0.8125rem;
 }
 .link-btn:hover { text-decoration: underline; }
+.link-btn:disabled { color: var(--muted); cursor: default; text-decoration: none; opacity: 0.7; }
+.history { display: flex; gap: 16px; }
 .link-btn.inline { display: inline; padding: 0; font-size: inherit; }
 
 /* Entlang der Route finden */

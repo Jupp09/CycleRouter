@@ -14,6 +14,7 @@ Routenplaner für **Rennrad**, **Gravelbike**, **Fahrrad** (Trekking-/Alltagsrad
 - **Wetter und Wind** entlang der Route zur geschätzten Ankunftszeit ([js/weather.js](js/weather.js), Daten von [Open-Meteo](https://open-meteo.com/)): Temperatur, Regenwahrscheinlichkeit und ob der Wind von vorn oder hinten kommt – als Zusammenfassung (bei Mehrtagestouren je Tag) und je Abschnitt von etwa 10 km. Ohne festgelegte Abfahrt gilt „jetzt“; die Vorhersage reicht 16 Tage. Bei Rundkurs und Distanz schlägt die App vor, die Route günstiger in den Wind zu legen (Rundkurs dorthin, woher der Wind kommt: Rückenwind auf dem Rückweg). Der Wind ändert die geschätzte Fahrzeit nicht. An Open-Meteo gehen nur auf 0,1° gerundete Orte
 - Aufschlüsselung nach **Untergrund** (Asphalt, Pflaster, Schotter …) und **Wegtyp** (Radweg, Hauptstraße, Wirtschaftsweg …) mit km und %, optional als Einfärbung der Route und als Farbband im Höhenprofil ([js/surfaces.js](js/surfaces.js))
 - Marker verschiebbar – die Route wird neu berechnet
+- **Rückgängig und Wiederholen** (Knöpfe oder Strg+Z / Strg+Umschalt+Z) für Änderungen an Start, Ziel, Zwischenstopps und Markern, für „Löschen“, „Neu würfeln“ und das Öffnen einer Route – der vorige Stand kommt exakt und ohne Neuberechnung zurück
 - **Mehrtagestouren** auf Knopfdruck (sobald die Route länger als die eingestellten km pro Tag ist): Tagesetappen, je Nacht wählbare Unterkunft (Hotel, Pension, Hostel, Zeltplatz aus OpenStreetMap) mit geschätztem Preis gegen das Budget pro Nacht und „Preis prüfen“-Link mit Datum ([js/stays.js](js/stays.js)). Jeder Tag lässt sich einzeln als GPX exportieren (Track von Unterkunft zu Unterkunft, mit den Wegpunkten dieses Tages), auf dem Handy alle Tage auf einmal über das Teilen-Menü
 - **Verpflegung unterwegs** ([js/stops.js](js/stops.js)):
   - Alle *x* km ein Stopp mit Essen (Supermarkt, Kiosk, Bäckerei, Café, Restaurant, Tankstelle), der bei der geschätzten Ankunft geöffnet hat – mit Feiertagen am Ort und typischen Öffnungszeiten von Ketten. Die Route führt durch die Stopps.
@@ -91,7 +92,7 @@ Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Pr
 
 ### Tests
 
-`npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Tageslicht, Wetter, GPX-Import, Fahrrad-Service und Bahnhöfe, Steigungen, Zoomgrenzen der Kartenstile, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
+`npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Tageslicht, Wetter, GPX-Import, Fahrrad-Service und Bahnhöfe, Steigungen, Rückgängig, Zoomgrenzen der Kartenstile, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
 
 ## Routing
 
@@ -125,6 +126,7 @@ js/app/                Oberfläche und Ablauf
   stagesView.js        Mehrtagestouren, ihre Einstellungen und GPX je Tag
   exportView.js        GPX teilen/herunterladen
   importView.js        GPX-Datei öffnen
+  history.js           Rückgängig und Wiederholen
   routesView.js        Gespeicherte Routen, „Meine Routen“, Teilen-Links
   accountView.js       Anmelden, Passwort, Konto löschen, Einstellungs-Abgleich
   homeView.js          Heimatadresse, Vorrat der Heimatregion auf dem Server
