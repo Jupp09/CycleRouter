@@ -6,6 +6,7 @@ Routenplaner für **Rennrad**, **Gravelbike**, **Fahrrad** (Trekking-/Alltagsrad
 - **Distanz** – Start + Wunschdistanz, das Ziel wird automatisch gewählt
 - **Rundkurs** – Schleife mit Wunschdistanz zurück zum Start
 - **GPX-Export** inkl. Höhendaten
+- **Offline-Start:** Die installierte App startet auch ohne Netz. Angemeldet zeigt „Meine Routen“ den zuletzt geladenen Stand; öffnen lassen sich die auf dem Gerät schon geöffneten Routen und die 20 zuletzt geänderten – mit Höhenprofil, Steigungen und Roadbook. Neue Routen, Ortssuche, Stopps, Wetter und der Kartenhintergrund brauchen Netz. Beim Abmelden wird das Gemerkte gelöscht
 - **Roadbook drucken:** eine Übersicht zum Ausdrucken oder als PDF – je Tag Länge, Anstieg, Abfahrt und Ankunft, Tageslicht, größte Anstiege, eine Tabelle der Verpflegungsstopps, Zwischenstopps und Trinkwasserstellen mit Ankunftszeit und Öffnungszeiten sowie die Unterkunft mit Preis, Telefon und Webseite
 - **GPX-Import:** eine vorhandene Strecke öffnen („GPX-Datei öffnen“ oder Datei auf die Karte ziehen) und Verpflegungsstopps, Trinkwasser, Unterkünfte und Wetter entlang davon planen. Die Datei wird im Browser gelesen und verlässt das Gerät nicht. Der importierte Weg bleibt erhalten: Nur die kurzen Abstecher zu Stopps, Unterkünften und Zwischenstopps werden berechnet. Untergrund und Wegtyp sind für den importierten Weg unbekannt; wer Start oder Ziel verschiebt und danach neu berechnet, bekommt eine gewöhnliche Route
 - Höhenprofil, Höhenmeter, geschätzte Fahrzeit
@@ -93,7 +94,7 @@ Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Pr
 
 ### Tests
 
-`npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Tageslicht, Wetter, GPX-Import, Fahrrad-Service und Bahnhöfe, Steigungen, Rückgängig, Roadbook, Zoomgrenzen der Kartenstile, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
+`npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Tageslicht, Wetter, GPX-Import, Fahrrad-Service und Bahnhöfe, Steigungen, Rückgängig, Roadbook, Offline-Start, Zoomgrenzen der Kartenstile, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
 
 ## Routing
 
@@ -110,6 +111,7 @@ Rundkurse und Distanz-Routen mit BRouter werden in [js/generators.js](js/generat
 
 ```text
 index.html             Oberfläche
+sw.js                  Service Worker: App-Dateien für den Offline-Start merken
 css/style.css          Layout (hell/dunkel, mobil); Darstellung wählbar: System, Hell, Dunkel
 js/main.js             Einstieg: lädt und startet die Module in js/app/
 
@@ -157,6 +159,7 @@ js/openingHours.js     opening_hours-Auswertung
 js/holidays.js         Feiertage (date.nager.at)
 js/regions.js          Land/Bundesland entlang der Route (Nominatim)
 js/account.js          Konto-Schnittstelle (Client)
+js/offlineStore.js     Datenbank im Browser: Kachel-Cache und Offline-Speicher fürs Konto
 js/shared.js           Gemeinsame Konstanten für Browser und Server
 
 server.mjs             Server: App ausliefern, /api/pois, /api/warm, Konten

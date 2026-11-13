@@ -167,7 +167,8 @@ async function handleWarmRoute(req, res) {
  * server/, node_modules/, cache/, package.json …) bleibt privat.
  */
 // Bilder liegen unter assets/ statt icons/: Apache leitet /icons/ auf seine eigenen Symbole um (z. B. bei Plesk)
-const PUBLIC = [/^\/index\.html$/, /^\/manifest\.webmanifest$/, /^\/(js|css|profiles|assets)\/[\w./-]+$/];
+// sw.js liegt im Stamm, weil ein Service Worker nur Pfade unterhalb seines eigenen Ordners erfassen darf
+const PUBLIC = [/^\/index\.html$/, /^\/manifest\.webmanifest$/, /^\/sw\.js$/, /^\/(js|css|profiles|assets)\/[\w./-]+$/];
 
 createServer(async (req, res) => {
   setSecurityHeaders(req, res);

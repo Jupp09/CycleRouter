@@ -50,7 +50,7 @@ export function contentSecurityPolicy(html, req) {
     `connect-src 'self' ${CONNECT.join(' ')}`,
     "font-src 'self'",
     "manifest-src 'self'",
-    "worker-src 'none'",
+    "worker-src 'self'", // Service Worker (sw.js) für den Offline-Start
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'self'",

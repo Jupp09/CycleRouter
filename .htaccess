@@ -17,6 +17,6 @@ Options -Indexes
 RedirectMatch 404 /\.
 
 # Nur freigegebene Pfade – alles andere (server/, cache/, scripts/, server.mjs, package.json, *.md …) sperren
-<If "%{REQUEST_URI} !~ m#^/(index\.html|manifest\.webmanifest)?$# && %{REQUEST_URI} !~ m#^/(js|css|profiles|assets)/[\w./-]+$# && %{REQUEST_URI} !~ m#^/api/#">
+<If "%{REQUEST_URI} !~ m#^/(index\.html|manifest\.webmanifest|sw\.js)?$# && %{REQUEST_URI} !~ m#^/(js|css|profiles|assets)/[\w./-]+$# && %{REQUEST_URI} !~ m#^/api/#">
   Require all denied
 </If>

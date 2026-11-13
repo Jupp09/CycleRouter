@@ -26,6 +26,7 @@ function renderAccount(message = '', isError = false) {
   $('#account-delete').hidden = true;
   $('#account-password').hidden = true;
   if (loggedIn) $('#account-name').textContent = account.user.username;
+  if (!message && account.offline) message = 'Offline – Anmelden, Abgleich und Speichern gehen wieder, sobald das Netz da ist.';
   const msg = $('#account-msg');
   msg.textContent = message;
   msg.hidden = !message;
@@ -160,7 +161,17 @@ async function syncSettings({ preferLocal = false } = {}) {
 export async function initAccount() {
   await loadAccount();
   renderAccount(); // gleich zeigen, nicht erst nach dem Abgleich
-  if (account.user) await syncSettings();
+  if (account.user && !account.offline) await syncSettings();
   emit('account'); // Kontobereich, Speichern-Knöpfe, „Meine Routen“
   await openSharedFromUrl();
+}
+
+// Netz weg oder wieder da: Kontostand neu bestimmen – offline der gemerkte Nutzer und seine gemerkten Routen
+for (const type of ['online', 'offline']) {
+  window.addEventListener(type, async () => {
+    const before = account.offline;
+    await loadAccount();
+    if (before && !account.offline && account.user) await syncSettings();
+    emit('account');
+  });
 }

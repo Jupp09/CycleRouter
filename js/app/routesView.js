@@ -7,9 +7,10 @@
  */
 import { providers, withStats, trackRoute } from '../routing/index.js';
 import {
-  account, listRoutes, getRoute, createRoute, updateRoute, deleteRoute, shareRoute, unshareRoute, getSharedRoute, shareUrl,
+  account, listRoutes, getRoute, prefetchRoutes, forgetOffline, createRoute, updateRoute, deleteRoute, shareRoute, unshareRoute,
+  getSharedRoute, shareUrl,
 } from '../account.js';
-import { formatKm, formatM, formatDate } from '../utils.js';
+import { formatKm, formatM, formatDate, formatClock } from '../utils.js';
 import { state, on, emit, MODE_LABELS, originRoute, defaultName } from './state.js';
 import { $, ui, isMobile, setStatus, flashStatus, ask, externalLink, linkButton, rowButton, span } from './dom.js';
 import { map } from './mapView.js';
@@ -149,7 +150,8 @@ async function revokeShareLink() {
 /** Knöpfe „Route speichern“/„Teilen“ und die Zeile darunter (Teilen-Link, als neue Route speichern). */
 function renderSaveActions() {
   const loggedIn = account.enabled && !!account.user;
-  $('#save-actions').hidden = !(loggedIn && state.route);
+  // Ohne Netz gibt es nichts zu speichern oder zu teilen – erst wieder, wenn der Server erreichbar ist
+  $('#save-actions').hidden = !(loggedIn && state.route) || account.offline;
   $('#btn-save-route').textContent = state.saved ? 'Änderungen speichern' : 'Route speichern';
 
   const hint = $('#save-hint');
@@ -159,6 +161,11 @@ function renderSaveActions() {
   if (!loggedIn) {
     hint.hidden = false;
     hint.textContent = 'Zum Speichern und Teilen unter Einstellungen (Zahnrad) anmelden.';
+    return;
+  }
+  if (account.offline) {
+    hint.hidden = false;
+    hint.textContent = 'Offline – Speichern und Teilen gehen wieder, sobald das Netz da ist.';
     return;
   }
   if (!state.saved) return;
@@ -181,19 +188,30 @@ async function refreshMyRoutes() {
   const box = $('#my-routes');
   box.hidden = !(account.enabled && account.user);
   if (box.hidden) return;
+  const wasOffline = account.offline;
   try {
     myRoutes = await listRoutes();
   } catch (e) {
-    // Sitzung abgelaufen → überall als abgemeldet anzeigen
-    if (e.status === 401) { account.user = null; emit('account'); }
+    // Sitzung abgelaufen → überall als abgemeldet anzeigen; nichts Gemerktes zurücklassen
+    if (e.status === 401) { account.user = null; await forgetOffline(); emit('account'); }
     return;
   }
   renderMyRoutes();
+  if (wasOffline !== account.offline) renderSaveActions(); // Netz gerade verloren oder wieder da
+  if (!myRoutes.offline) prefetchRoutes(myRoutes); // im Hintergrund für den Offline-Start merken
 }
 
 function renderMyRoutes() {
   $('#my-routes-count').textContent = myRoutes.length ? `(${myRoutes.length})` : '';
   $('#my-routes-empty').hidden = myRoutes.length > 0;
+  // Ohne Netz: gemerkter Stand – öffnen lässt sich, was auf diesem Gerät gemerkt ist; ändern lässt sich nichts
+  const offline = !!myRoutes.offline;
+  const note = $('#my-routes-offline');
+  note.hidden = !offline;
+  if (offline) {
+    const t = new Date(myRoutes.t);
+    note.textContent = `Offline – Stand vom ${formatDate(t)}, ${formatClock(t)}. Öffnen lassen sich die auf diesem Gerät gemerkten Routen.`;
+  }
   $('#my-routes-list').replaceChildren(...myRoutes.map(r => {
     const li = document.createElement('li');
     const current = state.saved?.id === r.id;
@@ -202,7 +220,10 @@ function renderMyRoutes() {
     meta.textContent = [formatKm(r.distance), `${formatM(r.ascent)} ↑`, MODE_LABELS[r.mode], formatDate(new Date(r.updatedAt))]
       .join(' · ') + (r.shared ? ' · 🔗 geteilt' : '');
     // Name und Angaben als Knopf „öffnen“ – vorher ein anklickbares <li>, das per Tastatur nicht erreichbar war
-    const open = rowButton([span('name', r.name), meta], () => openSaved(r.id));
+    const available = !offline || myRoutes.cached.has(r.id);
+    if (!available) meta.textContent += ' · offline nicht verfügbar';
+    const open = rowButton([span('name', r.name), meta], () => openSaved(r));
+    open.disabled = !available;
     if (current) open.setAttribute('aria-current', 'true');
     const tools = document.createElement('div');
     tools.className = 'tools';
@@ -212,6 +233,7 @@ function renderMyRoutes() {
       b.textContent = icon;
       b.title = title;
       b.setAttribute('aria-label', `„${r.name}“ ${title.toLowerCase()}`);
+      b.disabled = offline;
       b.addEventListener('click', fn);
       tools.append(b);
     };
@@ -222,10 +244,10 @@ function renderMyRoutes() {
   }));
 }
 
-async function openSaved(id) {
+async function openSaved({ id, updatedAt }) {
   setStatus('Route wird geladen …', 'loading');
   try {
-    const r = await getRoute(id);
+    const r = await getRoute(id, updatedAt);
     setStatus(null);
     restoreRoute(r, { own: true });
   } catch (e) {

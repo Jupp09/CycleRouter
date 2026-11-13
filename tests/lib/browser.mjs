@@ -150,6 +150,23 @@ async function newPage(send, listeners, { width = 1400, height = 900, mobile = f
     text: sel => ev(`document.querySelector(${JSON.stringify(sel)})?.textContent`),
 
     /**
+     * Netz für diese Seite sperren bzw. freigeben – auch für ihren Service Worker (eigenes Ziel im Browser, das
+     * die Sperre der Seite sonst nicht träfe). `page.offline` lässt auch die Konto-Attrappe Anfragen scheitern.
+     */
+    async setOffline(offline) {
+      const conditions = { offline, latency: 0, downloadThroughput: -1, uploadThroughput: -1 };
+      await s('Network.enable');
+      await s('Network.emulateNetworkConditions', conditions);
+      const { targetInfos } = await send('Target.getTargets');
+      for (const t of targetInfos.filter(i => i.type === 'service_worker' && i.browserContextId === browserContextId)) {
+        const { sessionId: worker } = await send('Target.attachToTarget', { targetId: t.targetId, flatten: true });
+        await send('Network.enable', {}, worker);
+        await send('Network.emulateNetworkConditions', conditions, worker);
+      }
+      page.offline = offline;
+    },
+
+    /**
      * App öffnen mit frischem localStorage: `storage` sind Einstellungen ohne Präfix ({bike: 'trekking'}),
      * `view` der Kartenausschnitt ({center, zoom}) – nötig für clickMap.
      */

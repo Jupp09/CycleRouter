@@ -41,5 +41,22 @@ import { initHome } from './app/homeView.js';
 import './app/settingsDialog.js';
 
 syncUi();
+
+// Offline-Start: Service Worker (sw.js) anmelden – der Browser erlaubt das nur über HTTPS oder auf localhost.
+// Beim ersten Besuch hat die Seite ihre Dateien geladen, bevor er zuständig war: Dann bekommt er einmal die
+// Liste der geladenen Dateien, damit schon der nächste Start ohne Netz gelingt.
+if ('serviceWorker' in navigator) {
+  const first = !navigator.serviceWorker.controller;
+  window.addEventListener('load', async () => {
+    try {
+      await navigator.serviceWorker.register(new URL('../sw.js', import.meta.url));
+      if (!first) return;
+      const { active } = await navigator.serviceWorker.ready;
+      const urls = [location.origin + '/', new URL('../manifest.webmanifest', import.meta.url).href,
+        ...performance.getEntriesByType('resource').map(e => e.name)];
+      active?.postMessage({ type: 'precache', urls: [...new Set(urls)] });
+    } catch { /* ohne Service Worker läuft die App wie bisher, nur nicht offline */ }
+  });
+}
 initHome();   // Heimatadresse als Standard-Startort
 initAccount(); // Konto, Einstellungs-Abgleich, geteilter Link (?route=…)

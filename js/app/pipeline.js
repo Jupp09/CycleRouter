@@ -84,6 +84,9 @@ export function clearRoute() {
 
 // ---------- Ablauf ----------
 
+/** Ohne Netz? Dann sagt die Fehlermeldung das, statt den technischen Fehler des Dienstes zu zeigen. */
+const offline = () => navigator.onLine === false;
+
 /**
  * Berechnung ausführen: `task(signal)` liefert die Grundroute; danach – je nach Einstellung – Mehrtagestour
  * und Verpflegungsstopps. Fehler eines Ergänzungsschritts lassen die bis dahin berechnete Route stehen.
@@ -163,13 +166,13 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
       watch.done();
     } catch (e) {
       if (e.name === 'AbortError' || signal.aborted) return;
-      console.error(e);
-      setStatus(e.message, 'error');
+      if (!offline()) console.error(e); // ohne Netz erwartet
+      setStatus(offline() ? 'Ohne Netz lassen sich keine Stopps planen – die Route selbst ist da.' : e.message, 'error');
     }
   } catch (e) {
     if (e.name === 'AbortError') return;
-    console.error(e);
-    setStatus(e.message, 'error');
+    if (!offline()) console.error(e); // ohne Netz erwartet
+    setStatus(offline() ? 'Ohne Netz lassen sich keine neuen Routen berechnen.' : e.message, 'error');
   }
 }
 

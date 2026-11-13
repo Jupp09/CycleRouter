@@ -9,6 +9,7 @@
  * Hintergrund: Die öffentlichen Overpass-Server haben oft lange Warteschlangen (auch kleine Abfragen
  * dauern dann 30 s). Deshalb wird nur abgefragt, was in keinem Cache liegt.
  */
+import { openDb } from './offlineStore.js';
 import { sampleRoute } from './utils.js';
 import { tileKey, fetchTilesFromOverpass, cacheName } from './poiSource.js';
 
@@ -33,16 +34,8 @@ const routeTiles = r => tilesNear(sampleRoute(r, 250), 0.012);
 
 // ---------- Browser-Cache (Speicher + IndexedDB) ----------
 
-let dbPromise = null;
-function db() {
-  dbPromise ??= new Promise((resolve, reject) => {
-    const req = indexedDB.open('cyclerouter', 1);
-    req.onupgradeneeded = () => req.result.createObjectStore('poiTiles');
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  }).catch(() => null); // z. B. privater Modus → nur Speicher-Cache
-  return dbPromise;
-}
+/** Die Datenbank teilt sich der Kachel-Cache mit dem Offline-Speicher des Kontos; null → nur Speicher-Cache. */
+const db = openDb;
 
 /** Gecachte Kacheln einer Ebene → Map key → pois (nur frische). */
 async function loadTiles(keys, layer) {

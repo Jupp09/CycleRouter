@@ -133,6 +133,11 @@ export function createAccountStore() {
     async attach(page) {
       page.on(async (method, p) => {
         if (method !== 'Fetch.requestPaused') return;
+        // Netz gesperrt (page.setOffline): Die Anfrage scheitert wie ohne Verbindung, statt beantwortet zu werden
+        if (page.offline) {
+          await page.send('Fetch.failRequest', { requestId: p.requestId, errorReason: 'InternetDisconnected' }).catch(() => {});
+          return;
+        }
         const { url, method: verb, postData, postDataEntries, hasPostData } = p.request;
         let raw = postDataEntries?.length
           ? Buffer.concat(postDataEntries.map(e => Buffer.from(e.bytes || '', 'base64'))).toString('utf8')
