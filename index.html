@@ -246,6 +246,7 @@
         <button id="btn-clear">Löschen</button>
       </div>
       <p class="hint" id="gpx-hint" hidden></p>
+      <button id="btn-roadbook" class="link-btn" title="Druckbare Übersicht: je Tag Zeiten, Stopps mit Öffnungszeiten und Unterkunft – im Druckdialog auch als PDF speicherbar">Roadbook drucken</button>
       <div class="actions" id="save-actions" hidden>
         <button id="btn-save-route" title="In „Meine Routen“ speichern – auf allen deinen Geräten verfügbar">Route speichern</button>
         <button id="btn-share-link" title="Link erzeugen, über den andere (oder dein Handy) die Route öffnen können">Link teilen</button>
@@ -277,6 +278,9 @@
       <div class="elevation-chart" id="elevation-chart"></div>
     </section>
   </main>
+
+  <!-- Nur für den Druck (js/app/roadbookView.js) -->
+  <section id="roadbook" aria-label="Roadbook" hidden></section>
 
   <dialog id="settings-dialog">
     <form method="dialog">

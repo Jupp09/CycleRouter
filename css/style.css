@@ -469,6 +469,34 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
 /* Windows-Kontrastmodus: Hintergründe und Schatten werden durch Systemfarben ersetzt – der gewählte Knopf
    eines Umschalters wäre sonst nicht mehr zu erkennen. Farbbalken und Legende behalten ihre Farben,
    weil sie Information tragen. */
+/* Roadbook drucken (js/app/roadbookView.js): Solange html.print-roadbook gesetzt ist, zeigt der Druck nur die
+   Übersicht – schwarz auf weiß, unabhängig von der Darstellung. Ohne die Klasse druckt die Seite wie am Bildschirm. */
+@media print {
+  html.print-roadbook, html.print-roadbook body { height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; }
+  html.print-roadbook body { display: block !important; }
+  html.print-roadbook body > *:not(#roadbook) { display: none !important; }
+  html.print-roadbook #roadbook { display: block !important; font-size: 10.5pt; line-height: 1.35; color: #000; }
+  #roadbook h1 { font-size: 18pt; margin: 0 0 4pt; }
+  #roadbook h2 { font-size: 13pt; margin: 0 0 3pt; }
+  #roadbook h3 { font-size: 10.5pt; margin: 0 0 2pt; }
+  #roadbook p { margin: 0 0 3pt; }
+  #roadbook header { border-bottom: 1.5pt solid #000; padding-bottom: 6pt; margin-bottom: 10pt; }
+  #roadbook .rb-facts { font-weight: 600; }
+  #roadbook .rb-muted { color: #444; }
+  #roadbook .rb-warn { font-weight: 600; }
+  #roadbook .rb-warn::before { content: "Achtung: "; }
+  #roadbook .rb-day { break-inside: avoid; margin-bottom: 12pt; padding-bottom: 8pt; border-bottom: 0.5pt solid #888; }
+  #roadbook table { width: 100%; border-collapse: collapse; margin: 5pt 0; font-size: 9.5pt; }
+  #roadbook th, #roadbook td { text-align: left; vertical-align: top; padding: 2pt 6pt 2pt 0; border-bottom: 0.5pt solid #bbb; }
+  #roadbook th { border-bottom: 1pt solid #000; }
+  #roadbook td:nth-child(1), #roadbook td:nth-child(2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #roadbook tr { break-inside: avoid; }
+  #roadbook .rb-stay { margin-top: 5pt; padding: 4pt 6pt; border: 0.75pt solid #000; break-inside: avoid; }
+  #roadbook .rb-name { font-weight: 600; }
+  #roadbook footer { font-size: 8.5pt; color: #444; }
+  @page { margin: 15mm; }
+}
+
 @media (forced-colors: active) {
   /* Fläche statt Rahmen: Der Rahmen ist schon der Tastaturfokus */
   .segmented button[aria-checked="true"], .tabs button[aria-checked="true"] {

@@ -6,6 +6,7 @@ Routenplaner für **Rennrad**, **Gravelbike**, **Fahrrad** (Trekking-/Alltagsrad
 - **Distanz** – Start + Wunschdistanz, das Ziel wird automatisch gewählt
 - **Rundkurs** – Schleife mit Wunschdistanz zurück zum Start
 - **GPX-Export** inkl. Höhendaten
+- **Roadbook drucken:** eine Übersicht zum Ausdrucken oder als PDF – je Tag Länge, Anstieg, Abfahrt und Ankunft, Tageslicht, größte Anstiege, eine Tabelle der Verpflegungsstopps, Zwischenstopps und Trinkwasserstellen mit Ankunftszeit und Öffnungszeiten sowie die Unterkunft mit Preis, Telefon und Webseite
 - **GPX-Import:** eine vorhandene Strecke öffnen („GPX-Datei öffnen“ oder Datei auf die Karte ziehen) und Verpflegungsstopps, Trinkwasser, Unterkünfte und Wetter entlang davon planen. Die Datei wird im Browser gelesen und verlässt das Gerät nicht. Der importierte Weg bleibt erhalten: Nur die kurzen Abstecher zu Stopps, Unterkünften und Zwischenstopps werden berechnet. Untergrund und Wegtyp sind für den importierten Weg unbekannt; wer Start oder Ziel verschiebt und danach neu berechnet, bekommt eine gewöhnliche Route
 - Höhenprofil, Höhenmeter, geschätzte Fahrzeit
 - **Steigungen:** Aufschlüsselung nach Steigungsklassen (bergab, flach, 3–6 %, 6–10 %, über 10 %) – im Höhenprofil farbig und schraffiert, auf Wunsch auch auf der Routenlinie – und die Liste der größten Anstiege mit Höhenmetern, Länge und Steigung; ein Klick zeigt den Anstieg auf der Karte ([js/climbs.js](js/climbs.js))
@@ -92,7 +93,7 @@ Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Pr
 
 ### Tests
 
-`npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Tageslicht, Wetter, GPX-Import, Fahrrad-Service und Bahnhöfe, Steigungen, Rückgängig, Zoomgrenzen der Kartenstile, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
+`npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Tageslicht, Wetter, GPX-Import, Fahrrad-Service und Bahnhöfe, Steigungen, Rückgängig, Roadbook, Zoomgrenzen der Kartenstile, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
 
 ## Routing
 
@@ -125,6 +126,7 @@ js/app/                Oberfläche und Ablauf
   alongView.js         „Entlang der Route finden“
   stagesView.js        Mehrtagestouren, ihre Einstellungen und GPX je Tag
   exportView.js        GPX teilen/herunterladen
+  roadbookView.js      Roadbook drucken
   importView.js        GPX-Datei öffnen
   history.js           Rückgängig und Wiederholen
   routesView.js        Gespeicherte Routen, „Meine Routen“, Teilen-Links

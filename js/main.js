@@ -13,6 +13,7 @@
  *   alongView.js      „Entlang der Route finden“
  *   stagesView.js     Mehrtagestouren
  *   exportView.js     GPX teilen/herunterladen
+ *   roadbookView.js   Roadbook drucken
  *   importView.js     GPX-Datei öffnen
  *   history.js        Rückgängig und Wiederholen
  *   routesView.js     gespeicherte Routen, „Meine Routen“, Teilen-Links
@@ -31,6 +32,7 @@ import './app/supplyView.js';
 import './app/alongView.js';
 import './app/stagesView.js';
 import './app/exportView.js';
+import './app/roadbookView.js';
 import './app/importView.js';
 import './app/history.js';
 import './app/routesView.js';
