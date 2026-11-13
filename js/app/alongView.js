@@ -2,7 +2,7 @@
  * „Entlang der Route finden“: Kategorie wählen (Café, Bäckerei …), Treffer bis 1 km neben der Route
  * mit Ankunftszeit und Öffnungsstatus anzeigen und auf Wunsch als Zwischenstopp übernehmen.
  */
-import { PLACE_CATEGORIES, searchAlongRoute } from '../placeSearch.js';
+import { PLACE_CATEGORIES, categoryName, categoryReach, searchAlongRoute } from '../placeSearch.js';
 import { openingAt } from '../stops.js';
 import { arrivalAt } from '../timeline.js';
 import { haversine, debounce, formatClock } from '../utils.js';
@@ -19,12 +19,19 @@ let alongResults = [];
 /** Nach einer Routenänderung die aktive Suche aktualisieren (km-Angaben, neue Abschnitte). */
 const refreshAlong = debounce(() => { if (alongCategory && state.route) searchAlong(alongCategory); }, 500);
 
-on('route', r => { if (r) refreshAlong(); else searchAlong(null); });
+/** Kategorien, die zum Fahrradtyp passen (Ladestationen nur fürs E-Bike). */
+const offered = () => Object.entries(PLACE_CATEGORIES).filter(([, c]) => !c.bikes || c.bikes.includes(state.bike));
+
+on('route', r => {
+  // Nach einem Wechsel des Fahrrads kann die aktive Kategorie wegfallen
+  if (r && alongCategory && !offered().some(([key]) => key === alongCategory)) searchAlong(null);
+  else if (r) { renderAlongChips(); refreshAlong(); } else searchAlong(null);
+});
 
 const offsetText = res => `${Math.round(res.offset / 50) * 50} m neben der Route`;
 
 function renderAlongChips() {
-  $('#along-chips').replaceChildren(...Object.entries(PLACE_CATEGORIES).map(([key, c]) => {
+  $('#along-chips').replaceChildren(...offered().map(([key, c]) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = `${c.icon} ${c.label}`;
@@ -37,6 +44,7 @@ function renderAlongChips() {
 /** „bei Ankunft ca. 14:20 geöffnet“ – aus den Öffnungszeiten im Cache (sonst unbekannt). */
 function openingText(res) {
   const when = `bei Ankunft ca. ${formatClock(res.eta)}`;
+  if (!PLACE_CATEGORIES[res.category].hours) return { text: when, warn: false }; // Bahnhof, Luftpumpe …: immer zugänglich
   const o = res.opening;
   if (o.state === 'unknown') return { text: `${when} · Öffnungszeiten unbekannt`, warn: false };
   const typical = o.typical ? ` (typisch für ${res.poi.typical.chain})` : '';
@@ -56,7 +64,7 @@ function alongPopup(res) {
   line(openingText(res).text);
   if (res.opening.hours) line(`Öffnungszeiten${res.opening.typical ? ' (typisch)' : ''}: ${res.opening.hours}`, 'muted');
   // Nur wenn der OSM-Eintrag bekannt ist (Cache) – ein Photon-Treffer allein sagt nichts über Öffnungszeiten
-  if (res.poi && !res.poi.tags.opening_hours) el.append(missingHoursLine());
+  if (PLACE_CATEGORIES[res.category].hours && res.poi && !res.poi.tags.opening_hours) el.append(missingHoursLine());
   line(`km ${(res.along / 1000).toFixed(1)} · ${offsetText(res)}`);
   el.append(osmLinks(res), popupButton('Als Zwischenstopp hinzufügen', () => addAlongResult(res)));
   return el;
@@ -66,8 +74,9 @@ function addAlongResult(res) {
   map.closePopup();
   alongResults = alongResults.filter(r => r.id !== res.id);
   renderAlongResults();
-  // Alle Kategorien sind Verpflegung – der Ort zählt bei der Stopp-Planung als Stopp
-  addVia(res, { label: res.name, icon: PLACE_CATEGORIES[res.category].icon, food: true });
+  // Verpflegung zählt bei der Stopp-Planung als Stopp; Bahnhof, Fahrradladen … sind nur Zwischenstopps
+  const c = PLACE_CATEGORIES[res.category];
+  addVia(res, { label: res.name, icon: c.icon, food: !!c.food });
 }
 
 function renderAlongResults() {
@@ -108,7 +117,8 @@ export async function searchAlong(category, { spoken = false } = {}) {
 
   const ctrl = alongController = new AbortController();
   const c = PLACE_CATEGORIES[category];
-  hint.textContent = `${c.label} entlang der Route werden gesucht …`;
+  const name = categoryName(category), reach = `${categoryReach(category) / 1000} km`;
+  hint.textContent = `${name} entlang der Route wird gesucht …`;
   try {
     const found = await searchAlongRoute(state.route, category, { signal: ctrl.signal });
     if (ctrl.signal.aborted) return;
@@ -121,11 +131,13 @@ export async function searchAlong(category, { spoken = false } = {}) {
       return { ...r, eta: t, opening: r.poi ? openingAt(r.poi, t) : { state: 'unknown', typical: false, hours: '' } };
     });
     const summary = alongResults.length
-      ? `${alongResults.length} × ${c.label} bis 1 km neben der Route – mit „+“ als Zwischenstopp übernehmen.`
-      : `Kein ${c.label} bis 1 km neben der Route gefunden.`;
+      ? `${alongResults.length} × ${name} bis ${reach} neben der Route – mit „+“ als Zwischenstopp übernehmen.`
+      : `${name}: nichts bis ${reach} neben der Route gefunden.`;
     hint.textContent = summary
-      + (found.partial ? ' Einzelne Abschnitte konnten nicht durchsucht werden – ggf. erneut versuchen.' : '')
-      + (found.source === 'photon' ? ' Öffnungszeiten für diesen Abschnitt werden gerade nachgeladen und stehen beim nächsten Mal zur Verfügung.' : '');
+      + (!found.partial ? '' : found.source === 'cache'
+        ? ' Die Daten für diese Strecke werden gerade nachgeladen – gleich noch einmal versuchen.'
+        : ' Einzelne Abschnitte konnten nicht durchsucht werden – ggf. erneut versuchen.')
+      + (found.source === 'photon' && c.hours ? ' Öffnungszeiten für diesen Abschnitt werden gerade nachgeladen und stehen beim nächsten Mal zur Verfügung.' : '');
     renderAlongResults();
     if (spoken) announce(summary);
   } catch (e) {

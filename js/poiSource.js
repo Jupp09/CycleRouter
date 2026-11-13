@@ -84,6 +84,31 @@ LAYERS.stay = {
   },
 };
 
+// Unterwegs helfen: Bahnhöfe (Ausstieg, Rückfahrt), Fahrradläden, Reparaturstationen, Luft, Laden fürs E-Bike.
+// Eine Ebene für alles: Jede Ebene kostet je Kachel eine eigene Abfrage und eigenen Vorrat auf dem Server.
+LAYERS.service = {
+  statements: b => `
+  nwr["railway"~"^(station|halt)$"](${b});
+  nwr["shop"="bicycle"](${b});
+  nwr["amenity"~"^(bicycle_repair_station|compressed_air)$"](${b});
+  nwr["amenity"="charging_station"]["bicycle"="yes"](${b});`,
+  // Ladestationen filtert osmium nur nach amenity; bicycle=yes prüft classify
+  filters: ['nwr/railway=station,halt', 'nwr/shop=bicycle', 'nwr/amenity=bicycle_repair_station,compressed_air,charging_station'],
+  classify(tags) {
+    if (['private', 'no'].includes(tags.access)) return null;
+    if (tags.railway === 'station' || tags.railway === 'halt') {
+      // U-Bahn, Standseil- und Museumsbahnen helfen bei der Rückfahrt mit dem Rad nicht
+      if (['subway', 'funicular', 'miniature', 'monorail'].includes(tags.station) || tags.usage === 'tourism') return null;
+      return 'station';
+    }
+    if (tags.shop === 'bicycle') return 'bike_shop';
+    if (tags.amenity === 'bicycle_repair_station') return 'repair_station';
+    if (tags.amenity === 'compressed_air') return 'air';
+    if (tags.amenity === 'charging_station' && tags.bicycle === 'yes') return 'charging';
+    return null;
+  },
+};
+
 /** Name, unter dem eine Ebene gecacht wird – ändert sich mit cacheVersion, damit alte Daten nicht weiterverwendet werden. */
 export const cacheName = layer => (LAYERS[layer]?.cacheVersion ? `${layer}.v${LAYERS[layer].cacheVersion}` : layer);
 
@@ -91,6 +116,7 @@ export const isLayer = l => Object.hasOwn(LAYERS, l);
 const LAYER_OF_TYPE = {
   cafe: 'food', restaurant: 'food', bakery: 'food',
   hotel: 'stay', motel: 'stay', guest_house: 'stay', hostel: 'stay', camp_site: 'stay',
+  station: 'service', bike_shop: 'service', repair_station: 'service', air: 'service', charging: 'service',
 };
 /** Ebene, zu der ein Ort-Typ gehört. */
 export const layerOfType = type => LAYER_OF_TYPE[type] || 'supply';
@@ -99,7 +125,9 @@ export const layerOfType = type => LAYER_OF_TYPE[type] || 'supply';
 const KEEP_TAGS = ['opening_hours', 'seasonal', 'fee', 'brand',
   // Unterkünfte: Sterne, Preisangaben (Freitext), Webseite, Ort für die Preissuche
   'stars', 'charge', 'website', 'contact:website', 'addr:city', 'addr:place', 'addr:postcode',
-  'check_date', 'phone', 'contact:phone'];
+  'check_date', 'phone', 'contact:phone',
+  // Fahrrad-Service: Was gibt es an der Station, wer betreibt sie
+  'service:bicycle:pump', 'service:bicycle:tools', 'operator'];
 
 /**
  * OSM-Objekt → Ort einer Ebene, oder null, wenn es nicht dazugehört. Gemeinsam für Overpass und den

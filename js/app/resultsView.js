@@ -3,7 +3,8 @@
  * Höhenprofil und die Aufschlüsselung nach Untergrund bzw. Wegtyp (samt Einfärbung der Routenlinie).
  */
 import { summarize, estimatedShare, longDistanceShare } from '../surfaces.js';
-import { storage, estimateTime, averageSpeed, formatKm, formatM, formatDuration } from '../utils.js';
+import { storage, estimateTime, averageSpeed, haversine, formatKm, formatM, formatDuration } from '../utils.js';
+import { fetchPoisNear } from '../poiTiles.js';
 import { dayTimes } from '../timeline.js';
 import { daylightNote, daylightToday } from '../sun.js';
 import { state, on, defaultName, departureDate } from './state.js';
@@ -21,6 +22,7 @@ on('route', r => {
   renderBreakdown();
   renderStats(r);
   renderDaylight(r);
+  renderStation(r);
   // Name einer geöffneten gespeicherten/geteilten Route beibehalten
   ui.routeName.value = state.loadedName ?? defaultName(r);
   ui.results.hidden = false;
@@ -79,6 +81,41 @@ function renderDaylight(r) {
   el.textContent = note.text;
   el.classList.toggle('warn', note.warn);
 }
+
+/** So weit vom Ziel wird ein Bahnhof für die Rückfahrt noch genannt (m). */
+const STATION_REACH = 2500;
+let stationController = null;
+
+/**
+ * A→B: nächster Bahnhof am Ziel, für die Rückfahrt. Nur aus dem Kachel-Cache – die Zeile wartet nie auf Overpass.
+ * Fehlen die Kacheln noch, lädt der Server sie im Hintergrund; dann wird ein paar Mal nachgesehen. Keine Ansage.
+ */
+async function renderStation(r, attempt = 0) {
+  const el = $('#station-hint');
+  stationController?.abort();
+  if (!attempt) el.hidden = true;
+  if (state.mode !== 'ab' || !state.end) return;
+  const ctrl = stationController = new AbortController();
+  const [lat, lon] = r.coords.at(-1), end = { lat, lon };
+  let pois;
+  try {
+    pois = await fetchPoisNear([end], ctrl.signal, ['service'], { cacheOnly: true });
+  } catch {
+    return; // ohne Daten keine Zeile
+  }
+  if (ctrl.signal.aborted) return;
+  const station = pois.filter(p => p.type === 'station').map(p => ({ p, d: haversine(end, p) }))
+    .filter(x => x.d <= STATION_REACH).sort((a, b) => a.d - b.d)[0];
+  if (station) {
+    el.textContent = `Nächster Bahnhof am Ziel: ${station.p.name || 'Bahnhof'}, ${formatKm(station.d)}`;
+    el.hidden = false;
+  } else if (!pois.complete && attempt < STATION_RETRY.length) {
+    const timer = setTimeout(() => { if (!ctrl.signal.aborted && state.route === r) renderStation(r, attempt + 1); }, STATION_RETRY[attempt]);
+    ctrl.signal.addEventListener('abort', () => clearTimeout(timer));
+  }
+}
+/** Wartezeiten bis zum nächsten Blick in den Cache (ms) – ein kalter Overpass-Abruf dauert oft 30 s und mehr. */
+const STATION_RETRY = [5000, 15000, 40000];
 
 /** Balken und Legende „Untergrund“ bzw. „Wegtyp“ mit km und Anteil. */
 function renderBreakdown() {
