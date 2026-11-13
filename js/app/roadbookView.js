@@ -4,7 +4,8 @@
  *
  * Gedruckt wird über den Druckdialog des Browsers (dort auch „Als PDF speichern“). Die Übersicht steht in
  * `#roadbook`, das auf dem Bildschirm nie sichtbar ist; solange `html.print-roadbook` gesetzt ist, zeigt der
- * Druck nur sie (css/style.css). Ohne Route druckt Strg+P die Seite wie bisher. Karte und Höhenprofil fehlen
+ * Druck nur sie (css/style.css). Ohne Route druckt Strg+P die Seite wie bisher. In der installierten App auf
+ * iPhone/iPad gibt es keinen Druckdialog; dort zeigt der Knopf die Übersicht stattdessen am Bildschirm (unten). Karte und Höhenprofil fehlen
  * bewusst (Kacheln drucken unzuverlässig), ebenso das Wetter (auf dem Papier schnell veraltet).
  */
 import { STATE_LABELS } from '../stops.js';
@@ -140,8 +141,26 @@ const root = document.documentElement;
 window.addEventListener('beforeprint', () => root.classList.toggle('print-roadbook', buildRoadbook()));
 window.addEventListener('afterprint', () => root.classList.remove('print-roadbook'));
 
-$('#btn-roadbook').addEventListener('click', () => {
+// Die installierte App auf iPhone/iPad (vom Home-Bildschirm, navigator.standalone gibt es nur dort) hat keinen
+// Druckdialog: window.print() tut nichts, ohne Fehler. Dort zeigt der Knopf das Roadbook in einem Dialog – eine
+// Kopie, damit #roadbook für den Druck direkt unter <body> bleibt (die Druckregeln setzen das voraus).
+const standalone = navigator.standalone === true;
+const button = $('#btn-roadbook'), dialog = $('#roadbook-dialog'), view = $('#roadbook-view');
+if (standalone) {
+  button.textContent = 'Roadbook anzeigen';
+  button.title = 'Übersicht: je Tag Zeiten, Stopps mit Öffnungszeiten und Unterkunft – drucken lässt sie sich in Safari';
+  $('#roadbook-host').textContent = location.host;
+}
+dialog.addEventListener('close', () => view.replaceChildren());
+
+button.addEventListener('click', () => {
   if (!buildRoadbook()) return;
+  if (standalone) {
+    view.replaceChildren(...[...$('#roadbook').childNodes].map(n => n.cloneNode(true)));
+    dialog.showModal();
+    dialog.scrollTop = 0;
+    return;
+  }
   root.classList.add('print-roadbook');
   window.print();
 });

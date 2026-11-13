@@ -77,4 +77,30 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   await page.send('Emulation.setEmulatedMedia', { media: 'print' });
   await page.shot('2-mehrtagestour');
   await page.send('Emulation.setEmulatedMedia', { media: '' });
+
+  step('Installierte App auf dem iPhone: anzeigen statt drucken');
+  page = await newPage({ height: 950 });
+  // navigator.standalone gibt es nur in Safari auf iOS; vor dem Laden der Module vortäuschen
+  await page.send('Page.addScriptToEvaluateOnNewDocument', { source: `Object.defineProperty(navigator, 'standalone', { value: true });` });
+  await page.open(app, { view: BONN, storage: { bike: 'trekking' } });
+  await page.ev(NO_DIALOG);
+  const label = await page.ev(`document.querySelector('#btn-roadbook').textContent`);
+  check('Knopf heißt „Roadbook anzeigen“', label === 'Roadbook anzeigen', label);
+  await page.clickMap(50.735, 7.10); await sleep(800);
+  await page.clickMap(50.70, 7.15);
+  check('Route berechnet', await page.waitFor(`${HAS_ROUTE} && ${IDLE}`, 120000));
+  // Erst jetzt auf Handybreite: Im schmalen Layout treffen die Kartenklicks oben nicht
+  await page.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: false }); await sleep(300);
+  await page.ev(`document.querySelector('#btn-roadbook').click(); true`); await sleep(300);
+  const shown = await page.ev(`(() => { const d = document.querySelector('#roadbook-dialog'), v = d.querySelector('#roadbook-view');
+    return { open: d.open, printed: window.__printed || 0, title: v.querySelector('h1')?.textContent, days: v.querySelectorAll('.rb-day').length,
+      original: document.querySelector('#roadbook').parentElement === document.body, hint: d.querySelector('.hint').textContent,
+      cls: document.documentElement.classList.contains('print-roadbook'), width: v.scrollWidth <= v.clientWidth + 1 }; })()`);
+  check('Dialog mit dem Roadbook, kein Druckaufruf', shown.open && shown.printed === 0 && !shown.cls && shown.days === 1 && !!shown.title, JSON.stringify(shown));
+  check('Hinweis auf Safari, Druckvorlage bleibt an ihrem Platz', /^Drucken und als PDF sichern geht in Safari: .+ dort öffnen\.$/.test(shown.hint) && shown.original, shown.hint);
+  check('Passt in die Breite des Handys', shown.width);
+  await page.shot('3-iphone-app');
+  await page.ev(`document.querySelector('#roadbook-dialog button[value=close]').click(); true`); await sleep(200);
+  const closed = await page.ev(`({ open: document.querySelector('#roadbook-dialog').open, empty: !document.querySelector('#roadbook-view').children.length })`);
+  check('Schließen leert den Dialog', !closed.open && closed.empty, JSON.stringify(closed));
 }

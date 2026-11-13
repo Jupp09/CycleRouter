@@ -283,6 +283,18 @@
   <!-- Nur für den Druck (js/app/roadbookView.js) -->
   <section id="roadbook" aria-label="Roadbook" hidden></section>
 
+  <!-- Installierte App auf iPhone/iPad: kein Druckdialog, das Roadbook wird hier angezeigt -->
+  <dialog id="roadbook-dialog" aria-labelledby="roadbook-dialog-title">
+    <form method="dialog">
+      <div class="roadbook-head">
+        <h2 id="roadbook-dialog-title">Roadbook</h2>
+        <button value="close">Schließen</button>
+      </div>
+      <p class="hint">Drucken und als PDF sichern geht in Safari: <span id="roadbook-host">cyclorouter.de</span> dort öffnen.</p>
+      <div id="roadbook-view"></div>
+    </form>
+  </dialog>
+
   <dialog id="settings-dialog">
     <form method="dialog">
       <h2>Einstellungen</h2>
