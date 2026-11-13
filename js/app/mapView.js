@@ -5,7 +5,8 @@
  */
 import { createMap } from '../map.js';
 import { createElevation } from '../elevation.js';
-import { state, isLoop, activeVias } from './state.js';
+import { segmentsFor } from '../surfaces.js';
+import { state, isLoop, activeVias, activeBreakdown } from './state.js';
 import { $ } from './dom.js';
 
 const handlers = { onClick: null, onMarkerDrag: null };
@@ -27,10 +28,11 @@ export function relayout() {
   requestAnimationFrame(() => map.invalidateSize());
 }
 
-/** Routenlinie zeichnen – auf Wunsch nach Untergrund bzw. Wegtyp eingefärbt. */
+/** Routenlinie zeichnen – auf Wunsch nach Untergrund, Wegtyp bzw. Steigung eingefärbt. */
 export function drawRouteLine() {
   const r = state.route;
-  map.setRoute(r?.coords, r?.segments, state.colorRoute ? state.breakdown : null);
+  const kind = state.colorRoute && r ? activeBreakdown(r) : null;
+  map.setRoute(r?.coords, kind && segmentsFor(r, kind), kind);
 }
 
 /** Beschriftung eines Zwischenstopp-Markers: Kategorie-Symbol oder laufende Nummer. */

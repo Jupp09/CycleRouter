@@ -8,6 +8,7 @@ Routenplaner für **Rennrad**, **Gravelbike**, **Fahrrad** (Trekking-/Alltagsrad
 - **GPX-Export** inkl. Höhendaten
 - **GPX-Import:** eine vorhandene Strecke öffnen („GPX-Datei öffnen“ oder Datei auf die Karte ziehen) und Verpflegungsstopps, Trinkwasser, Unterkünfte und Wetter entlang davon planen. Die Datei wird im Browser gelesen und verlässt das Gerät nicht. Der importierte Weg bleibt erhalten: Nur die kurzen Abstecher zu Stopps, Unterkünften und Zwischenstopps werden berechnet. Untergrund und Wegtyp sind für den importierten Weg unbekannt; wer Start oder Ziel verschiebt und danach neu berechnet, bekommt eine gewöhnliche Route
 - Höhenprofil, Höhenmeter, geschätzte Fahrzeit
+- **Steigungen:** Aufschlüsselung nach Steigungsklassen (bergab, flach, 3–6 %, 6–10 %, über 10 %) – im Höhenprofil farbig und schraffiert, auf Wunsch auch auf der Routenlinie – und die Liste der größten Anstiege mit Höhenmetern, Länge und Steigung; ein Klick zeigt den Anstieg auf der Karte ([js/climbs.js](js/climbs.js))
 - **Entlang der Route finden:** Café, Restaurant, Bäckerei, Supermarkt, Tankstelle, dazu **Fahrradladen, Reparaturstation, Luftpumpe** und **Bahnhöfe** (bis 3 km, als Ausstieg) – fürs E-Bike auch **Ladestationen**. Bei A → B nennt die App den nächsten Bahnhof am Ziel für die Rückfahrt
 - **Tageslicht:** Sonnenauf- und -untergang am Start und Ziel, lokal berechnet ([js/sun.js](js/sun.js)). Mit festgelegter Abfahrt (Verpflegungsstopps oder Mehrtagestour) warnt die App, wenn ein Teil der Fahrt im Dunkeln liegt – bei Mehrtagestouren je Tag; sonst zeigt sie den hellen Tag heute
 - **Wetter und Wind** entlang der Route zur geschätzten Ankunftszeit ([js/weather.js](js/weather.js), Daten von [Open-Meteo](https://open-meteo.com/)): Temperatur, Regenwahrscheinlichkeit und ob der Wind von vorn oder hinten kommt – als Zusammenfassung (bei Mehrtagestouren je Tag) und je Abschnitt von etwa 10 km. Ohne festgelegte Abfahrt gilt „jetzt“; die Vorhersage reicht 16 Tage. Bei Rundkurs und Distanz schlägt die App vor, die Route günstiger in den Wind zu legen (Rundkurs dorthin, woher der Wind kommt: Rückenwind auf dem Rückweg). Der Wind ändert die geschätzte Fahrzeit nicht. An Open-Meteo gehen nur auf 0,1° gerundete Orte
@@ -90,7 +91,7 @@ Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Pr
 
 ### Tests
 
-`npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Tageslicht, Wetter, GPX-Import, Zoomgrenzen der Kartenstile, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
+`npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Tageslicht, Wetter, GPX-Import, Fahrrad-Service und Bahnhöfe, Steigungen, Zoomgrenzen der Kartenstile, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
 
 ## Routing
 
@@ -145,6 +146,7 @@ js/poiSource.js        Overpass-Abfragen und Datenebenen (auch vom Server genutz
 js/chainHours.js       Typische Öffnungszeiten von Ketten
 js/timeline.js         Ankunftszeiten und Tagesetappen
 js/sun.js              Sonnenauf- und -untergang, Tageslicht-Hinweise
+js/climbs.js           Steigungsklassen und größte Anstiege
 js/weather.js          Wetter und Wind entlang der Route (Open-Meteo)
 js/routeGeometry.js    Positionen auf/neben der Route, Wegpunkte einfügen
 js/openingHours.js     opening_hours-Auswertung

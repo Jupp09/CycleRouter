@@ -1,15 +1,17 @@
 /**
  * Ergebnis-Panel: Kennzahlen (Distanz, Höhenmeter, Fahrzeit), Tageslicht, Anteil auf Radfernwegen, Routenname,
- * Höhenprofil und die Aufschlüsselung nach Untergrund bzw. Wegtyp (samt Einfärbung der Routenlinie).
+ * Höhenprofil und die Aufschlüsselung nach Untergrund, Wegtyp bzw. Steigung (samt Einfärbung der Routenlinie)
+ * mit der Liste der größten Anstiege.
  */
 import { summarize, estimatedShare, longDistanceShare } from '../surfaces.js';
-import { storage, estimateTime, averageSpeed, haversine, formatKm, formatM, formatDuration } from '../utils.js';
+import { findClimbs, hasElevation } from '../climbs.js';
+import { storage, estimateTime, averageSpeed, haversine, indexAtDistance, formatKm, formatM, formatDuration } from '../utils.js';
 import { fetchPoisNear } from '../poiTiles.js';
 import { dayTimes } from '../timeline.js';
 import { daylightNote, daylightToday } from '../sun.js';
-import { state, on, defaultName, departureDate } from './state.js';
-import { $, ui } from './dom.js';
-import { elevation, drawRouteLine } from './mapView.js';
+import { state, on, defaultName, departureDate, activeBreakdown } from './state.js';
+import { $, ui, rowButton, span } from './dom.js';
+import { map, elevation, drawRouteLine } from './mapView.js';
 import { syncUi } from './controls.js';
 
 on('route', r => {
@@ -18,8 +20,9 @@ on('route', r => {
     ui.results.hidden = true;
     return;
   }
-  elevation.show(r, state.breakdown);
+  elevation.show(r, activeBreakdown(r));
   renderBreakdown();
+  syncUi(); // Umschalter: zeigt die Einteilung, die für diese Route gilt
   renderStats(r);
   renderDaylight(r);
   renderStation(r);
@@ -117,14 +120,19 @@ async function renderStation(r, attempt = 0) {
 /** Wartezeiten bis zum nächsten Blick in den Cache (ms) – ein kalter Overpass-Abruf dauert oft 30 s und mehr. */
 const STATION_RETRY = [5000, 15000, 40000];
 
-/** Balken und Legende „Untergrund“ bzw. „Wegtyp“ mit km und Anteil. */
+/** Balken und Legende „Untergrund“, „Wegtyp“ bzw. „Steigung“ mit km und Anteil; dazu die größten Anstiege. */
 function renderBreakdown() {
   const r = state.route;
   const box = $('#breakdown');
-  box.hidden = !r?.segments?.length;
+  const surface = !!r?.segments?.length, grade = !!r && hasElevation(r);
+  box.hidden = !surface && !grade;
   if (box.hidden) return;
+  // Nur anbieten, wofür die Route Daten hat (importierter Weg ohne Höhen: keine Steigung)
+  for (const b of document.querySelectorAll('#breakdown-switch button')) b.hidden = b.dataset.value === 'grade' ? !grade : !surface;
+  const kind = activeBreakdown(r);
+  renderClimbs(r, kind);
 
-  const items = summarize(r, state.breakdown);
+  const items = summarize(r, kind);
   $('#breakdown-bar').replaceChildren(...items.map(it => {
     const span = document.createElement('span');
     span.style.flex = String(it.share);
@@ -144,9 +152,27 @@ function renderBreakdown() {
 
   // Untergrund fehlt in OSM oft und wird aus dem Wegtyp geschätzt – das offen sagen
   const hint = $('#breakdown-hint');
-  const estimated = estimatedShare(r);
-  hint.hidden = state.breakdown !== 'surface' || estimated < 0.01;
+  const estimated = surface ? estimatedShare(r) : 0;
+  hint.hidden = kind !== 'surface' || estimated < 0.01;
   hint.textContent = `${Math.round(estimated * 100)} % des Untergrunds ist in OpenStreetMap nicht explizit erfasst und aus Straßen- bzw. Wegtyp abgeleitet.`;
+}
+
+/** Die größten Anstiege als Liste (nur bei „Steigung“); ein Klick zeigt den Anstieg auf der Karte. */
+function renderClimbs(r, kind) {
+  const climbs = kind === 'grade' ? findClimbs(r) : [];
+  $('#climbs').hidden = !climbs.length;
+  const km = m => (m / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const pct = g => (g * 100).toLocaleString('de-DE', { maximumFractionDigits: g < 0.1 ? 1 : 0 });
+  $('#climb-list').replaceChildren(...climbs.map(c => {
+    const li = document.createElement('li');
+    const main = span('main');
+    const detail = document.createElement('small');
+    detail.textContent = `Ø ${pct(c.mean)} %, bis ${pct(c.max)} %`;
+    main.append(span('name', `${formatM(c.gain)} ↑ auf ${formatKm(c.length)}`), detail);
+    li.append(rowButton([main, span('km', `km ${km(c.from)}–${km(c.to)}`)],
+      () => map.fitSection(r.coords.slice(indexAtDistance(r, c.from), indexAtDistance(r, c.to) + 1))));
+    return li;
+  }));
 }
 
 $('#breakdown-switch').addEventListener('click', e => {
@@ -157,7 +183,7 @@ $('#breakdown-switch').addEventListener('click', e => {
   syncUi();
   renderBreakdown();
   drawRouteLine();
-  elevation.setKind(value);
+  elevation.setKind(activeBreakdown());
 });
 
 $('#color-route').addEventListener('change', e => {

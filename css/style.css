@@ -219,6 +219,14 @@ button.primary:hover { background: var(--accent-hover); }
 .legend i.dashed { background: repeating-linear-gradient(90deg, var(--c) 0 4px, transparent 4px 6px); border-radius: 1px; }
 .legend i.dotted { background: radial-gradient(circle, var(--c) 0 2.5px, transparent 3px) 0 0 / 6px 6px; }
 .legend .km { color: var(--muted); }
+#climbs > .label { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+.climb-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.8125rem; }
+.climb-list li { border-radius: 8px; background: var(--surface); }
+.climb-list li:hover { background: var(--accent-soft); }
+.climb-list .row { grid-template-columns: 1fr auto; gap: 8px; padding: 6px 8px; }
+.climb-list .name { font-weight: 600; }
+.climb-list small { display: block; color: var(--muted); font-size: 0.75rem; }
+.climb-list .km { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.75rem; }
 .legend .pct { text-align: right; font-weight: 600; }
 .check { display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; cursor: pointer; }
 .check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
@@ -395,6 +403,8 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
 .elevation-chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .elevation-chart .area { fill: var(--accent-soft); }
 .elevation-chart .line { fill: none; stroke: var(--route); stroke-width: 2; }
+.elevation-chart .grade-fill { fill-opacity: 0.75; }
+.elevation-chart .hatch { stroke: #111827; stroke-width: 1.3; stroke-opacity: 0.55; }
 .elevation-chart .grid { stroke: var(--border); stroke-width: 1; }
 .elevation-chart .axis { fill: var(--muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
 .elevation-chart .cursor { stroke: var(--text); stroke-width: 1; stroke-dasharray: 3 3; }

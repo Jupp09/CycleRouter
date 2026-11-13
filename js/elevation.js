@@ -1,4 +1,4 @@
-import { CATEGORIES, segmentAt } from './surfaces.js';
+import { CATEGORIES, segmentAt, segmentsFor } from './surfaces.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const M = { top: 22, right: 10, bottom: 28, left: 42 };
@@ -69,7 +69,7 @@ export function elevationSummary({ coords, cum, distance }) {
 /**
  * Höhenprofil als SVG. `onHover` erhält den Punkt unter dem Mauszeiger bzw. an der Tastaturposition (oder null).
  * Der Container ist ein Schieberegler (role="slider"): mit den Pfeiltasten in 1-%-Schritten, Bild ↑/↓ in
- * 10-%-Schritten, Pos1/Ende an Anfang/Ende. Die Position wird mit Höhe und Untergrund angesagt.
+ * 10-%-Schritten, Pos1/Ende an Anfang/Ende. Die Position wird mit Höhe und Untergrund, Wegtyp bzw. Steigung angesagt.
  */
 export function createElevation(container, { onHover }) {
   const section = container.closest('section');
@@ -133,20 +133,41 @@ export function createElevation(container, { onHover }) {
     }
     const last = coords.length - 1;
     path += `L${x(cum[last]).toFixed(1)},${y(coords[last][2] ?? lastEle).toFixed(1)}`;
-    el('path', { class: 'area', d: `${path}L${x(distance)},${y(min)}L${x(0)},${y(min)}Z` }, svg);
-    el('path', { class: 'line', d: path }, svg);
+    const area = `${path}L${x(distance)},${y(min)}L${x(0)},${y(min)}Z`;
+    el('path', { class: 'area', d: area }, svg);
 
-    // Farbband für Untergrund bzw. Wegtyp
-    const segments = route.segments || [];
+    // Zusammenhängende Abschnitte gleicher Kategorie (Untergrund, Wegtyp oder Steigung)
+    const segments = segmentsFor(route, kind);
+    const runs = [];
     for (let k = 0; k < segments.length;) {
       const key = segments[k][kind];
       const from = segments[k].from;
       while (k < segments.length && segments[k][kind] === key) k++;
-      const to = segments[k - 1].to;
-      el('rect', {
-        x: x(cum[from]), y: m.top + h + BAND.gap, width: Math.max(0.5, x(cum[to]) - x(cum[from])), height: BAND.height,
-        fill: CATEGORIES[kind][key].color,
-      }, svg);
+      runs.push({ key, x: x(cum[from]), width: Math.max(0.5, x(cum[segments[k - 1].to]) - x(cum[from])) });
+    }
+
+    // Steigung: Fläche unter der Kurve je Klasse in Farbe und – je steiler, desto dichter – schraffiert,
+    // damit nicht die Farbe allein die Steigung zeigt
+    if (kind === 'grade') {
+      const defs = el('defs', {}, svg);
+      el('path', { d: area }, el('clipPath', { id: 'grade-area' }, defs));
+      for (const [n, gap] of [[1, 9], [2, 6], [3, 3.5]]) {
+        const p = el('pattern', { id: `grade-hatch-${n}`, patternUnits: 'userSpaceOnUse', width: gap, height: gap, patternTransform: 'rotate(45)' }, defs);
+        el('line', { class: 'hatch', x1: 0, y1: 0, x2: 0, y2: gap }, p);
+      }
+      const fills = el('g', { 'clip-path': 'url(#grade-area)' }, svg);
+      for (const run of runs) {
+        const cat = CATEGORIES.grade[run.key];
+        const box = { x: run.x, y: m.top, width: run.width, height: h };
+        el('rect', { ...box, class: 'grade-fill', fill: cat.color }, fills);
+        if (cat.pattern) el('rect', { ...box, fill: `url(#grade-hatch-${cat.pattern})` }, fills);
+      }
+    }
+    el('path', { class: 'line', d: path }, svg);
+
+    // Farbband unter dem Profil
+    for (const run of runs) {
+      el('rect', { x: run.x, y: m.top + h + BAND.gap, width: run.width, height: BAND.height, fill: CATEGORIES[kind][run.key].color }, svg);
     }
 
     const cursor = el('line', { class: 'cursor', y1: m.top, y2: m.top + h, visibility: 'hidden' }, svg);

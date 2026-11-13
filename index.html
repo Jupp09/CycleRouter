@@ -199,10 +199,15 @@
         <div class="segmented small" id="breakdown-switch" role="radiogroup" aria-label="Aufschlüsselung">
           <button role="radio" data-value="surface">Untergrund</button>
           <button role="radio" data-value="waytype">Wegtyp</button>
+          <button role="radio" data-value="grade">Steigung</button>
         </div>
         <div class="bar" id="breakdown-bar" aria-hidden="true"></div>
         <ul class="legend" id="breakdown-legend"></ul>
         <p class="hint" id="breakdown-hint" hidden></p>
+        <div id="climbs" hidden>
+          <h2 class="label">Größte Anstiege</h2>
+          <ol class="climb-list" id="climb-list"></ol>
+        </div>
         <label class="check"><input type="checkbox" id="color-route"> Route auf Karte einfärben</label>
       </div>
       <div class="stops" id="stops" hidden>

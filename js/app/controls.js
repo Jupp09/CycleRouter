@@ -4,7 +4,7 @@
  * blendet modusabhängige Felder (`data-show`) ein und aus.
  */
 import { storage, newSeed } from '../utils.js';
-import { state, provider } from './state.js';
+import { state, provider, activeBreakdown } from './state.js';
 import { $, ui } from './dom.js';
 import { clearRoute, calcAB, generate, recalc } from './pipeline.js';
 
@@ -17,7 +17,7 @@ export function syncUi() {
   check('#mode-tabs button', 'aria-checked', 'mode', state.mode);
   showOnly('#bike-switch', 'value', state.visibleBikes, state.bike);
   showOnly('#mode-tabs', 'mode', state.visibleModes, state.mode);
-  check('#breakdown-switch button', 'aria-checked', 'value', state.breakdown);
+  check('#breakdown-switch button', 'aria-checked', 'value', activeBreakdown());
   for (const n of document.querySelectorAll('[data-show]')) n.hidden = !n.dataset.show.split(' ').includes(state.mode);
 
   $('#color-route').checked = state.colorRoute;

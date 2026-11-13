@@ -12,6 +12,7 @@
  *   'account' ()             Anmeldestand geändert (angemeldet, abgemeldet, gelöscht, Sitzung abgelaufen)
  */
 import { providers } from '../routing/index.js';
+import { hasElevation } from '../climbs.js';
 import { storage, newSeed, toDateTimeLocal } from '../utils.js';
 import { BIKES, MODES } from '../shared.js';
 
@@ -41,7 +42,7 @@ export const state = {
   visibleModes: visibleOf('visibleModes', MODES),
 
   // Anzeige
-  breakdown: storage.get('breakdown', 'surface'), // 'surface' | 'waytype'
+  breakdown: storage.get('breakdown', 'surface'), // 'surface' | 'waytype' | 'grade' – siehe activeBreakdown()
   colorRoute: storage.get('colorRoute', true),
 
   // Verpflegungsstopps
@@ -139,6 +140,17 @@ export function activeVias() {
 /** Grundroute ohne Übernachtungen und Verpflegungsstopps – Ausgangspunkt jeder Neuplanung. */
 export function originRoute() {
   return state.route?.origin || state.route?.base || state.route;
+}
+
+/**
+ * Einteilung, nach der Balken, Höhenprofil und Kartenlinie gerade aufgeschlüsselt werden: die gewählte, soweit
+ * die Route die Daten dafür hat – „Steigung“ braucht Höhen, Untergrund und Wegtyp die Abschnitte des
+ * Routing-Dienstes. Fehlt das Gewählte, gilt das andere; die Einstellung selbst bleibt.
+ */
+export function activeBreakdown(r = state.route) {
+  const surface = !!r?.segments?.length, grade = !!r && hasElevation(r);
+  if (state.breakdown === 'grade') return grade || !surface ? 'grade' : 'surface';
+  return surface || !grade ? state.breakdown : 'grade';
 }
 
 /** Vorschlag für den Routennamen, z. B. „Rundkurs 60 km ab Bremen“. */

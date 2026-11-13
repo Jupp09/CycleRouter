@@ -1,5 +1,7 @@
-// Einteilung der Route nach Untergrund und Wegtyp.
-// Ein Routenabschnitt ist {from, to, surface, waytype, estimated} mit Indizes in route.coords.
+// Einteilung der Route nach Untergrund, Wegtyp und Steigung.
+// Ein Routenabschnitt ist {from, to, surface, waytype, estimated} mit Indizes in route.coords; die Abschnitte
+// nach Steigung ({from, to, grade}) werden aus den Höhen berechnet (climbs.js) – siehe segmentsFor.
+import { gradeSegments } from './climbs.js';
 
 // Farben nach der Okabe-Ito-Palette: auch bei Rot-Grün-Schwäche (Protanopie, Deuteranopie) unterscheidbar
 // (simuliert nach Machado 2009, kleinster Abstand ΔE ≈ 18). Unbefestigtes ist zusätzlich gestrichelt
@@ -24,9 +26,26 @@ export const CATEGORIES = {
     ferry: { label: 'Fähre', color: '#882255', dash: 'dotted' },
     other: { label: 'Sonstiges', color: '#cbd5e1' },
   },
+  // Steigung: Die drei Anstiegsklassen werden von Gelb über Orangerot nach Weinrot immer dunkler – die Helligkeit
+  // unterscheidet sie auch bei Farbschwäche (simuliert nach Machado 2009: kleinster Abstand ΔE ≈ 28; mit dem
+  // helleren Orange #e69f00 wären es bei Deuteranopie nur 17). Dazu im Höhenprofil eine Schraffur, die mit der
+  // Steigung dichter wird (`pattern`), und auf der Karte die Strichelung (`dash`). Reihenfolge hier = Reihenfolge
+  // in Balken und Legende.
+  grade: {
+    down: { label: 'Bergab (über 3 %)', color: '#56b4e9' },
+    flat: { label: 'Flach (bis 3 %)', color: '#cbd5e1' },
+    up3: { label: 'Steigung 3–6 %', color: '#f0e442', pattern: 1 },
+    up6: { label: 'Steigung 6–10 %', color: '#d55e00', pattern: 2, dash: 'dashed' },
+    up10: { label: 'Steigung über 10 %', color: '#882255', pattern: 3, dash: 'dotted' },
+  },
 };
 
-export const KIND_LABELS = { surface: 'Untergrund', waytype: 'Wegtyp' };
+export const KIND_LABELS = { surface: 'Untergrund', waytype: 'Wegtyp', grade: 'Steigung' };
+
+/** Abschnitte der Route für eine Einteilung: nach Steigung berechnet, sonst die des Routing-Dienstes. */
+export function segmentsFor(route, kind) {
+  return kind === 'grade' ? gradeSegments(route) : route.segments || [];
+}
 
 const SURFACE_TAGS = {
   asphalt: ['asphalt', 'paved', 'chipseal', 'concrete', 'metal', 'wood'],
@@ -119,14 +138,18 @@ export function segmentAt(segments, i) {
   return segments.find(s => i >= s.from && i < s.to) || segments[segments.length - 1];
 }
 
-/** Distanz je Kategorie, absteigend sortiert. Basis ist route.cum, damit die Summe der Gesamtdistanz entspricht. */
+/**
+ * Distanz je Kategorie, absteigend sortiert – Steigung in fester Reihenfolge (bergab bis steil), weil die Klassen
+ * eine Rangfolge haben. Basis ist route.cum, damit die Summe der Gesamtdistanz entspricht.
+ */
 export function summarize(route, kind) {
   const totals = {};
-  for (const s of route.segments) totals[s[kind]] = (totals[s[kind]] || 0) + route.cum[s.to] - route.cum[s.from];
+  for (const s of segmentsFor(route, kind)) totals[s[kind]] = (totals[s[kind]] || 0) + route.cum[s.to] - route.cum[s.from];
+  const order = Object.keys(CATEGORIES[kind]);
   return Object.entries(totals)
     .filter(([, d]) => d > 0)
     .map(([key, distance]) => ({ key, ...CATEGORIES[kind][key], distance, share: distance / route.distance }))
-    .sort((a, b) => b.distance - a.distance);
+    .sort((a, b) => (kind === 'grade' ? order.indexOf(a.key) - order.indexOf(b.key) : b.distance - a.distance));
 }
 
 /**

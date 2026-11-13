@@ -114,7 +114,7 @@ export function createMap(el, { onClick, onMarkerDrag }) {
       }
     },
 
-    /** colorBy: null für einfarbig, sonst 'surface' oder 'waytype' (Abschnitte in Kategorie-Farbe). */
+    /** colorBy: null für einfarbig, sonst 'surface', 'waytype' oder 'grade' (`segments` in Kategorie-Farbe, vgl. segmentsFor). */
     setRoute(coords, segments, colorBy) {
       routeLayer.clearLayers();
       if (!coords) return;
@@ -248,6 +248,11 @@ export function createMap(el, { onClick, onMarkerDrag }) {
       const mobile = window.matchMedia('(max-width: 800px)').matches;
       // Kurze Routen nicht bis in die höchste Stufe einpassen
       map.fitBounds(bounds, { padding: mobile ? [20, 20] : [50, 50], maxZoom: 16, ...motion() });
+    },
+
+    /** Ausschnitt auf ein Stück der Route einpassen (z. B. einen Anstieg). */
+    fitSection(coords) {
+      map.fitBounds(L.latLngBounds(coords.map(c => [c[0], c[1]])), { padding: [40, 40], maxZoom: 16, ...motion() });
     },
 
     flyTo(point, zoom = 13) {
