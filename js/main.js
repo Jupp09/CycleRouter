@@ -17,6 +17,7 @@
  *   importView.js     GPX-Datei öffnen
  *   history.js        Rückgängig und Wiederholen
  *   routesView.js     gespeicherte Routen, „Meine Routen“, Teilen-Links
+ *   linkView.js       Route als Link in der Adresse (#v=1&…), ohne Konto
  *   accountView.js    Anmelden, Passwort, Konto löschen, Einstellungs-Abgleich
  *   homeView.js       Heimatadresse und Vorrat auf dem Server
  *   settingsDialog.js Einstellungsdialog
@@ -36,6 +37,7 @@ import './app/roadbookView.js';
 import './app/importView.js';
 import './app/history.js';
 import './app/routesView.js';
+import { openLinkFromUrl } from './app/linkView.js';
 import { initAccount } from './app/accountView.js';
 import { initHome } from './app/homeView.js';
 import './app/settingsDialog.js';
@@ -59,4 +61,5 @@ if ('serviceWorker' in navigator) {
   });
 }
 initHome();   // Heimatadresse als Standard-Startort
+openLinkFromUrl(); // Route aus der Adresse (#v=1&…) – nach initHome, damit der Link den Start überschreibt
 initAccount(); // Konto, Einstellungs-Abgleich, geteilter Link (?route=…)

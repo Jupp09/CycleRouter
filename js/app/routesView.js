@@ -19,6 +19,7 @@ import { run, showRoute, abortCalculation } from './pipeline.js';
 import { setRoutePoints } from './waypoints.js';
 import { checkpoint } from './history.js';
 import { searchAlong } from './alongView.js';
+import { shareLink } from './linkView.js';
 
 on('route', renderSaveActions);
 // Angemeldet, abgemeldet, Konto gelöscht oder Sitzung abgelaufen (accountView.js bzw. refreshMyRoutes)
@@ -160,7 +161,7 @@ function renderSaveActions() {
   if (!state.route || !account.enabled) return;
   if (!loggedIn) {
     hint.hidden = false;
-    hint.textContent = 'Zum Speichern und Teilen unter Einstellungen (Zahnrad) anmelden.';
+    hint.textContent = 'Zum Speichern unter Einstellungen (Zahnrad) anmelden.';
     return;
   }
   if (account.offline) {
@@ -178,7 +179,9 @@ function renderSaveActions() {
 }
 
 $('#btn-save-route').addEventListener('click', () => saveCurrentRoute());
-$('#btn-share-link').addEventListener('click', shareCurrentRoute);
+// Angemeldet (und online): Konto-Link wie bisher – zurückziehbar, auch für GPX-Strecken und mit den gewählten
+// Unterkünften. Sonst der Link in der Adresse (linkView.js).
+$('#btn-share-link').addEventListener('click', () => (account.enabled && account.user && !account.offline ? shareCurrentRoute() : shareLink()));
 
 // ---------- Meine Routen ----------
 

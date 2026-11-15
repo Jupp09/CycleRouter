@@ -100,8 +100,8 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   const shown = await page.ev(DIALOG);
   check('Dialog mit dem Roadbook, kein Druckaufruf', shown.open && shown.printed === 0 && !shown.cls && shown.days === 1 && !!shown.title, JSON.stringify(shown));
   check('Überschriften in richtiger Reihenfolge', shown.headings === 'H2 H3', shown.headings);
-  // Ohne Server-Datenbank (wie im Test) gibt es keine Links: Der Hinweis sagt, dass die Route in Safari fehlt
-  check('Hinweis auf Safari, Druckvorlage unberührt', /^Drucken und als PDF sichern geht nur in Safari; dort muss die Route neu geplant werden\.$/.test(shown.hint) && shown.untouched, shown.hint);
+  // Die App hat ihren eigenen Speicher: Nach Safari kommt die Route über „Link teilen“ (linkView.js)
+  check('Hinweis auf Safari, Druckvorlage unberührt', /^Drucken und als PDF sichern geht nur in Safari\. Dorthin kommt die Route über „Link teilen“\.$/.test(shown.hint) && shown.untouched, shown.hint);
   check('Passt in die Breite des Handys', shown.width);
   const axe = await (await fetch('https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js')).text();
   await page.ev(axe + '; true');

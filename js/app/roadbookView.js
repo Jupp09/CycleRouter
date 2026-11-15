@@ -18,6 +18,7 @@ import { findClimbs } from '../climbs.js';
 import { locateOnRoute } from '../routeGeometry.js';
 import { indexAtDistance, formatKm, formatM, formatDuration, formatClock, formatDayDate, formatDate } from '../utils.js';
 import { account } from '../account.js';
+import { isTrackRoute } from './linkView.js';
 import { state, departureDate, BIKE_LABELS, on } from './state.js';
 import { $ } from './dom.js';
 import { gpxName } from './exportView.js';
@@ -168,9 +169,11 @@ on('route', r => {
 button.addEventListener('click', () => {
   if (standalone) {
     if (!buildRoadbook(view, 2)) return;
-    $('#roadbook-hint').textContent = account.enabled
-      ? 'Drucken und als PDF sichern geht nur in Safari. Dorthin kommt die Route über „Link teilen“ oder über „Meine Routen“, wenn du in Safari angemeldet bist.'
-      : 'Drucken und als PDF sichern geht nur in Safari; dort muss die Route neu geplant werden.';
+    $('#roadbook-hint').textContent = !isTrackRoute(state.route)
+      ? 'Drucken und als PDF sichern geht nur in Safari. Dorthin kommt die Route über „Link teilen“.'
+      : account.enabled
+        ? 'Drucken und als PDF sichern geht nur in Safari. Importierte Strecken kommen angemeldet über „Link teilen“ dorthin.'
+        : 'Drucken und als PDF sichern geht nur in Safari; importierte Strecken müssen dort neu geöffnet werden.';
     dialog.showModal();
     dialog.scrollTop = 0;
     return;

@@ -41,7 +41,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Hinweise als Liste mit Symbol', ['eurovelo-share', 'routing-fallback', 'daylight', 'station-hint', 'weather'].every(id => layout.facts.includes(id)) && /☀/.test(layout.icon), layout.icon);
   check('Erklärtexte eingeklappt', layout.more >= 2 && layout.closed, String(layout.more));
   check('Block „Route weiterverwenden“: Name, GPX, dann Roadbook … Löschen in einer Reihe',
-    layout.order.join(',') === 'h-route-actions,route-name,btn-gpx,btn-roadbook,btn-clear' && layout.oneRow, layout.order.join(','));
+    layout.order.join(',') === 'h-route-actions,route-name,btn-gpx,btn-roadbook,btn-share-link,btn-clear' && layout.oneRow, layout.order.join(','));
   await page.shot('1-ergebnis');
   await ev(`document.querySelector('.route-actions').scrollIntoView({ block: 'end' }); true`); await sleep(200);
   await page.shot('2-aktionen');
@@ -120,7 +120,8 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
 
   step('Heimat als Start beim Laden');
   await ev(`localStorage.setItem('cyclerouter.home', JSON.stringify({lat: 50.94, lon: 6.96, label: 'Testheimat Köln'}));
-    localStorage.setItem('cyclerouter.mode', '"ab"'); true`);
+    localStorage.setItem('cyclerouter.mode', '"ab"');
+    history.replaceState(null, '', location.pathname); true`); // sonst stellt die Adresse (#v=1…) den Rundkurs wieder her
   await page.reload();
   check('Heimat als Start', (await ev(`${q('#start-input')}.value`)) === 'Testheimat Köln' && !(await ev(`${q('#btn-home')}.hidden`)));
 }

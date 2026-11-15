@@ -6,6 +6,7 @@ Routenplaner für **Rennrad**, **Gravelbike**, **Fahrrad** (Trekking-/Alltagsrad
 - **Distanz** – Start + Wunschdistanz, das Ziel wird automatisch gewählt
 - **Rundkurs** – Schleife mit Wunschdistanz zurück zum Start
 - **GPX-Export** inkl. Höhendaten
+- **Route als Link, ohne Konto:** Die Adresse enthält die Route (hinter „#“, wird nie an den Server geschickt). „Link teilen“ kopiert sie bzw. öffnet am Handy das Teilen-Menü; wer den Link öffnet, bekommt dieselbe Route – auch denselben Rundkurs. Neuladen und Lesezeichen behalten die Route. Angemeldet erzeugt „Link teilen“ wie bisher den zurückziehbaren Konto-Link, der auch importierte GPX-Strecken kann
 - **Offline-Start:** Die installierte App startet auch ohne Netz. Angemeldet zeigt „Meine Routen“ den zuletzt geladenen Stand; öffnen lassen sich die auf dem Gerät schon geöffneten Routen und die 20 zuletzt geänderten – mit Höhenprofil, Steigungen und Roadbook. Neue Routen, Ortssuche, Stopps, Wetter und der Kartenhintergrund brauchen Netz. Beim Abmelden wird das Gemerkte gelöscht
 - **Übersichtliches Ergebnis:** Distanz, Höhenmeter und Fahrzeit auf einen Blick, darunter die Hinweise (Radfernwege, Tageslicht, Bahnhof am Ziel, Wetter) als Liste mit Symbolen; GPX, Roadbook, Speichern, Teilen und Löschen gebündelt unter „Route weiterverwenden“
 - **Roadbook drucken:** eine Übersicht zum Ausdrucken oder als PDF – je Tag Länge, Anstieg, Abfahrt und Ankunft, Tageslicht, größte Anstiege, eine Tabelle der Verpflegungsstopps, Zwischenstopps und Trinkwasserstellen mit Ankunftszeit und Öffnungszeiten sowie die Unterkunft mit Preis, Telefon und Webseite. Die installierte App auf iPhone und iPad hat keinen Druckdialog; dort zeigt „Roadbook anzeigen“ die Übersicht am Bildschirm, gedruckt wird in Safari
@@ -133,6 +134,7 @@ js/app/                Oberfläche und Ablauf
   importView.js        GPX-Datei öffnen
   history.js           Rückgängig und Wiederholen
   routesView.js        Gespeicherte Routen, „Meine Routen“, Teilen-Links
+  linkView.js          Route als Link in der Adresse (ohne Konto)
   accountView.js       Anmelden, Passwort, Konto löschen, Einstellungs-Abgleich
   homeView.js          Heimatadresse, Vorrat der Heimatregion auf dem Server
   settingsDialog.js    Einstellungsdialog
