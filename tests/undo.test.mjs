@@ -71,7 +71,9 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
 
   step('Im Eingabefeld bleibt Strg+Z beim Text');
   const before = await page.ev(BUTTONS);
-  await page.ev(`document.querySelector('#start-input').focus(); true`);
+  // Mit Route sind die Eingaben eingeklappt (planView.js) – erst „Ändern“, dann ins Feld
+  await page.ev(`(() => { if (document.querySelector('#plan').hidden) document.querySelector('#btn-plan-edit').click();
+    document.querySelector('#start-input').focus(); return document.activeElement.id; })()`);
   await ctrlZ();
   now = await page.ev(NOW);
   check('Kein Schritt zurückgenommen', now.route === 'B' && await page.ev(BUTTONS) === before, await page.ev(BUTTONS));

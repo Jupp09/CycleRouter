@@ -54,6 +54,19 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Erklärtexte eingeklappt', layout.more >= 2 && layout.closed, String(layout.more));
   check('Block „Route weiterverwenden“: Name, GPX, dann Roadbook … Löschen in einer Reihe',
     layout.order.join(',') === 'h-route-actions,route-name,btn-roadbook,btn-share-link,btn-clear' && layout.oneRow, layout.order.join(','));
+  // Eingaben eingeklappt, Zusammenfassung mit „Ändern“; Stopps an einer Stelle
+  const plan = `({ hidden: document.querySelector('#plan').hidden, summary: document.querySelector('#plan-summary').hidden ? null : document.querySelector('#plan-summary-text').textContent,
+    button: document.querySelector('#btn-plan-edit').textContent, expanded: document.querySelector('#btn-plan-edit').getAttribute('aria-expanded') })`;
+  let pl = await ev(plan);
+  check('Nach dem Berechnen eingeklappt: eine Zeile mit Start, Ziel und Fahrrad', pl.hidden && /^A → B · .+ → .+ · Fahrrad$/.test(pl.summary || '') && pl.button === 'Ändern' && pl.expanded === 'false', JSON.stringify(pl));
+  await ev(`document.querySelector('#btn-plan-edit').click(); true`);
+  pl = await ev(plan);
+  check('„Ändern“ klappt auf', !pl.hidden && pl.button === 'Einklappen' && pl.expanded === 'true', JSON.stringify(pl));
+  await ev(`document.querySelector('#btn-plan-edit').click(); true`);
+  check('„Einklappen“ klappt wieder zu', (await ev(plan)).hidden);
+  const stopsSection = await ev(`(() => { const s = document.querySelector('.stops-section');
+    return ['#supply-enabled', '#stops', '#water', '#along-chips'].every(sel => s.contains(document.querySelector(sel))) && s.querySelector('h2').textContent; })()`);
+  check('„Stopps unterwegs“: Verpflegung, Stoppliste, Trinkwasser und „Entlang der Route“ zusammen', stopsSection === 'Stopps unterwegs', String(stopsSection));
   check('GPX-Export direkt unter den Kacheln', await ev(`document.querySelector('.stats').nextElementSibling?.id === 'btn-gpx'
     && document.querySelector('#btn-gpx').classList.contains('primary')`));
   await page.shot('1-ergebnis');
