@@ -44,6 +44,22 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Summe der Klassen = Distanz', calc.sum === calc.distance);
   check('Ohne Höhen: keine Steigung', calc.noEle === 'false,0,0', calc.noEle);
 
+  step('Achse des Höhenprofils passt zu den Daten');
+  // Profil mit künstlicher Route zeichnen und die Beschriftung der y-Achse lesen
+  const axis = await page.ev(`(async () => {
+    const { computeStats } = await import('/js/utils.js');
+    const { elevation } = await import('/js/app/mapView.js');
+    const labels = ele => { const coords = []; for (let i = 0; i <= 200; i++) coords.push([50 + i * 0.0009, 7, ele(i)]);
+      elevation.show({ coords, ...computeStats(coords), segments: [] }, 'surface');
+      return [...document.querySelectorAll('#elevation-chart text.axis')].map(t => t.textContent).filter(t => t.endsWith(' m')).join(','); };
+    const out = { flat: labels(i => 0.75 + 4.25 * Math.abs(Math.sin(i / 20))), rolling: labels(i => 40 + 22 * Math.abs(Math.sin(i / 30))),
+      below: labels(i => -3 + 2 * Math.sin(i / 10)) };
+    elevation.hide();
+    return out; })()`);
+  check('Flach (1–5 m): Achse 0–20 m statt −40 bis +40 m', axis.flat === '0 m,10 m,20 m', axis.flat);
+  check('Hügelig (40–62 m): Achse ab 40 m', axis.rolling.startsWith('40 m,') && axis.rolling.endsWith(',70 m'), axis.rolling);
+  check('Unter dem Meeresspiegel: Achse darf unter 0', axis.below.startsWith('-10 m'), axis.below);
+
   step('Hügelige Route (Siebengebirge)');
   await page.clickMap(50.674, 7.194); await sleep(800);
   await page.clickMap(50.683, 7.277);

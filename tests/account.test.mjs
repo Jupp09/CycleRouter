@@ -172,7 +172,7 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
   const withRoute = await ev(`(() => { const s = document.querySelector('#route-summary'), r = s.getBoundingClientRect();
     return { map: Math.round(document.querySelector('.map-area').getBoundingClientRect().height), shown: getComputedStyle(s).display !== 'none' && r.bottom <= innerHeight,
       text: document.querySelector('#route-summary-text').textContent }; })()`);
-  check('Mit Route: Karte 62 %, Kurzzeile mit km sichtbar', Math.abs(withRoute.map - 852 * 0.62) <= 2 && withRoute.shown && /km · ↑ \d+ m · /.test(withRoute.text), JSON.stringify(withRoute));
+  check('Mit Route: Karte 62 %, Kurzzeile mit km sichtbar', Math.abs(withRoute.map - 852 * 0.62) <= 2 && withRoute.shown && /km · ↑ (\d+|< 5) m · /.test(withRoute.text), JSON.stringify(withRoute));
   await page.shot('4-iphone');
   const hashBefore = await ev(`location.hash`);
   await ev(`document.querySelector('#btn-summary-details').click(); true`); await sleep(800);

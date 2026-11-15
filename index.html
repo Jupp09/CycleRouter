@@ -178,6 +178,9 @@
         <div><span class="k">Höhenmeter</span><span class="v updown"><span><span aria-hidden="true">↑ </span><span id="stat-up"></span></span><span class="sr-only"> / </span><span><span aria-hidden="true">↓ </span><span id="stat-down"></span></span></span></div>
         <div><span class="k">Fahrzeit ca.</span><span class="v" id="stat-time"></span></div>
       </div>
+      <!-- Wichtigste Aktion nach dem Berechnen: direkt unter den Kennzahlen -->
+      <button id="btn-gpx" class="primary">GPX exportieren</button>
+      <p class="hint" id="gpx-hint" hidden></p>
       <!-- Hinweise zur Route: Symbole per CSS (.facts > li#… ::before), damit textContent sie nicht löscht -->
       <ul class="facts">
         <li class="hint" id="eurovelo-share" hidden></li>
@@ -252,8 +255,6 @@
           <span class="label">Routenname</span>
           <input id="route-name" type="text">
         </label>
-        <button id="btn-gpx" class="primary">GPX exportieren</button>
-        <p class="hint" id="gpx-hint" hidden></p>
         <div class="action-row">
           <button id="btn-roadbook" title="Druckbare Übersicht: je Tag Zeiten, Stopps mit Öffnungszeiten und Unterkunft – im Druckdialog auch als PDF speicherbar">Roadbook</button>
           <button id="btn-share-link" title="Link zur Route kopieren bzw. teilen – ohne Konto; er steht auch in der Adresszeile">Link teilen</button>

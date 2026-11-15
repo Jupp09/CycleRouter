@@ -515,7 +515,7 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
   .map-area { order: -1; height: 45vh; height: 45dvh; }
   body:has(#results:not([hidden])) .map-area { height: 62vh; height: 62dvh; }
   .elevation { height: 120px; padding-bottom: 4px; }
-  .panel { border-right: none; border-top: 1px solid var(--border); overflow: visible; padding: 12px; gap: 12px; }
+  .panel { border-right: none; border-top: 1px solid var(--border); overflow: visible; gap: 12px; } /* Rand bleibt 16 px wie am Rechner */
   .brand h1 { font-size: 1.125rem; }
   .route-summary {
     display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 12px;

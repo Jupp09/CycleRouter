@@ -27,7 +27,7 @@ on('route', r => {
   syncUi(); // Umschalter: zeigt die Einteilung, die für diese Route gilt
   renderStats(r);
   // Kurzzeile unter der Karte (nur Handy, CSS) – dort steht das Ergebnis weit unten
-  $('#route-summary-text').textContent = `${formatKm(r.distance)} · ↑ ${formatM(r.ascent)} · ${formatDuration(estimateTime(r.distance, r.ascent, state.bike))}`;
+  $('#route-summary-text').textContent = `${formatKm(r.distance)} · ↑ ${heightText(r.ascent, r)} · ${formatDuration(estimateTime(r.distance, r.ascent, state.bike))}`;
   summary.hidden = false;
   renderDaylight(r);
   renderStation(r);
@@ -61,6 +61,13 @@ export function routeSummary(r) {
   return `Route berechnet: ${parts.join(', ')}`;
 }
 
+/**
+ * Höhenmeter für Kachel und Kurzzeile. Gezählt wird erst ab 4 m Unterschied (Messrauschen, utils.js) – auf ganz
+ * flachen Strecken ergibt das 0, was nach fehlenden Daten aussähe. Dann „< 5 m“ (kurz, passt in die Kachel).
+ * Ohne Höhendaten (z. B. GPX-Datei ohne <ele>) „–“.
+ */
+const heightText = (m, r) => (!hasElevation(r) ? '–' : m > 0 ? formatM(m) : '< 5 m');
+
 function renderStats(r) {
   // Teilstücke vom Ausweichdienst (routing/index.js): offen sagen, dass die Route anders bewertet wurde
   const fb = $('#routing-fallback');
@@ -70,8 +77,8 @@ function renderStats(r) {
       + 'Valhalla bewertet Wege etwas anders, eine EuroVelo-Bevorzugung gibt es dort nicht. Spätere Berechnungen versuchen es wieder mit BRouter.';
   }
   $('#stat-dist').textContent = formatKm(r.distance);
-  $('#stat-up').textContent = formatM(r.ascent);
-  $('#stat-down').textContent = formatM(r.descent);
+  $('#stat-up').textContent = heightText(r.ascent, r);
+  $('#stat-down').textContent = heightText(r.descent, r);
   $('#stat-time').textContent = formatDuration(estimateTime(r.distance, r.ascent, state.bike));
   $('#stat-time').title = `Ø ${averageSpeed(state.bike)} km/h in der Ebene, Anstiege zusätzlich – einstellbar unter Einstellungen`;
 

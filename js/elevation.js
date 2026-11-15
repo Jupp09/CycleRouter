@@ -104,11 +104,16 @@ export function createElevation(container, { onHover }) {
     if (w < 20 || h < 20) return;
 
     const eles = coords.map(c => c[2]).filter(e => e != null);
-    let min = Math.min(...eles), max = Math.max(...eles);
-    if (max - min < 50) { const mid = (max + min) / 2; min = mid - 25; max = mid + 25; }
+    const lowest = Math.min(...eles);
+    let min = lowest, max = Math.max(...eles);
+    // Achse an die Daten anpassen, mit mindestens 20 m Spanne ab dem auf 10 m abgerundeten Tiefstwert –
+    // sonst wird eine flache Strecke (Bremen: 1–5 m) zur Linie auf einer Achse von −40 bis +40 m
+    if (max - min < 20) { min = Math.floor(min / 10) * 10; max = Math.max(min + 20, max); }
     const yStep = niceStep(max - min, 3);
     min = Math.floor(min / yStep) * yStep;
     max = Math.ceil(max / yStep) * yStep;
+    // Unter 0 nur, wenn die Route wirklich unter dem Meeresspiegel liegt (Niederlande)
+    if (lowest >= 0) min = Math.max(0, min);
 
     const x = d => m.left + (d / distance) * w;
     const y = e => m.top + h - ((e - min) / (max - min)) * h;

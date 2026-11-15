@@ -41,7 +41,9 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Hinweise als Liste mit Symbol', ['eurovelo-share', 'routing-fallback', 'daylight', 'station-hint', 'weather'].every(id => layout.facts.includes(id)) && /☀/.test(layout.icon), layout.icon);
   check('Erklärtexte eingeklappt', layout.more >= 2 && layout.closed, String(layout.more));
   check('Block „Route weiterverwenden“: Name, GPX, dann Roadbook … Löschen in einer Reihe',
-    layout.order.join(',') === 'h-route-actions,route-name,btn-gpx,btn-roadbook,btn-share-link,btn-clear' && layout.oneRow, layout.order.join(','));
+    layout.order.join(',') === 'h-route-actions,route-name,btn-roadbook,btn-share-link,btn-clear' && layout.oneRow, layout.order.join(','));
+  check('GPX-Export direkt unter den Kacheln', await ev(`document.querySelector('.stats').nextElementSibling?.id === 'btn-gpx'
+    && document.querySelector('#btn-gpx').classList.contains('primary')`));
   await page.shot('1-ergebnis');
   await ev(`document.querySelector('.route-actions').scrollIntoView({ block: 'end' }); true`); await sleep(200);
   await page.shot('2-aktionen');

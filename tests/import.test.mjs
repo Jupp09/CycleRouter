@@ -152,7 +152,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   const round = await page.ev(`(async () => { const s = ${STATE}, r = s.route; const { insertWaypoints } = await import('/js/routeGeometry.js');
     return { mode: s.mode, up: document.querySelector('#stat-up').textContent, km: r.distance / 1000,
       anchors: insertWaypoints(r, []).length - 2, name: document.querySelector('#route-name').value }; })()`);
-  check('Runde bleibt A → B, Anstieg 0 m', round.mode === 'ab' && round.up === '0 m' && round.name === 'Runde', JSON.stringify(round));
+  check('Runde bleibt A → B, ohne Höhen „–“ statt 0 m', round.mode === 'ab' && round.up === '–' && round.name === 'Runde', JSON.stringify(round));
   // Stützpunkte liegen auf vorhandenen Punkten: hier die drei Ecken. Fände die Suche das Ziel am Start, wären es keine
   check('Stützpunkte über die ganze Runde', round.anchors === 3, `${round.anchors} auf ${round.km.toFixed(1)} km`);
   check('Ohne Berechnung im Gange', await page.ev(IDLE));
