@@ -229,6 +229,14 @@ button.primary:hover { background: var(--accent-hover); }
 #daylight::before { content: "☀️"; content: "☀️" / ""; }
 #station-hint::before { content: "🚆"; content: "🚆" / ""; }
 #weather::before { content: "🌦️"; content: "🌦️" / ""; }
+#wind::before { content: "💨"; content: "💨" / ""; }
+/* „Wetter je Abschnitt“ unter Wetter und Wind: ohne eigenes Symbol, eingerückt wie die Texte; ohne Daten weg */
+.facts > li.facts-more { display: block; padding-left: calc(1.25rem + 6px); }
+.facts > li.facts-more:has(> details[hidden]) { display: none; }
+.facts-more summary { cursor: pointer; padding: 2px 0; font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+/* Wind-Vorschlag: Satz und darunter ein richtiger Knopf statt eines Links im Fließtext */
+#weather-advice { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 4px; }
+#weather-advice button { padding: 6px 12px; font-weight: 600; }
 
 /* Erklärtexte, die man nur einmal lesen muss: eingeklappt */
 details.more summary { cursor: pointer; width: fit-content; font-size: 0.75rem; font-weight: 600; color: var(--accent-text); }

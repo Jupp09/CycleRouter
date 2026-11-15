@@ -6,10 +6,13 @@ export const title = 'Wetter und Wind';
 
 const BOX = `(() => { const q = s => document.querySelector(s); return {
   hidden: q('#weather').hidden, summary: [...q('#weather-summary').children].map(p => p.textContent),
+  wind: q('#wind').hidden ? [] : [...q('#wind-summary').children].filter(e => e.id !== 'weather-advice').map(p => p.textContent),
   rows: [...q('#weather-list').children].map(li => li.textContent), details: !q('#weather-details').hidden,
-  link: q('#weather a')?.href }; })()`;
+  link: q('#weather-more a')?.href, near: (() => { const w = q('#weather').getBoundingClientRect(), v = q('#wind').getBoundingClientRect(); return v.top - w.bottom < 30; })() }; })()`;
 const LOADED = `!document.querySelector('#weather').hidden && !document.querySelector('#weather-details').hidden`;
-const SUMMARY = /^-?\d+(–-?\d+)? °C · (trocken|Regen möglich \(\d+ %\)|Regen wahrscheinlich ab ca\. \d\d:\d\d \(\d+ %\)) · ((Gegen|Rücken)wind auf \d+ % der Strecke, im Mittel \d+ km\/h|Seitenwind|schwacher Wind|kaum Wind)( · Böen bis \d+ km\/h)?$/;
+// Wetter und Wind stehen in eigenen Zeilen (#weather, #wind)
+const SUMMARY = /^-?\d+(–-?\d+)? °C · (trocken|Regen möglich \(\d+ %\)|Regen wahrscheinlich ab ca\. \d\d:\d\d \(\d+ %\))$/;
+const WIND = /^((Gegen|Rücken)wind auf \d+ % der Strecke, im Mittel \d+ km\/h|Seitenwind|schwacher Wind|kaum Wind)( · Böen bis \d+ km\/h)?$/;
 const ROW = /^km \d+–\d+ · \d\d:\d\d · -?\d+ °C · Regen \d+ %( \([\d,]+ mm\))? · ((Gegen|Rücken|Seiten)wind \d+ km\/h|schwacher Wind|kaum Wind)$/;
 
 export default async function ({ app, page: newPage, check, step, sleep }) {
@@ -43,9 +46,11 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   let box = await page.ev(BOX);
   const now = box.summary[0]?.match(/^Wetter bei Abfahrt jetzt \(\d\d:\d\d\): (.+)$/);
   check('Zusammenfassung „Abfahrt jetzt“', box.summary.length === 1 && !!now && SUMMARY.test(now[1]), box.summary[0]);
+  check('Wind als eigene Zeile', box.wind.length === 1 && WIND.test(box.wind[0]), box.wind[0]);
   check('Abschnitte (etwa alle 10 km)', box.rows.length >= 2 && box.rows.every(x => ROW.test(x)), `${box.rows.length}: ${box.rows[0]}`);
   check('Quellenangabe', box.link === 'https://open-meteo.com/', box.link);
   await page.ev(`document.querySelector('#weather-details').open = true`);
+  check('Wetter und Wind stehen auch aufgeklappt direkt untereinander', (await page.ev(BOX)).near);
   await page.shot('1-wetter');
 
   step('Mit Abfahrt am Mittwoch');
@@ -58,7 +63,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Wetter geladen', await page.waitFor(LOADED, 20000));
   box = await page.ev(BOX);
   const wed = box.summary[0]?.match(/^Wetter bei Abfahrt Mi\.? 10:00: (.+)$/);
-  check('Zusammenfassung mit Abfahrt', !!wed && SUMMARY.test(wed[1]), box.summary[0]);
+  check('Zusammenfassung mit Abfahrt', !!wed && SUMMARY.test(wed[1]) && WIND.test(box.wind[0] || ''), `${box.summary[0]} | ${box.wind[0]}`);
   const requests = await page.ev(`performance.getEntriesByType('resource').filter(e => e.name.includes('open-meteo')).length`);
   check('Sparsam: höchstens 2 Anfragen trotz mehrfacher Anzeige', requests >= 1 && requests <= 2, requests);
 
@@ -91,10 +96,13 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Rundkurs erzeugt', await page.waitFor(`${HAS_ROUTE} && ${IDLE} && !!document.querySelector('#weather-summary').textContent.includes('Wetter bei Abfahrt')`, 120000));
   const centre = `(async () => { const s = ${STATE}, c = s.route.coords; return c.reduce((sum, p) => sum + p[0], 0) / c.length - s.start.lat; })()`;
   const south = await page.ev(centre);
-  const advice = await page.ev(`(() => { const p = document.querySelector('#weather-advice'); return p ? { text: p.firstChild.textContent, button: p.querySelector('button').textContent } : null; })()`);
+  await page.waitFor(`!!document.querySelector('#weather-advice')`, 20000);
+  const advice = await page.ev(`(() => { const p = document.querySelector('#weather-advice'); return p ? { text: p.querySelector('p').textContent, button: p.querySelector('button').textContent,
+    link: p.querySelector('button').classList.contains('link-btn'), inWind: !!p.closest('#wind') } : null; })()`);
   check('Runde liegt südlich vom Start', south < 0, south.toFixed(4));
-  check('Vorschlag: Rundkurs nach Norden', advice?.text === 'Der Wind kommt aus Norden. Liegt der Rundkurs in dieser Richtung, hast du ihn auf dem Rückweg im Rücken. '
-    && advice.button === 'Rundkurs Richtung Norden legen', JSON.stringify(advice));
+  check('Vorschlag: Rundkurs nach Norden, als Knopf in der Windzeile',
+    advice?.text === 'Wind aus Norden: Liegt die Runde nördlich, fährst du zuerst gegen den Wind und kommst mit Rückenwind zurück.'
+    && advice.button === 'Rundkurs gegen den Wind starten' && !advice.link && advice.inWind, JSON.stringify(advice));
   await page.shot('2-vorschlag');
   await page.ev(`document.querySelector('#weather-advice button').click(); true`);
   await sleep(1000);

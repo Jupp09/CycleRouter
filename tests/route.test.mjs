@@ -32,6 +32,8 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Route berechnet', await waitFor(HAS_ROUTE), await text('#stat-dist'));
   check('Name vorgeschlagen', /^Route \d+ km/.test(await ev(`${q('#route-name')}.value`)), await ev(`${q('#route-name')}.value`));
   check('Aufschlüsselung sichtbar', await ev(`!${q('#breakdown')}.hidden && document.querySelectorAll('#breakdown-legend li').length > 0`));
+  const legendKm = await ev(`[...document.querySelectorAll('#breakdown-legend .km')].map(s => s.textContent)`);
+  check('Keine Legendenzeile mit „0 km“', legendKm.length > 0 && !legendKm.includes('0 km'), legendKm.join(', '));
   check('Höhenprofil sichtbar', await ev(`!!${q('#elevation-chart')}.querySelector('svg')`));
 
   // Aufbau des Ergebnisses: drei Kacheln, Hinweise als Liste, Erklärtexte eingeklappt, Aktionen gebündelt

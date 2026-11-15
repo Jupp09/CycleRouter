@@ -19,7 +19,10 @@ export const CATEGORIES = {
     cycleway: { label: 'Radweg', color: '#0072b2' },
     roadlane: { label: 'Straße mit Radspur', color: '#56b4e9' },
     main: { label: 'Hauptstraße', color: '#d55e00' },
-    minor: { label: 'Nebenstraße', color: '#e69f00' },
+    // Gelb statt Orange: neben dem Zinnoberrot der Hauptstraße war Orange kaum zu unterscheiden (CIEDE2000 zur
+    // Hauptstraße normal / Protanopie / Deuteranopie: Orange 22 / 18 / 13, Gelb 44 / 33 / 24; zu keiner anderen
+    // Wegtyp-Farbe liegt Gelb näher)
+    minor: { label: 'Nebenstraße', color: '#f0e442' },
     residential: { label: 'Wohn-/Anliegerstraße', color: '#94a3b8' },
     track: { label: 'Wirtschafts-/Feldweg', color: '#8c5a2b', dash: 'dashed' },
     path: { label: 'Pfad/Fußweg', color: '#009e73', dash: 'dashed' },

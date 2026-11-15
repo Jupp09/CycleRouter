@@ -192,7 +192,14 @@
         <li class="hint" id="station-hint" hidden></li>
         <li class="weather" id="weather" hidden>
           <div id="weather-summary"></div>
-          <details id="weather-details">
+        </li>
+        <!-- Wind als eigene Zeile, darunter ggf. der Vorschlag mit Knopf (weatherView.js) -->
+        <li class="weather" id="wind" hidden>
+          <div id="wind-summary"></div>
+        </li>
+        <!-- Liste je Abschnitt unter Wetter und Wind, damit die beiden Zeilen auch aufgeklappt beieinander stehen -->
+        <li class="facts-more" id="weather-more">
+          <details id="weather-details" hidden>
             <summary>Wetter je Abschnitt</summary>
             <ol class="weather-list" id="weather-list"></ol>
             <p class="hint">Wind in 10 m Höhe, am Boden meist schwächer. Wetterdaten: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></p>

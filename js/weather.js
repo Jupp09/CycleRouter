@@ -119,6 +119,15 @@ export function windLabel(s) {
 
 /** Kurztext für mehrere Abschnitte (eine Tour oder ein Tag): „6–9 °C · Regen wahrscheinlich ab ca. 15:10 (60 %) · …“ */
 export function weatherSummary(sections) {
+  const { weather, wind } = weatherParts(sections);
+  return `${weather} · ${wind}`;
+}
+
+/**
+ * Dasselbe getrennt für eigene Zeilen: `weather` = Temperatur und Regen („6–9 °C · trocken“), `wind` = Wind und
+ * Böen („Gegenwind auf 60 % der Strecke, im Mittel 12 km/h · Böen bis 35 km/h“).
+ */
+export function weatherParts(sections) {
   const temps = sections.map(s => Math.round(s.temp));
   const lo = Math.min(...temps), hi = Math.max(...temps);
   const parts = [lo === hi ? `${lo} °C` : `${lo}–${hi} °C`];
@@ -135,14 +144,15 @@ export function weatherSummary(sections) {
     return { share: len / total, mean: len ? hit.reduce((sum, s) => sum + Math.abs(s.head) * (s.to - s.from), 0) / len : 0 };
   };
   const against = group(s => s.head >= NOTABLE), behind = group(s => s.head <= -NOTABLE);
-  const wind = (name, g) => `${name} auf ${Math.round(g.share * 100)} % der Strecke, im Mittel ${Math.round(g.mean)} km/h`;
-  if (against.share >= 0.2 && against.share >= behind.share) parts.push(wind('Gegenwind', against));
-  else if (behind.share >= 0.2) parts.push(wind('Rückenwind', behind));
-  else parts.push(calm(Math.max(...sections.map(s => s.wind))));
+  const share = (name, g) => `${name} auf ${Math.round(g.share * 100)} % der Strecke, im Mittel ${Math.round(g.mean)} km/h`;
+  const wind = [];
+  if (against.share >= 0.2 && against.share >= behind.share) wind.push(share('Gegenwind', against));
+  else if (behind.share >= 0.2) wind.push(share('Rückenwind', behind));
+  else wind.push(calm(Math.max(...sections.map(s => s.wind))));
 
   const gust = Math.max(...sections.map(s => s.gust ?? 0));
-  if (gust >= 30) parts.push(`Böen bis ${Math.round(gust)} km/h`);
-  return parts.join(' · ');
+  if (gust >= 30) wind.push(`Böen bis ${Math.round(gust)} km/h`);
+  return { weather: parts.join(' · '), wind: wind.join(' · ') };
 }
 
 const COMPASS = ['Norden', 'Nordosten', 'Osten', 'Südosten', 'Süden', 'Südwesten', 'Westen', 'Nordwesten'];

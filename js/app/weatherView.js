@@ -3,11 +3,11 @@
  * und eine aufklappbare Liste je Abschnitt. Lädt nach der Anzeige der Route; die Berechnung wartet nicht darauf.
  * Keine Ansage: Es ist eine automatische Aktualisierung.
  */
-import { weatherAlong, weatherSummary, windLabel, windAdvice, FORECAST_DAYS } from '../weather.js';
+import { weatherAlong, weatherParts, windLabel, windAdvice, FORECAST_DAYS } from '../weather.js';
 import { dayTimes, pausedTimeline } from '../timeline.js';
 import { formatClock, formatDate, formatDayDate, formatWeekday } from '../utils.js';
 import { state, on, departureDate, defaultDeparture, provider } from './state.js';
-import { $, linkButton } from './dom.js';
+import { $ } from './dom.js';
 import { generate } from './pipeline.js';
 
 let controller = null;
@@ -24,7 +24,9 @@ function hint(text) {
 async function renderWeather(r) {
   controller?.abort();
   const box = $('#weather'), summary = $('#weather-summary'), details = $('#weather-details');
-  if (!r) { box.hidden = true; summary.replaceChildren(); return; }
+  const windBox = $('#wind'), windSummary = $('#wind-summary');
+  // „Wetter je Abschnitt“ steht in eigener Zeile unter Wind (#weather-more) und verschwindet mit details.hidden
+  if (!r) { box.hidden = true; windBox.hidden = true; details.hidden = true; summary.replaceChildren(); windSummary.replaceChildren(); return; }
   const ctrl = controller = new AbortController();
 
   // Abfahrt nur mit Verpflegungsstopps oder Mehrtagestour sichtbar festgelegt – sonst gilt „jetzt“, und das steht auch da
@@ -34,9 +36,10 @@ async function renderWeather(r) {
   const midnight = new Date();
   midnight.setHours(0, 0, 0, 0);
   const limit = new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate() + FORECAST_DAYS);
-  const message = text => { summary.replaceChildren(hint(text)); details.hidden = true; box.hidden = false; };
+  // Hinweis statt Wetter: Die Windzeile verschwindet; sonst bleibt sie bis zu den neuen Daten stehen (kein Flackern)
+  const message = text => { summary.replaceChildren(hint(text)); details.hidden = true; box.hidden = false; windBox.hidden = true; };
 
-  if (departure < midnight) { box.hidden = true; return; } // Abfahrt in der Vergangenheit
+  if (departure < midnight) { box.hidden = true; windBox.hidden = true; details.hidden = true; return; } // Abfahrt in der Vergangenheit
   const last = days.at(-1).end;
   if (last >= limit) {
     const first = new Date(last.getFullYear(), last.getMonth(), last.getDate() - FORECAST_DAYS + 1);
@@ -62,11 +65,17 @@ async function renderWeather(r) {
   const dayLabel = d => `Tag ${d.day} · ${formatDayDate(d.start)}`;
   const start = fixed ? `${formatWeekday(departure)} ${formatClock(departure)}` : `jetzt (${formatClock(departure)})`;
   const ofDay = d => sections.filter(s => s.day === d.day);
+  // Wetter und Wind als eigene Zeilen mit Symbol (Hinweisliste .facts), bei Mehrtagestouren je Tag
+  const withData = days.filter(d => ofDay(d).length);
   summary.replaceChildren(...(multi
-    ? days.filter(d => ofDay(d).length).map(d => hint(`${dayLabel(d)}: ${weatherSummary(ofDay(d))}`))
-    : [hint(`Wetter bei Abfahrt ${start}: ${weatherSummary(sections)}`)]));
+    ? withData.map(d => hint(`${dayLabel(d)}: ${weatherParts(ofDay(d)).weather}`))
+    : [hint(`Wetter bei Abfahrt ${start}: ${weatherParts(sections).weather}`)]));
+  windSummary.replaceChildren(...(multi
+    ? withData.map(d => hint(`Tag ${d.day}: ${weatherParts(ofDay(d)).wind}`))
+    : [hint(weatherParts(sections).wind)]));
   const advice = !multi && adviceLine(sections);
-  if (advice) summary.append(advice);
+  if (advice) windSummary.append(advice);
+  windBox.hidden = false;
 
   const km = m => Math.round(m / 1000);
   $('#weather-list').replaceChildren(...days.flatMap(d => {
@@ -96,16 +105,25 @@ function adviceLine(sections) {
   const advice = windAdvice(sections, state.mode);
   if (!advice || advice.direction === state.direction) return null;
   const loop = state.mode === 'loop';
-  const p = hint(`Der Wind kommt aus ${advice.from}. ` + (loop
-    ? 'Liegt der Rundkurs in dieser Richtung, hast du ihn auf dem Rückweg im Rücken. '
-    : `Mit dem Ziel in Richtung ${advice.target} hast du ihn im Rücken. `));
-  p.id = 'weather-advice';
-  const button = linkButton(`${loop ? 'Rundkurs' : 'Ziel'} Richtung ${advice.target} legen`, () => {
+  const box = document.createElement('div');
+  box.id = 'weather-advice';
+  // Rundkurs: in die Richtung legen, aus der der Wind kommt – erst gegen den Wind, zurück mit Rückenwind
+  box.append(hint(loop
+    ? `Wind aus ${advice.from}: Liegt die Runde ${ADJECTIVE[advice.target]}, fährst du zuerst gegen den Wind und kommst mit Rückenwind zurück.`
+    : `Wind aus ${advice.from}: Mit dem Ziel im ${advice.target} hast du ihn im Rücken.`));
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = loop ? 'Rundkurs gegen den Wind starten' : `Ziel mit dem Wind legen (Richtung ${advice.target})`;
+  button.addEventListener('click', () => {
     state.direction = advice.direction;
     $('#direction').value = advice.direction;
     generate();
   });
-  button.classList.add('inline');
-  p.append(button);
-  return p;
+  box.append(button);
+  return box;
 }
+
+const ADJECTIVE = {
+  Norden: 'nördlich', Nordosten: 'nordöstlich', Osten: 'östlich', Südosten: 'südöstlich',
+  Süden: 'südlich', Südwesten: 'südwestlich', Westen: 'westlich', Nordwesten: 'nordwestlich',
+};

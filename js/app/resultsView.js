@@ -165,7 +165,8 @@ function renderBreakdown() {
     span.title = `${it.label}: ${formatKm(it.distance)}`;
     return span;
   }));
-  $('#breakdown-legend').replaceChildren(...items.map(it => {
+  // Legende ohne Zeilen, die gerundet „0 km“ ergäben (unter 50 m) – im Balken sind sie ohnehin kaum zu sehen
+  $('#breakdown-legend').replaceChildren(...items.filter(it => it.distance >= 50).map(it => {
     const li = document.createElement('li');
     const dot = document.createElement('i');
     dot.style.setProperty('--c', it.color);
