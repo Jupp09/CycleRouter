@@ -22,6 +22,30 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Aufschlüsselung sichtbar', await ev(`!${q('#breakdown')}.hidden && document.querySelectorAll('#breakdown-legend li').length > 0`));
   check('Höhenprofil sichtbar', await ev(`!!${q('#elevation-chart')}.querySelector('svg')`));
 
+  // Aufbau des Ergebnisses: drei Kacheln, Hinweise als Liste, Erklärtexte eingeklappt, Aktionen gebündelt
+  const layout = await ev(`(() => {
+    const tiles = [...document.querySelectorAll('.stats > div .k')].map(k => k.textContent);
+    const facts = [...document.querySelectorAll('.facts > li')].map(li => li.id);
+    const icon = getComputedStyle(document.querySelector('#daylight'), '::before').content;
+    const more = [...document.querySelectorAll('details.more')];
+    const block = document.querySelector('.route-actions');
+    const order = [...block.querySelectorAll('h2, input, button')].filter(e => !e.closest('[hidden]')).map(e => e.id || e.tagName);
+    const rowTop = id => document.getElementById(id).getBoundingClientRect().top;
+    const fits = [...document.querySelectorAll('.stats > div')].every(d => d.scrollWidth <= d.clientWidth + 1);
+    return { tiles, facts, icon, fits, more: more.length, closed: more.every(d => !d.open), order,
+      oneRow: Math.abs(rowTop('btn-roadbook') - rowTop('btn-clear')) < 2,
+      updown: document.querySelector('#stat-up').textContent + ' | ' + document.querySelector('#stat-down').textContent };
+  })()`);
+  check('Drei Kacheln, Anstieg und Abstieg zusammen', layout.tiles.join('|') === 'Distanz|Höhenmeter|Fahrzeit ca.' && /^\d+ m \| \d+ m$/.test(layout.updown), `${layout.tiles.join('|')} – ${layout.updown}`);
+  check('Kacheln ohne Überlauf', layout.fits);
+  check('Hinweise als Liste mit Symbol', ['eurovelo-share', 'routing-fallback', 'daylight', 'station-hint', 'weather'].every(id => layout.facts.includes(id)) && /☀/.test(layout.icon), layout.icon);
+  check('Erklärtexte eingeklappt', layout.more >= 2 && layout.closed, String(layout.more));
+  check('Block „Route weiterverwenden“: Name, GPX, dann Roadbook … Löschen in einer Reihe',
+    layout.order.join(',') === 'h-route-actions,route-name,btn-gpx,btn-roadbook,btn-clear' && layout.oneRow, layout.order.join(','));
+  await page.shot('1-ergebnis');
+  await ev(`document.querySelector('.route-actions').scrollIntoView({ block: 'end' }); true`); await sleep(200);
+  await page.shot('2-aktionen');
+
   await ev(`${q('#breakdown-switch [data-value=waytype]')}.click(); true`);
   check('Wegtyp-Schalter', await ev(`${q('#breakdown-switch [data-value=waytype]')}.getAttribute('aria-checked') === 'true' && ${q('#breakdown-hint')}.hidden`));
   await ev(`${q('#breakdown-switch [data-value=surface]')}.click(); true`);

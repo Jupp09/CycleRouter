@@ -155,7 +155,7 @@ window.addEventListener('afterprint', () => root.classList.remove('print-roadboo
 const standalone = navigator.standalone === true;
 const button = $('#btn-roadbook'), dialog = $('#roadbook-dialog'), view = $('#roadbook-view');
 if (standalone) {
-  button.textContent = 'Roadbook anzeigen';
+  button.textContent = 'Roadbook anzeigen'; // sonst „Roadbook“ (index.html)
   button.title = 'Übersicht: je Tag Zeiten, Stopps mit Öffnungszeiten und Unterkunft – drucken lässt sie sich in Safari';
 }
 dialog.addEventListener('close', () => view.replaceChildren());

@@ -161,7 +161,10 @@
           <input id="departure" type="datetime-local">
         </label>
         <p class="hint holiday" id="departure-hint" hidden></p>
-        <p class="hint">Stopps mit Essen (Supermarkt, Bäckerei, Café, Restaurant, Tankstelle), die bei der geschätzten Ankunft geöffnet haben – welche bevorzugt werden, legt der Pausenstil in den Einstellungen fest. Öffentliche Trinkwasserstellen an der Route werden zusätzlich angezeigt.</p>
+        <details class="more">
+          <summary>So funktioniert's</summary>
+          <p class="hint">Stopps mit Essen (Supermarkt, Bäckerei, Café, Restaurant, Tankstelle), die bei der geschätzten Ankunft geöffnet haben – welche bevorzugt werden, legt der Pausenstil in den Einstellungen fest. Öffentliche Trinkwasserstellen an der Route werden zusätzlich angezeigt.</p>
+        </details>
       </div>
     </section>
 
@@ -171,22 +174,24 @@
       <h2 class="sr-only" id="h-results">Ergebnis</h2>
       <div class="stats">
         <div><span class="k">Distanz</span><span class="v" id="stat-dist"></span></div>
-        <div><span class="k">Anstieg</span><span class="v" id="stat-up"></span></div>
-        <div><span class="k">Abstieg</span><span class="v" id="stat-down"></span></div>
+        <div><span class="k">Höhenmeter</span><span class="v updown"><span><span aria-hidden="true">↑ </span><span id="stat-up"></span></span><span class="sr-only"> / </span><span><span aria-hidden="true">↓ </span><span id="stat-down"></span></span></span></div>
         <div><span class="k">Fahrzeit ca.</span><span class="v" id="stat-time"></span></div>
       </div>
-      <p class="hint" id="eurovelo-share" hidden></p>
-      <p class="hint warn" id="routing-fallback" hidden></p>
-      <p class="hint" id="daylight" hidden></p>
-      <p class="hint" id="station-hint" hidden></p>
-      <div class="weather" id="weather" hidden>
-        <div id="weather-summary"></div>
-        <details id="weather-details">
-          <summary>Wetter je Abschnitt</summary>
-          <ol class="weather-list" id="weather-list"></ol>
-          <p class="hint">Wind in 10 m Höhe, am Boden meist schwächer. Wetterdaten: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></p>
-        </details>
-      </div>
+      <!-- Hinweise zur Route: Symbole per CSS (.facts > li#… ::before), damit textContent sie nicht löscht -->
+      <ul class="facts">
+        <li class="hint" id="eurovelo-share" hidden></li>
+        <li class="hint warn" id="routing-fallback" hidden></li>
+        <li class="hint" id="daylight" hidden></li>
+        <li class="hint" id="station-hint" hidden></li>
+        <li class="weather" id="weather" hidden>
+          <div id="weather-summary"></div>
+          <details id="weather-details">
+            <summary>Wetter je Abschnitt</summary>
+            <ol class="weather-list" id="weather-list"></ol>
+            <p class="hint">Wind in 10 m Höhe, am Boden meist schwächer. Wetterdaten: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></p>
+          </details>
+        </li>
+      </ul>
       <div class="stages" id="stages" hidden>
         <button id="btn-multiday" class="primary"></button>
         <p class="hint warn" id="stages-error" hidden></p>
@@ -198,7 +203,10 @@
           </label>
           <ol class="stage-list" id="stage-list"></ol>
           <p class="stages-export"><button type="button" class="link-btn inline" id="btn-stages-gpx">Alle Tage einzeln als GPX exportieren</button></p>
-          <p class="hint">Preise sind Schätzungen nach Unterkunftsart und Sternen – den echten Preis zeigt „Preis prüfen“. Budget, km pro Tag und Unterkunftsarten unter Einstellungen.</p>
+          <details class="more">
+            <summary>So funktioniert's</summary>
+            <p class="hint">Preise sind Schätzungen nach Unterkunftsart und Sternen – den echten Preis zeigt „Preis prüfen“. Budget, km pro Tag und Unterkunftsarten unter Einstellungen.</p>
+          </details>
         </div>
       </div>
       <div class="breakdown" id="breakdown">
@@ -237,21 +245,24 @@
         <p class="hint" id="along-hint" hidden></p>
         <ul class="along-list" id="along-list"></ul>
       </div>
-      <label class="field">
-        <span class="label">Routenname</span>
-        <input id="route-name" type="text">
-      </label>
-      <div class="actions">
+      <section class="route-actions" aria-labelledby="h-route-actions">
+        <h2 class="label" id="h-route-actions">Route weiterverwenden</h2>
+        <label class="field">
+          <span class="label">Routenname</span>
+          <input id="route-name" type="text">
+        </label>
         <button id="btn-gpx" class="primary">GPX exportieren</button>
-        <button id="btn-clear">Löschen</button>
-      </div>
-      <p class="hint" id="gpx-hint" hidden></p>
-      <button id="btn-roadbook" class="link-btn" title="Druckbare Übersicht: je Tag Zeiten, Stopps mit Öffnungszeiten und Unterkunft – im Druckdialog auch als PDF speicherbar">Roadbook drucken</button>
-      <div class="actions" id="save-actions" hidden>
-        <button id="btn-save-route" title="In „Meine Routen“ speichern – auf allen deinen Geräten verfügbar">Route speichern</button>
-        <button id="btn-share-link" title="Link erzeugen, über den andere (oder dein Handy) die Route öffnen können">Link teilen</button>
-      </div>
-      <p class="hint" id="save-hint" hidden></p>
+        <p class="hint" id="gpx-hint" hidden></p>
+        <div class="action-row">
+          <button id="btn-roadbook" title="Druckbare Übersicht: je Tag Zeiten, Stopps mit Öffnungszeiten und Unterkunft – im Druckdialog auch als PDF speicherbar">Roadbook</button>
+          <span class="action-group" id="save-actions" hidden>
+            <button id="btn-save-route" title="In „Meine Routen“ speichern – auf allen deinen Geräten verfügbar">Route speichern</button>
+            <button id="btn-share-link" title="Link erzeugen, über den andere (oder dein Handy) die Route öffnen können">Link teilen</button>
+          </span>
+          <button id="btn-clear" class="push-end" title="Route und Wegpunkte entfernen – mit „Rückgängig“ zurückholbar">Löschen</button>
+        </div>
+        <p class="hint" id="save-hint" hidden></p>
+      </section>
       <p class="hint">Marker auf der Karte lassen sich verschieben – die Route wird dann neu berechnet.</p>
     </section>
 
