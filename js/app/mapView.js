@@ -6,6 +6,7 @@
 import { createMap } from '../map.js';
 import { createElevation } from '../elevation.js';
 import { segmentsFor } from '../surfaces.js';
+import { approxDist } from '../utils.js';
 import { state, isLoop, activeVias, activeBreakdown } from './state.js';
 import { $ } from './dom.js';
 
@@ -16,9 +17,36 @@ export function setMapHandlers(h) {
   Object.assign(handlers, h);
 }
 
+// Stelle auf der Routenlinie (Maus darüber oder angetippt) → im Höhenprofil zeigen, höchstens einmal pro Bild
+let hovered, hoverFrame = 0;
+function routeHover(point) {
+  hovered = point;
+  if (hoverFrame) return;
+  hoverFrame = requestAnimationFrame(() => {
+    hoverFrame = 0;
+    const r = state.route;
+    if (!hovered || !r) { elevation.clearAt(); return; }
+    elevation.showAt(nearestAlong(r, hovered));
+  });
+}
+
+/**
+ * Position (m) des nächsten Routenpunkts. Bewusst über die ganze Route statt locateOnRoute: Das nimmt den ersten
+ * Durchgang, bei Hin-und-zurück-Strecken also oft die falsche Richtung.
+ */
+function nearestAlong(r, p) {
+  let best = Infinity, idx = 0;
+  for (let j = 0; j < r.coords.length; j++) {
+    const d = approxDist(p.lat, p.lon, r.coords[j][0], r.coords[j][1]);
+    if (d < best) { best = d; idx = j; }
+  }
+  return r.cum[idx];
+}
+
 export const map = createMap($('#map'), {
-  onClick: point => handlers.onClick?.(point),
+  onClick: point => { routeHover(null); handlers.onClick?.(point); },
   onMarkerDrag: (index, point) => handlers.onMarkerDrag?.(index, point),
+  onRouteHover: routeHover,
 });
 
 export const elevation = createElevation($('#elevation-chart'), { onHover: p => map.showHover(p) });

@@ -59,6 +59,9 @@ function profile(route) {
 /** Hat die Route Höhen (sonst keine Steigungen)? */
 export const hasElevation = route => !!profile(route).grade;
 
+/** Über WINDOW gemittelte Steigung am Routenpunkt `i` (0,05 = 5 %); ohne Höhen null. */
+export const gradeAt = (route, i) => profile(route).grade?.[i] ?? null;
+
 /**
  * Abschnitte gleicher Steigungsklasse: [{from, to, grade}] mit Indizes in route.coords, lückenlos von Anfang bis
  * Ende – aufgebaut wie route.segments, damit Balken, Profil und Kartenlinie sie genauso behandeln.

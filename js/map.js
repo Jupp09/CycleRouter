@@ -60,7 +60,7 @@ const KIND_NAME = { start: 'Start', end: 'Ziel', via: 'Wegpunkt', manual: 'Zwisc
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const motion = () => ({ animate: !reduceMotion.matches });
 
-export function createMap(el, { onClick, onMarkerDrag }) {
+export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }) {
   const view = storage.get('view', { center: [51.1657, 10.4515], zoom: 6 });
   // Auch Zoomen per Mausrad/Knopf springt dann, statt zu animieren (gilt ab dem nächsten Laden der Seite)
   const calm = reduceMotion.matches ? { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false } : {};
@@ -88,7 +88,8 @@ export function createMap(el, { onClick, onMarkerDrag }) {
   const stayMarkers = new Map();
   const searchLayer = L.layerGroup().addTo(map);
   const searchMarkers = new Map();
-  const hoverMarker = L.circleMarker([0, 0], { radius: 7, color: '#111827', weight: 3, fillColor: ROUTE_COLOR, fillOpacity: 1 });
+  // Nicht interaktiv: Er sitzt genau unter dem Mauszeiger und würde der Routenlinie sonst die Maus wegnehmen
+  const hoverMarker = L.circleMarker([0, 0], { radius: 7, color: '#111827', weight: 3, fillColor: ROUTE_COLOR, fillOpacity: 1, interactive: false });
 
   return {
     /**
@@ -123,8 +124,14 @@ export function createMap(el, { onClick, onMarkerDrag }) {
       const line = { interactive: false, lineCap: 'round', lineJoin: 'round' };
       L.polyline(latlngs, { ...line, color: '#111827', weight: 12, opacity: 0.75 }).addTo(routeLayer);
       L.polyline(latlngs, { ...line, color: '#fff', weight: 9, opacity: 1 }).addTo(routeLayer);
+      // Zuoberst eine unsichtbare, breite Trefferfläche: Maus darüber bzw. Antippen zeigt die Stelle im
+      // Höhenprofil. Der Klick geht nicht an die Karte – ein Zwischenstopp genau auf der Route brächte nichts.
+      const hit = () => L.polyline(latlngs, { lineCap: 'round', lineJoin: 'round', weight: 20, opacity: 0, className: 'route-hit' })
+        .on('mousemove click', e => { L.DomEvent.stopPropagation(e); onRouteHover({ lat: e.latlng.lat, lon: e.latlng.lng }); })
+        .on('mouseout', () => onRouteHover(null));
       if (!colorBy || !segments?.length) {
         L.polyline(latlngs, { ...line, color: ROUTE_COLOR, weight: 6, opacity: 1 }).addTo(routeLayer);
+        hit().addTo(routeLayer);
         return;
       }
       let run = null;
@@ -143,6 +150,7 @@ export function createMap(el, { onClick, onMarkerDrag }) {
         run = { key: s[colorBy], from: s.from, to: s.to };
       }
       flush();
+      hit().addTo(routeLayer);
     },
 
     /** stops: [{id, lat, lon, icon, warn, title?, popup: HTMLElement}] */

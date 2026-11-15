@@ -365,6 +365,8 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
 /* ---------- Map ---------- */
 .map-area { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #map { flex: 1; min-height: 0; background: var(--surface); }
+/* Unsichtbare Trefferfläche über der Route (map.js): zeigt die Stelle im Höhenprofil */
+.leaflet-interactive.route-hit { cursor: crosshair; }
 
 .marker-pin {
   width: 22px; height: 22px; border-radius: 50%;

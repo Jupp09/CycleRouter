@@ -51,6 +51,34 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Umschalter mit „Steigung“, Untergrund gewählt', await page.ev(SWITCH) === 'surface:gewählt,waytype,grade', await page.ev(SWITCH));
   check('Liste der Anstiege noch verborgen', await page.ev(`document.querySelector('#climbs').hidden`));
 
+  step('Karte → Höhenprofil');
+  // Bildschirmpunkt auf der Routenlinie: Anteil `f` der gezeichneten Trefferfläche (map.js, .route-hit)
+  const onLine = f => page.ev(`(() => { const p = document.querySelector('#map path.route-hit');
+    const pt = p.getPointAtLength(p.getTotalLength() * ${f}), m = p.getScreenCTM(); return { x: m.a * pt.x + m.c * pt.y + m.e, y: m.b * pt.x + m.d * pt.y + m.f }; })()`);
+  const hover = async f => {
+    const { x, y } = await onLine(f);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    await sleep(200);
+    return page.ev(`(async () => { const tip = document.querySelector('.elevation-tip');
+      return { shown: !!tip && !tip.hidden, text: tip?.textContent || '', km: parseFloat((tip?.textContent || '').replace(',', '.')),
+        total: ${STATE}.route.distance / 1000 }; })()`);
+  };
+  // Nicht ganz an den Enden: Dort liegen Start- und Zielmarker über der Linie
+  const atStart = await hover(0.03), atEnd = await hover(0.97);
+  check('Maus nahe dem Anfang der Linie: Profil zeigt den Anfang', atStart.shown && atStart.km < 0.6, atStart.text);
+  check('Maus nahe dem Ende der Linie: Profil zeigt das Ende', atEnd.shown && Math.abs(atEnd.km - atEnd.total) < 0.6, `${atEnd.text} / ${atEnd.total.toFixed(1)} km`);
+  check('Infofeld nennt die Steigung', / · −?\d+ %$/.test(atEnd.text), atEnd.text);
+  const mid = await hover(0.5);
+  check('Punkt auf der Karte folgt', mid.shown && await page.ev(`[...document.querySelectorAll('#map .leaflet-overlay-pane path')].some(p => p.getAttribute('fill') === '#e6007e')`));
+  await page.shot('0-karte-profil');
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 5, y: 5 }); await sleep(200);
+  check('Maus weg: Anzeige verschwindet', await page.ev(`document.querySelector('.elevation-tip').hidden`));
+  const vias = await page.ev(`(async () => ${STATE}.vias.length)()`);
+  const { x, y } = await onLine(0.5);
+  await page.click(x, y); await sleep(800);
+  check('Klick auf die Linie setzt keinen Zwischenstopp', await page.ev(`(async () => ${STATE}.vias.length)()`) === vias
+    && await page.ev(`!document.querySelector('.elevation-tip').hidden`));
+
   await page.ev(`document.querySelector('#breakdown-switch [data-value=grade]').click(); true`);
   await sleep(500);
   const legend = await page.ev(LEGEND);

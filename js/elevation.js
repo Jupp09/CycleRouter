@@ -1,4 +1,5 @@
 import { CATEGORIES, segmentAt, segmentsFor } from './surfaces.js';
+import { gradeAt } from './climbs.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const M = { top: 22, right: 10, bottom: 28, left: 42 };
@@ -68,6 +69,7 @@ export function elevationSummary({ coords, cum, distance }) {
 
 /**
  * Höhenprofil als SVG. `onHover` erhält den Punkt unter dem Mauszeiger bzw. an der Tastaturposition (oder null).
+ * Umgekehrt zeigt `showAt(along)` eine Stelle, die auf der Karte unter der Maus ist (mapView.js).
  * Der Container ist ein Schieberegler (role="slider"): mit den Pfeiltasten in 1-%-Schritten, Bild ↑/↓ in
  * 10-%-Schritten, Pos1/Ende an Anfang/Ende. Die Position wird mit Höhe und Untergrund, Wegtyp bzw. Steigung angesagt.
  */
@@ -185,7 +187,9 @@ export function createElevation(container, { onHover }) {
       cursor.setAttribute('visibility', 'visible');
       tip.hidden = false;
       const category = segments.length ? ' · ' + CATEGORIES[kind][segmentAt(segments, i)[kind]].label : '';
-      tip.textContent = `${km(cum[i])} km · ${ele != null ? Math.round(ele) + ' m' : '–'}${category}`;
+      const g = gradeAt(route, i);
+      const grade = g == null ? '' : ` · ${(Math.round(g * 100) || 0).toLocaleString('de-DE')} %`.replace('-', '−');
+      tip.textContent = `${km(cum[i])} km · ${ele != null ? Math.round(ele) + ' m' : '–'}${category}${grade}`;
       const rect = svg.getBoundingClientRect();
       const half = tip.offsetWidth / 2 + 2;
       tip.style.left = `${Math.min(rect.width - half, Math.max(half, x(cum[i]) / W * rect.width))}px`;
@@ -251,6 +255,13 @@ export function createElevation(container, { onHover }) {
       draw();
     },
     setKind(k) { kind = k; draw(); },
+    /** Stelle `along` (m) anzeigen – wenn die Maus über der Routenlinie auf der Karte ist oder sie angetippt wurde. */
+    showAt(along) { place?.(along); },
+    /** Anzeige von showAt beenden; eine Tastaturposition im Profil bleibt dann stehen. */
+    clearAt() {
+      if (pos != null && document.activeElement === container) place?.(pos);
+      else hideCursor?.();
+    },
     hide() { route = null; pos = null; section.hidden = true; draw(); },
   };
 }
