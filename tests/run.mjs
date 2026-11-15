@@ -2,7 +2,8 @@
 //
 // Startet einen eigenen Testserver (Port 8765, ohne Datenbank, ohne Datenauszug-Download), dazu Edge/Chrome
 // headless, und führt die Tests tests/*.test.mjs nacheinander aus. Mit Namen nur diese (z. B. `keyboard a11y`).
-// --shots speichert Screenshots in tests/out/, --headed zeigt das Browserfenster.
+// --shots speichert Screenshots in tests/out/, --headed zeigt das Browserfenster. Nach jedem Lauf stehen in
+// tests/out/bericht.html die Ergebnisse grafisch (mit Screenshots und dem Verlauf der letzten Läufe, verlauf.json).
 //
 // Die Tests nutzen die echten Dienste (BRouter, Photon, Nominatim, Kartenkacheln) – sie brauchen Internet,
 // dauern ein paar Minuten und können scheitern, wenn brouter.de ausgelastet ist.
@@ -12,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { launchBrowser, sleep } from './lib/browser.mjs';
 import { createAccountStore } from './lib/fakeAccount.mjs';
+import { writeReport, appendHistory } from './lib/report.mjs';
 
 const DIR = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(DIR, '..');
@@ -64,6 +66,7 @@ process.on('SIGINT', async () => { await cleanup(); process.exit(130); });
 // ---------- Tests ----------
 
 const results = [];
+const startedAt = Date.now();
 for (const file of files) {
   const name = file.replace('.test.mjs', '');
   const mod = await import(pathToFileURL(join(DIR, file)));
@@ -71,22 +74,32 @@ for (const file of files) {
   let failed = 0, passed = 0;
   const pages = [];
   const accounts = createAccountStore();
+  // Für den Bericht: Schritte mit ihren Prüfungen und Screenshots (Pfade relativ zu tests/out/)
+  const steps = [{ title: '', checks: [], shots: [] }];
+  const current = () => steps[steps.length - 1];
   const t = {
     app: APP,
     sleep,
     /** Neue Seite (eigener Browser-Kontext). `accounts: true` → Konto-API aus dem gemeinsamen Speicher dieses Tests. */
     async page({ accounts: withAccounts = false, ...opts } = {}) {
-      const p = await browser.newPage({ ...opts, shotDir: flags.has('--shots') ? join(OUT, name) : null });
+      const shots = flags.has('--shots');
+      const p = await browser.newPage({ ...opts, shotDir: shots ? join(OUT, name) : null });
+      if (shots) {
+        const shot = p.shot;
+        p.shot = async n => { await shot(n); current().shots.push(`${name}/${n}.png`); };
+      }
       if (withAccounts) await accounts.attach(p);
       pages.push(p);
       return p;
     },
     check(label, cond, extra = '') {
       if (cond) passed++; else failed++;
-      console.log(`${cond ? 'OK  ' : 'FEHL'} ${label}${extra !== '' && extra != null ? ' – ' + extra : ''}`);
+      const detail = extra !== '' && extra != null ? String(extra) : '';
+      console.log(`${cond ? 'OK  ' : 'FEHL'} ${label}${detail ? ' – ' + detail : ''}`);
+      current().checks.push({ label, ok: !!cond, detail: detail.slice(0, 600) });
       return !!cond;
     },
-    step: title => console.log(`— ${title}`),
+    step: title => { console.log(`— ${title}`); steps.push({ title, checks: [], shots: [] }); },
   };
   const t0 = Date.now();
   try {
@@ -95,11 +108,22 @@ for (const file of files) {
     failed++;
     console.log(`FEHL Abbruch: ${e.stack || e}`);
   }
+  steps.push({ title: 'Zum Schluss', checks: [], shots: [] });
   for (const p of pages) t.check('Keine JS-Fehler', !p.errors.length, p.errors.join(' | ').slice(0, 500));
-  results.push({ name, passed, failed, s: Math.round((Date.now() - t0) / 1000) });
+  results.push({ name, title: mod.title || '', passed, failed, s: Math.round((Date.now() - t0) / 1000),
+    steps: steps.filter(st => st.checks.length || st.shots.length) });
 }
 
 await cleanup();
+
+// Bericht und Verlauf (tests/out/bericht.html, verlauf.json) – ein Fehler dabei soll den Testlauf nicht verfälschen
+try {
+  const run = { at: new Date(startedAt).toISOString(), s: Math.round((Date.now() - startedAt) / 1000), args, results };
+  const file = writeReport(OUT, run, appendHistory(OUT, run));
+  console.log(`\nBericht: ${pathToFileURL(file).href}`);
+} catch (e) {
+  console.log(`\nBericht konnte nicht geschrieben werden: ${e.message}`);
+}
 
 console.log('\n=== Ergebnis');
 for (const r of results) console.log(`${r.failed ? 'FEHL' : 'OK  '} ${r.name.padEnd(10)} ${r.passed} OK, ${r.failed} fehlgeschlagen (${r.s} s)`);
