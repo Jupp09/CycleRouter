@@ -46,32 +46,6 @@
       </button>
     </header>
 
-    <section class="group">
-      <div class="segmented" id="bike-switch" role="radiogroup" aria-label="Fahrradtyp">
-        <button role="radio" data-value="road">Rennrad</button>
-        <button role="radio" data-value="gravel">Gravel</button>
-        <button role="radio" data-value="trekking" title="Trekking-, Touren- und Alltagsrad">Fahrrad</button>
-        <button role="radio" data-value="ebike" title="Pedelec mit Unterstützung bis 25 km/h – Anstiege werden kaum gemieden">E-Bike</button>
-      </div>
-      <label class="field inline" id="traffic-field">
-        <span>Verkehr meiden</span>
-        <select id="traffic">
-          <option value="normal">Normal</option>
-          <option value="low">Stark</option>
-          <option value="verylow">Sehr stark</option>
-        </select>
-      </label>
-      <label class="field inline" id="eurovelo-field" title="Bevorzugt die europäischen Radfernwege (EuroVelo, in OSM als internationale Radrouten erfasst). Die Strecke wird dadurch etwas länger.">
-        <span>EuroVelo-Radfernwege</span>
-        <select id="eurovelo">
-          <option value="off">Normal</option>
-          <option value="prefer">Bevorzugen</option>
-          <option value="strong">Stark bevorzugen</option>
-        </select>
-      </label>
-      <p class="hint" id="provider-hint" hidden></p>
-    </section>
-
     <div class="tabs" id="mode-tabs" role="radiogroup" aria-label="Art der Route">
       <button role="radio" data-mode="ab" aria-label="A nach B">A → B</button>
       <button role="radio" data-mode="distance">Distanz</button>
@@ -144,6 +118,33 @@
         <button id="btn-generate" class="primary">Route erstellen</button>
         <button id="btn-reroll" title="Andere Variante erzeugen">Neu würfeln</button>
       </div>
+    </section>
+
+    <!-- Fahrrad und Routing-Optionen nach den Wegpunkten: erst wohin, dann wie (auch Tab-Reihenfolge) -->
+    <section class="group">
+      <div class="segmented" id="bike-switch" role="radiogroup" aria-label="Fahrradtyp">
+        <button role="radio" data-value="road">Rennrad</button>
+        <button role="radio" data-value="gravel">Gravel</button>
+        <button role="radio" data-value="trekking" title="Trekking-, Touren- und Alltagsrad">Fahrrad</button>
+        <button role="radio" data-value="ebike" title="Pedelec mit Unterstützung bis 25 km/h – Anstiege werden kaum gemieden">E-Bike</button>
+      </div>
+      <label class="field inline" id="traffic-field">
+        <span>Verkehr meiden</span>
+        <select id="traffic">
+          <option value="normal">Normal</option>
+          <option value="low">Stark</option>
+          <option value="verylow">Sehr stark</option>
+        </select>
+      </label>
+      <label class="field inline" id="eurovelo-field" title="Bevorzugt die europäischen Radfernwege (EuroVelo, in OSM als internationale Radrouten erfasst). Die Strecke wird dadurch etwas länger.">
+        <span>EuroVelo-Radfernwege</span>
+        <select id="eurovelo">
+          <option value="off">Normal</option>
+          <option value="prefer">Bevorzugen</option>
+          <option value="strong">Stark bevorzugen</option>
+        </select>
+      </label>
+      <p class="hint" id="provider-hint" hidden></p>
     </section>
 
     <section class="group supply">
@@ -287,6 +288,11 @@
 
   <main class="map-area" aria-label="Karte">
     <div id="map"></div>
+    <!-- Nur auf dem Handy (CSS): Kennzahlen direkt unter der Karte, das Ergebnis steht weit unten -->
+    <div class="route-summary" id="route-summary" hidden>
+      <span id="route-summary-text"></span>
+      <button type="button" class="link-btn" id="btn-summary-details">Details ↓</button>
+    </div>
     <section id="elevation" class="elevation" hidden>
       <div class="elevation-chart" id="elevation-chart"></div>
     </section>

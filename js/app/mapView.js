@@ -48,6 +48,9 @@ export const map = createMap($('#map'), {
   onMarkerDrag: (index, point) => handlers.onMarkerDrag?.(index, point),
   onRouteHover: routeHover,
 });
+// Die Kartenhöhe ändert sich auch ohne Fenster-Änderung (Handy: größer, sobald eine Route da ist; CSS) –
+// Leaflet kennt sonst nur die alte Größe und lässt Kacheln grau
+new ResizeObserver(() => map.invalidateSize()).observe($('#map'));
 
 export const elevation = createElevation($('#elevation-chart'), { onHover: p => map.showHover(p) });
 

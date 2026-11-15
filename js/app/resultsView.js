@@ -15,21 +15,39 @@ import { map, elevation, drawRouteLine } from './mapView.js';
 import { syncUi } from './controls.js';
 
 on('route', r => {
+  const summary = $('#route-summary');
   if (!r) {
     elevation.hide();
     ui.results.hidden = true;
+    summary.hidden = true;
     return;
   }
   elevation.show(r, activeBreakdown(r));
   renderBreakdown();
   syncUi(); // Umschalter: zeigt die Einteilung, die für diese Route gilt
   renderStats(r);
+  // Kurzzeile unter der Karte (nur Handy, CSS) – dort steht das Ergebnis weit unten
+  $('#route-summary-text').textContent = `${formatKm(r.distance)} · ↑ ${formatM(r.ascent)} · ${formatDuration(estimateTime(r.distance, r.ascent, state.bike))}`;
+  summary.hidden = false;
   renderDaylight(r);
   renderStation(r);
   // Name einer geöffneten gespeicherten/geteilten Route beibehalten
   ui.routeName.value = state.loadedName ?? defaultName(r);
   ui.results.hidden = false;
 });
+
+/**
+ * Zum Ergebnis springen (Sprunglink, „Details“ unter der Karte) – per Skript statt href="#results": Ein Anker
+ * würde den Routen-Link in der Adresse (#v=1…, linkView.js) überschreiben.
+ */
+function goToResults(e) {
+  e.preventDefault();
+  const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  ui.results.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
+  ui.results.focus({ preventScroll: true });
+}
+$('.skip-link').addEventListener('click', goToResults);
+$('#btn-summary-details').addEventListener('click', goToResults);
 
 /**
  * Kurze Zusammenfassung für Screenreader, wenn eine Berechnung fertig ist (pipeline.js) –

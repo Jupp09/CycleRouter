@@ -159,14 +159,27 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
   const btn = await ev(`(() => { const r = document.querySelector('#btn-locate').getBoundingClientRect(); return Math.round(r.width) + '×' + Math.round(r.height); })()`);
   check('Tippfläche Standort-Knopf ≥ 44 px', btn.split('×').every(v => +v >= 44), btn);
   const mapH = await ev(`Math.round(document.querySelector('.map-area').getBoundingClientRect().height)`);
-  check('Kartenhöhe 55 % (dvh)', Math.abs(mapH - 852 * 0.55) <= 2, `${mapH} px`);
+  check('Ohne Route: Kartenhöhe 45 % (dvh)', Math.abs(mapH - 852 * 0.45) <= 2, `${mapH} px`);
+  const startBox = await ev(`(() => { const r = document.querySelector('#start-input').getBoundingClientRect(); return Math.round(r.bottom); })()`);
+  check('Start-Feld ohne Scrollen sichtbar', startBox <= 852, `Unterkante bei ${startBox} px`);
   check('Keine waagerechte Scrollleiste', await ev(`document.documentElement.scrollWidth <= innerWidth`));
 
   step('iPhone: Route per Fingertipp, eigene Dialoge');
   await page.clickMapAt(0.35, 0.25, { touch: true }); await sleep(900);
   await page.clickMapAt(0.6, 0.7, { touch: true });
   check('Route per Fingertipp gesetzt', await waitFor(HAS_ROUTE), await page.text('#stat-dist'));
+  await sleep(500);
+  const withRoute = await ev(`(() => { const s = document.querySelector('#route-summary'), r = s.getBoundingClientRect();
+    return { map: Math.round(document.querySelector('.map-area').getBoundingClientRect().height), shown: getComputedStyle(s).display !== 'none' && r.bottom <= innerHeight,
+      text: document.querySelector('#route-summary-text').textContent }; })()`);
+  check('Mit Route: Karte 62 %, Kurzzeile mit km sichtbar', Math.abs(withRoute.map - 852 * 0.62) <= 2 && withRoute.shown && /km · ↑ \d+ m · /.test(withRoute.text), JSON.stringify(withRoute));
   await page.shot('4-iphone');
+  const hashBefore = await ev(`location.hash`);
+  await ev(`document.querySelector('#btn-summary-details').click(); true`); await sleep(800);
+  const details = await ev(`(() => { const r = document.querySelector('#results').getBoundingClientRect(); return { top: Math.round(r.top), focus: document.activeElement.id, hash: location.hash }; })()`);
+  check('„Details“ springt zum Ergebnis, Adresse behält den Routen-Link', details.top >= -2 && details.top < 852 && details.focus === 'results'
+    && details.hash === hashBefore && hashBefore.startsWith('#v=1'), JSON.stringify(details));
+  await page.shot('4b-iphone-details');
 
   check('Konto angelegt', await register(page, 'ios_user'));
   await ev(`document.querySelector('#settings-dialog').close(); true`);

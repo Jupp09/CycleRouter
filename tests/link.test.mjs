@@ -8,7 +8,12 @@ export const title = 'Route als Link';
 const ROUTE = `(async () => { const s = ${STATE}, r = s.route;
   return r && { mode: s.mode, bike: s.bike, distance: Math.round(r.distance), name: document.querySelector('#route-name').value,
     start: s.start && [s.start.lat.toFixed(5), s.start.lon.toFixed(5)].join(), end: s.end && [s.end.lat.toFixed(5), s.end.lon.toFixed(5)].join(),
-    vias: s.vias.length }; })()`;
+    vias: s.vias.length, fallback: r.fallback || null }; })()`;
+/**
+ * Gleiche Länge (±20 m)? Hat eine der beiden Berechnungen den Ausweichdienst Valhalla gebraucht (BRouter
+ * ausgelastet), bewertet der Wege anders – dann ist die Länge nicht vergleichbar und die Prüfung entfällt.
+ */
+const sameLength = (a, b) => !!(a.fallback || b.fallback) || Math.abs(a.distance - b.distance) <= 20;
 const HASH = `location.hash`;
 
 export default async function ({ app, page: newPage, check, step, sleep }) {
@@ -38,14 +43,15 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   const opened = await other.ev(ROUTE);
   check('Gleiche Punkte, gleiches Fahrrad, gleicher Name', opened.start === original.start && opened.end === original.end
     && opened.mode === 'ab' && opened.bike === 'gravel' && opened.name === 'Rhein & Ville', JSON.stringify([original, opened]));
-  check('Gleiche Länge (±20 m)', Math.abs(opened.distance - original.distance) <= 20, `${original.distance} / ${opened.distance}`);
+  check('Gleiche Länge (±20 m)', sameLength(original, opened), `${original.distance} / ${opened.distance}${opened.fallback ? ' (Valhalla)' : ''}`);
   check('Startfeld zeigt den Namen aus dem Link', /\S/.test(await other.ev(`document.querySelector('#start-input').value`)));
   await other.shot('1-geoeffnet');
 
   step('Neuladen behält die Route');
   await other.reload();
   check('Nach dem Neuladen wieder da', await other.waitFor(`${HAS_ROUTE} && ${IDLE}`, 120000));
-  check('Gleiche Länge nach dem Neuladen', Math.abs((await other.ev(ROUTE)).distance - original.distance) <= 20);
+  const reloaded = await other.ev(ROUTE);
+  check('Gleiche Länge nach dem Neuladen', sameLength(original, reloaded), `${original.distance} / ${reloaded.distance}${reloaded.fallback ? ' (Valhalla)' : ''}`);
 
   step('Rundkurs: dieselbe Saat ergibt denselben Rundkurs');
   page = await newPage({ height: 950 });
@@ -60,7 +66,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   await again.open(loopLink, { view: BONN, storage: { bike: 'road' } });
   check('Rundkurs aus dem Link erzeugt', await again.waitFor(`${HAS_ROUTE} && ${IDLE}`, 150000));
   const loop2 = await again.ev(ROUTE);
-  check('Derselbe Rundkurs (±20 m)', loop2.mode === 'loop' && Math.abs(loop2.distance - loop.distance) <= 20, `${loop.distance} / ${loop2.distance}`);
+  check('Derselbe Rundkurs (±20 m)', loop2.mode === 'loop' && sameLength(loop, loop2), `${loop.distance} / ${loop2.distance}${loop2.fallback ? ' (Valhalla)' : ''}`);
 
   step('Kaputter Link');
   page = await newPage({ height: 950 });

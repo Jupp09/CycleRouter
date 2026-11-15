@@ -58,7 +58,8 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   await ev(`document.activeElement.blur(); document.querySelector('.skip-link').focus(); true`);
   check('Sprunglink sichtbar bei Fokus', await ev(`getComputedStyle(document.querySelector('.skip-link')).display !== 'none' && document.querySelector('.skip-link').getBoundingClientRect().top >= 0`));
   await page.key('Enter');
-  check('Sprunglink führt zum Ergebnis', await ev(`document.activeElement.id === 'results' || location.hash === '#results'`), await ev(`document.activeElement.id + ' ' + location.hash`));
+  // Per Skript, nicht über den Anker: Die Adresse behält den Routen-Link (#v=1…, linkView.js)
+  check('Sprunglink führt zum Ergebnis, Adresse unverändert', await ev(`document.activeElement.id === 'results' && location.hash.startsWith('#v=1')`), await ev(`document.activeElement.id + ' ' + location.hash.slice(0, 20)`));
   await ev(`document.querySelector('#btn-gpx').focus(); true`);
   await page.key('Tab', { shift: true }); await page.key('Tab');
   check('Fokusrahmen auf Knopf', await ev(`(() => { const s = getComputedStyle(document.activeElement); return s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) >= 2; })()`), await focused());
