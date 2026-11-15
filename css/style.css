@@ -558,9 +558,10 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
        scrollt im sichtbaren Teil, und „Route erstellen“ kann dort stehen bleiben (.plan-actions) */
     height: var(--sheet-visible, 55vh);
     transition: height .25s ease;
-    /* Kein Innenabstand unten: Safari zieht ihn beim Festkleben (.plan-actions) nicht ab, Chrome schon – der
-       Abstand am Ende kommt deshalb von ::after */
-    padding-bottom: 0;
+    /* Unten ein Rand statt Innenabstand: Safari zieht Innenabstand beim Festkleben (.plan-actions) nicht ab, Chrome
+       schon; ein Rand gehört in beiden nicht zum scrollenden Bereich. Er hält Home-Balken bzw. Safaris Leiste frei,
+       der Inhalt scrollt nur darüber. Der Abstand am Ende des Inhalts kommt von ::after. */
+    padding-bottom: 0; border-bottom: var(--bottom-gap) solid var(--panel);
     overflow-y: auto; overscroll-behavior: contain;
     padding-top: 0; gap: 12px; /* Rand bleibt 16 px wie am Rechner */
     border-right: none; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 20px rgba(0, 0, 0, .18);
@@ -576,11 +577,11 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
      Leiste, deren Höhe die Seite nicht erfährt (iOS 26/27; env() deckt nur den Home-Balken ab). sheetView.js liest
      --browser-bar für die Stufe „Kurz“. */
   :root { --browser-bar: 0px; --bottom-gap: max(env(safe-area-inset-bottom), 8px); }
-  /* Distanz/Rundkurs: „Route erstellen“ und „Neu würfeln“ am unteren Rand des Blatts festhalten */
-  .panel::after { content: ""; flex: none; height: calc(16px + var(--bottom-gap)); margin-top: -12px; }
+  /* Distanz/Rundkurs: „Route erstellen“ und „Neu würfeln“ am unteren Rand des Blatts festhalten (über dem Rand) */
+  .panel::after { content: ""; flex: none; height: 16px; margin-top: -12px; }
   .plan-actions {
     position: sticky; bottom: 0; z-index: 2;
-    margin: 0 -16px; padding: 10px 16px calc(10px + var(--bottom-gap));
+    margin: 0 -16px; padding: 10px 16px;
     background: var(--panel); border-top: 1px solid var(--border);
   }
   /* Ziehen (sheetView.js): Das Blatt folgt dem Finger ohne Verzögerung; die Kennzahlen-Zeile ist Ziehfläche */

@@ -183,15 +183,18 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
     if ((await ev(SHEET)).state !== st) { await ev(`document.querySelector('#sheet-handle').click(); true`); await sleep(400); }
     const gen = await ev(`(() => { const b = document.querySelector('#btn-generate').getBoundingClientRect(), p = document.querySelector('#panel').getBoundingClientRect();
       const a = document.querySelector('.plan-actions').getBoundingClientRect();
+      const next = document.querySelector('.plan-actions').closest('section').nextElementSibling.getBoundingClientRect();
+      const gap = parseFloat(getComputedStyle(document.querySelector('#panel')).borderBottomWidth);
       return { state: document.querySelector('#panel').dataset.sheet, top: Math.round(b.top), bottom: Math.round(b.bottom), sheetTop: Math.round(p.top),
-        actionsBottom: Math.round(a.bottom), sheetBottom: Math.round(p.bottom),
+        actionsBottom: Math.round(a.bottom), sheetBottom: Math.round(p.bottom - gap), nextTop: Math.round(next.top),
         scrolls: document.querySelector('#panel').scrollHeight > document.querySelector('#panel').clientHeight + 1,
         bar: getComputedStyle(document.documentElement).getPropertyValue('--browser-bar').trim() }; })()`);
     check(`„${st === 'half' ? 'Halb' : 'Voll'}“: „Route erstellen“ im Blatt sichtbar, frei von Safaris Leiste`, gen.state === st && gen.top >= gen.sheetTop && gen.bottom <= 852 - 64 && gen.bar === '64px', JSON.stringify(gen));
-    // Scrollt das Blatt, klebt die Leiste bündig am unteren Rand – unabhängig davon, wie ein Browser den
-    // Innenabstand beim Festkleben zählt (Safari anders als Chrome); passt alles hinein, steht sie im Blatt
-    const flush = gen.scrolls ? Math.abs(gen.actionsBottom - gen.sheetBottom) <= 1 : gen.actionsBottom <= gen.sheetBottom;
-    check(`„${st === 'half' ? 'Halb' : 'Voll'}“: Knopfleiste ${gen.scrolls ? 'endet am unteren Rand des Blatts' : 'liegt im Blatt'}`, flush && gen.sheetBottom <= 852, JSON.stringify(gen));
+    // Scrollt das Blatt, klebt die Leiste bündig über seinem unteren Rand (Home-Balken/Safari-Leiste; sheetBottom
+    // ist schon ohne ihn) – unabhängig davon, wie ein Browser Innenabstand beim Festkleben zählt (Safari anders als
+    // Chrome); passt alles hinein, steht sie im Blatt, ohne Lücke zur Fahrradwahl
+    const flush = gen.scrolls ? Math.abs(gen.actionsBottom - gen.sheetBottom) <= 1 : gen.actionsBottom <= gen.sheetBottom && gen.nextTop - gen.actionsBottom <= 30;
+    check(`„${st === 'half' ? 'Halb' : 'Voll'}“: Knopfleiste ${gen.scrolls ? 'endet am unteren Rand des Blatts' : 'liegt im Blatt, keine Lücke darunter'}`, flush && gen.sheetBottom <= 852 - 64, JSON.stringify(gen));
   }
   await page.shot('3c-route-erstellen');
   await ev(`document.querySelector('#mode-tabs [data-mode=ab]').click(); true`); await sleep(300);
