@@ -93,7 +93,9 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   await page.ev(`(async () => { const c = window.__imported[Math.floor(window.__imported.length / 2)];
     (await import('/js/app/waypoints.js')).addVia({ lat: c[0] + 0.002, lon: c[1] }, { label: 'Abstecher' }); return true; })()`);
   await sleep(1000);
-  check('Neu geplant', await page.waitFor(SUPPLY_DONE, 150000));
+  // Auf die Route mit dem Zwischenstopp warten, nicht nur aufs Ende einer Berechnung: Ist der Routing-Dienst
+  // langsam (Valhalla-Ausweich), meldet SUPPLY_DONE sonst noch die vorige Route
+  check('Neu geplant', await page.waitFor(`(async () => ${STATE}.route.waypoints.some(p => p.manual && p.label === 'Abstecher') && ${SUPPLY_DONE})()`, 150000));
   k = await page.ev(KEPT);
   const via = await page.ev(`(async () => ${STATE}.route.waypoints.filter(p => p.manual).map(p => p.label).join())()`);
   check('Zwischenstopp auf der Route, Weg erhalten', via === 'Abstecher' && k.share >= 0.8, `${via}, ${Math.round(k.share * 100)} %`);
