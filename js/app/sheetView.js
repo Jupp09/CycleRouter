@@ -3,8 +3,8 @@
  * „Kurz“ (Griff, Kennzahlen bzw. Kopfzeile), „Halb“ (Start/Ziel und Fahrrad ohne Scrollen) und „Voll“. Der Griff
  * ist ein Knopf, der die Stufen durchschaltet (Tastatur, Screenreader); dazu lässt sich das Blatt ziehen (unten).
  *
- * Die Stufe steht als `data-sheet` am Panel, die sichtbare Höhe als CSS-Variable `--sheet-visible` (das Blatt
- * schiebt sich per transform hoch). `--map-covered` ist, was davon die Karte unten verdeckt – in Stufe „Kurz“
+ * Die Stufe steht als `data-sheet` am Panel, die sichtbare Höhe als CSS-Variable `--sheet-visible` – das ist die
+ * echte Höhe des Blatts (nicht verschoben), so endet es immer am Bildschirmrand und der Inhalt scrollt darin. `--map-covered` ist, was davon die Karte unten verdeckt – in Stufe „Kurz“
  * samt Höhenprofil darüber; danach richten sich Leaflets untere Bedienelemente (Maßstab, Quellenangabe) und das
  * Einpassen der Route (sheetCovered). Am Rechner (über 800 px Breite) ist das alles aus.
  */
@@ -23,7 +23,10 @@ const NEXT = { peek: 'half', half: 'full', full: 'peek' };
 
 let current = 'half';
 
-const visible = state => (state === 'full' ? window.innerHeight - TOP_GAP : state === 'half' ? Math.round(window.innerHeight * 0.55) : PEEK);
+/** Höhe von Safaris schwebender Leiste im Browser (CSS --browser-bar, in der installierten App 0). */
+const browserBar = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--browser-bar')) || 0;
+// „Kurz“ um die Browser-Leiste höher, sonst läge die Kennzahlen-Zeile darunter
+const visible = state => (state === 'full' ? window.innerHeight - TOP_GAP : state === 'half' ? Math.round(window.innerHeight * 0.55) : PEEK + browserBar());
 
 /** Stufe setzen: 'peek' | 'half' | 'full' (am Rechner ohne Wirkung). */
 export function setSheet(state) {
@@ -93,7 +96,7 @@ function moveDrag(e) {
   const dt = Math.max(1, e.timeStamp - drag.t);
   drag.v = (drag.y - e.clientY) / dt; // positiv = nach oben
   drag.y = e.clientY; drag.t = e.timeStamp;
-  const height = Math.min(visible('full'), Math.max(PEEK, drag.h0 + dy));
+  const height = Math.min(visible('full'), Math.max(visible('peek'), drag.h0 + dy));
   document.documentElement.style.setProperty('--sheet-visible', `${height}px`);
 }
 

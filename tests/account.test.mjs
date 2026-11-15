@@ -174,7 +174,21 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
   for (let i = 0; i < 3; i++) { await ev(`document.querySelector('#sheet-handle').click(); true`); await sleep(400); states.push(await ev(SHEET)); }
   check('Griff: Halb → Voll → Kurz → Halb', states.map(s => s.state).join(',') === 'full,peek,half', states.map(s => s.state).join(','));
   check('Griff ist ein Knopf mit Namen und Zustand', states[0].expanded === 'true' && states[0].label === 'Panel verkleinern' && states[1].expanded === 'false'
-    && states[1].label === 'Panel vergrößern' && states[1].top >= 852 - 152, JSON.stringify(states[1]));
+    && states[1].label === 'Panel vergrößern' && states[1].top >= 852 - 152 - 64, JSON.stringify(states[1])); // im Browser um Safaris Leiste höher
+
+  step('iPhone: „Route erstellen“ bleibt sichtbar');
+  // Im Testbrowser gilt die Browser-Ansicht (display-mode: browser): unten 64 px für Safaris schwebende Leiste
+  await ev(`document.querySelector('#mode-tabs [data-mode=distance]').click(); true`); await sleep(400);
+  for (const st of ['half', 'full']) {
+    if ((await ev(SHEET)).state !== st) { await ev(`document.querySelector('#sheet-handle').click(); true`); await sleep(400); }
+    const gen = await ev(`(() => { const b = document.querySelector('#btn-generate').getBoundingClientRect(), p = document.querySelector('#panel').getBoundingClientRect();
+      return { state: document.querySelector('#panel').dataset.sheet, top: Math.round(b.top), bottom: Math.round(b.bottom), sheetTop: Math.round(p.top),
+        bar: getComputedStyle(document.documentElement).getPropertyValue('--browser-bar').trim() }; })()`);
+    check(`„${st === 'half' ? 'Halb' : 'Voll'}“: „Route erstellen“ im Blatt sichtbar, frei von Safaris Leiste`, gen.state === st && gen.top >= gen.sheetTop && gen.bottom <= 852 - 64 && gen.bar === '64px', JSON.stringify(gen));
+  }
+  await page.shot('3c-route-erstellen');
+  await ev(`document.querySelector('#mode-tabs [data-mode=ab]').click(); true`); await sleep(300);
+  while ((await ev(SHEET)).state !== 'half') { await ev(`document.querySelector('#sheet-handle').click(); true`); await sleep(400); }
 
   step('iPhone: Blatt ziehen');
   // Finger am Griff aufsetzen und in `steps` Schritten zu `toY` ziehen (langsam: Lage zählt; schnell: Richtung)
@@ -191,7 +205,8 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
   };
   check('Langsam von „Halb“ weit nach oben gezogen → „Voll“', await swipe(80) === 'full');
   check('Langsam ganz nach unten gezogen → „Kurz“', await swipe(840) === 'peek');
-  check('Kurz nach oben gewischt → nächste Stufe „Halb“', await swipe(640, { steps: 3, stepMs: 16 }) === 'half');
+  const peekHandle = await ev(`Math.round(document.querySelector('#sheet-handle').getBoundingClientRect().top + 14)`);
+  check('Kurz (70 px) nach oben gewischt → nächste Stufe „Halb“', await swipe(peekHandle - 70, { steps: 3, stepMs: 16 }) === 'half');
   const handleY = await ev(`Math.round(document.querySelector('#sheet-handle').getBoundingClientRect().top + 14)`);
   check('Kleines Wackeln (3 px) bleibt ein Tippen auf den Griff: „Halb“ → „Voll“', await swipe(handleY - 3, { steps: 2, stepMs: 20 }) === 'full');
   await ev(`document.querySelector('#sheet-handle').click(); document.querySelector('#sheet-handle').click(); true`); await sleep(500); // Voll → Kurz → Halb

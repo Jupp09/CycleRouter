@@ -554,9 +554,11 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
   .leaflet-bottom { bottom: var(--map-covered, 0px); transition: bottom .25s ease; }
   .panel {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
-    height: calc(100vh - 48px); height: calc(100dvh - 48px);
-    transform: translateY(calc(100% - var(--sheet-visible, 55vh)));
-    transition: transform .25s ease;
+    /* Echte Höhe statt nach unten verschoben: Das untere Ende des Blatts ist immer der Bildschirmrand, der Inhalt
+       scrollt im sichtbaren Teil, und „Route erstellen“ kann dort stehen bleiben (.plan-actions) */
+    height: var(--sheet-visible, 55vh);
+    transition: height .25s ease;
+    padding-bottom: calc(16px + var(--bottom-gap));
     overflow-y: auto; overscroll-behavior: contain;
     padding-top: 0; gap: 12px; /* Rand bleibt 16 px wie am Rechner */
     border-right: none; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 20px rgba(0, 0, 0, .18);
@@ -568,6 +570,16 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
     background: var(--panel); cursor: grab; touch-action: none;
   }
   .sheet-handle span { width: 40px; height: 5px; border-radius: 3px; background: var(--muted); opacity: .6; }
+  /* Unten frei halten: Home-Balken und – nur im Browser, nicht in der installierten App – Safaris schwebende
+     Leiste, deren Höhe die Seite nicht erfährt (iOS 26/27; env() deckt nur den Home-Balken ab). sheetView.js liest
+     --browser-bar für die Stufe „Kurz“. */
+  :root { --browser-bar: 0px; --bottom-gap: max(env(safe-area-inset-bottom), 8px); }
+  /* Distanz/Rundkurs: „Route erstellen“ und „Neu würfeln“ am unteren Rand des Blatts festhalten */
+  .plan-actions {
+    position: sticky; bottom: calc(-16px - var(--bottom-gap)); z-index: 2;
+    margin: 0 -16px; padding: 10px 16px calc(10px + var(--bottom-gap));
+    background: var(--panel); border-top: 1px solid var(--border);
+  }
   /* Ziehen (sheetView.js): Das Blatt folgt dem Finger ohne Verzögerung; die Kennzahlen-Zeile ist Ziehfläche */
   .panel.dragging { transition: none; }
   .route-summary { touch-action: none; }
@@ -579,6 +591,12 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
     font-weight: 700; font-variant-numeric: tabular-nums;
   }
   .route-summary .link-btn { align-self: center; }
+}
+
+/* Handy im Browser (Safari-Tab oder Home-Bildschirm-Lesezeichen ohne „Als Web-App öffnen“): Platz für Safaris
+   schwebende untere Leiste. In der installierten App (display-mode: standalone) gibt es sie nicht. */
+@media (max-width: 800px) and (display-mode: browser) and (pointer: coarse) {
+  :root { --browser-bar: 64px; --bottom-gap: calc(max(env(safe-area-inset-bottom), 8px) + 64px); }
 }
 
 /* Roadbook drucken (js/app/roadbookView.js): Solange html.print-roadbook gesetzt ist, zeigt der Druck nur die
