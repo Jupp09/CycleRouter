@@ -33,8 +33,16 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <aside class="panel" aria-label="Routenplanung">
+  <aside class="panel" id="panel" aria-label="Routenplanung">
     <a class="skip-link" href="#results">Zum Ergebnis springen</a>
+    <!-- Handy: Das Panel liegt als Blatt über der Karte (sheetView.js); der Griff ist ein Knopf, der die Stufen
+         Kurz → Halb → Voll durchschaltet. Am Rechner ausgeblendet. -->
+    <button type="button" class="sheet-handle" id="sheet-handle" aria-controls="panel" aria-expanded="false" aria-label="Panel vergrößern"><span aria-hidden="true"></span></button>
+    <!-- Kopf des Blatts auf dem Handy: Kennzahlen der Route (resultsView.js), am Rechner nie sichtbar -->
+    <div class="route-summary" id="route-summary" hidden>
+      <span id="route-summary-text"></span>
+      <button type="button" class="link-btn" id="btn-summary-details">Details ↓</button>
+    </div>
     <header class="brand">
       <svg class="brand-icon" viewBox="0 0 32 32" aria-hidden="true">
         <circle cx="8" cy="21" r="6"/><circle cx="24" cy="21" r="6"/>
@@ -317,11 +325,6 @@
 
   <main class="map-area" aria-label="Karte">
     <div id="map"></div>
-    <!-- Nur auf dem Handy (CSS): Kennzahlen direkt unter der Karte, das Ergebnis steht weit unten -->
-    <div class="route-summary" id="route-summary" hidden>
-      <span id="route-summary-text"></span>
-      <button type="button" class="link-btn" id="btn-summary-details">Details ↓</button>
-    </div>
     <section id="elevation" class="elevation" hidden>
       <div class="elevation-chart" id="elevation-chart"></div>
     </section>

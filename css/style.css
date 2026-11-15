@@ -423,8 +423,8 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
 #map { flex: 1; min-height: 0; background: var(--surface); }
 /* Kartenstil „CyclOSM ruhig“ (map.js): dieselben Kacheln, blasser – die Route hebt sich deutlich ab */
 .leaflet-tile-pane .tiles-calm { filter: saturate(.45) brightness(1.06); }
-/* Kurzzeile unter der Karte: nur auf dem Handy (siehe Mobile), am Rechner steht das Ergebnis daneben */
-.route-summary { display: none; }
+/* Kurzzeile und Griff des Blatts: nur auf dem Handy (siehe Mobile), am Rechner steht das Ergebnis daneben */
+.route-summary, .sheet-handle { display: none; }
 /* Unsichtbare Trefferfläche über der Route (map.js): zeigt die Stelle im Höhenprofil */
 .leaflet-interactive.route-hit { cursor: crosshair; }
 
@@ -540,22 +540,42 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
 
 /* ---------- Mobile ---------- */
 @media (max-width: 800px) {
-  /* dvh: stabile Höhe, auch wenn die Safari-Leiste ein- und ausfährt (vh als Rückfall für ältere Browser) */
-  /* Ohne Route kleinere Karte, damit Start und Ziel ohne Scrollen sichtbar sind; mit Route mehr Platz für Karte,
-     Kurzzeile und Höhenprofil (mapView.js misst die Karte bei Größenänderung neu) */
-  body { grid-template-columns: 1fr; grid-template-rows: auto auto; height: auto; }
-  .map-area { order: -1; height: 45vh; height: 45dvh; }
-  body:has(#results:not([hidden])) .map-area { height: 62vh; height: 62dvh; }
-  .elevation { height: 120px; padding-bottom: 4px; }
-  .panel { border-right: none; border-top: 1px solid var(--border); overflow: visible; gap: 12px; } /* Rand bleibt 16 px wie am Rechner */
+  /* Karte über den ganzen Bildschirm, das Panel als Blatt darüber (sheetView.js: Stufen Kurz/Halb/Voll über
+     --sheet-visible). Die Seite selbst scrollt nicht – nur das Blatt innen. dvh: stabile Höhe, auch wenn die
+     Safari-Leiste ein- und ausfährt (vh als Rückfall für ältere Browser). */
+  html, body { overflow: hidden; overscroll-behavior: none; }
+  body { display: block; }
+  .map-area { position: fixed; inset: 0; z-index: 0; }
+  /* Höhenprofil unten auf der Karte, direkt über dem Blatt – nur in Stufe „Kurz“, sonst läge es mitten im Bild */
+  .elevation { position: absolute; left: 0; right: 0; bottom: var(--sheet-visible, 150px); z-index: 500; height: 120px;
+    padding-bottom: 4px; background: var(--panel); border-top: 1px solid var(--border); }
+  .panel[data-sheet]:not([data-sheet="peek"]) ~ .map-area .elevation { display: none; }
+  /* Maßstab und Quellenangabe bleiben über dem, was das Blatt verdeckt */
+  .leaflet-bottom { bottom: var(--map-covered, 0px); transition: bottom .25s ease; }
+  .panel {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    height: calc(100vh - 48px); height: calc(100dvh - 48px);
+    transform: translateY(calc(100% - var(--sheet-visible, 55vh)));
+    transition: transform .25s ease;
+    overflow-y: auto; overscroll-behavior: contain;
+    padding-top: 0; gap: 12px; /* Rand bleibt 16 px wie am Rechner */
+    border-right: none; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 20px rgba(0, 0, 0, .18);
+  }
+  /* Griff: bleibt beim Scrollen im Blatt oben stehen */
+  .sheet-handle {
+    display: grid; place-items: center; position: sticky; top: 0; z-index: 3; flex: none;
+    margin: 0 -16px; width: calc(100% + 32px); height: 28px; padding: 0; border: none; border-radius: 16px 16px 0 0;
+    background: var(--panel); cursor: grab; touch-action: none;
+  }
+  .sheet-handle span { width: 40px; height: 5px; border-radius: 3px; background: var(--muted); opacity: .6; }
+  /* Beim Springen zum Ergebnis nicht unter dem stehenbleibenden Griff landen */
+  #results { scroll-margin-top: 36px; }
   .brand h1 { font-size: 1.125rem; }
   .route-summary {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 12px;
-    background: var(--panel); border-top: 1px solid var(--border); font-weight: 700; font-variant-numeric: tabular-nums;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: -6px;
+    font-weight: 700; font-variant-numeric: tabular-nums;
   }
   .route-summary .link-btn { align-self: center; }
-  /* Gummiband-Effekt der Seite nicht an die Karte weitergeben */
-  html, body { overscroll-behavior-y: none; }
 }
 
 /* Roadbook drucken (js/app/roadbookView.js): Solange html.print-roadbook gesetzt ist, zeigt der Druck nur die
@@ -611,4 +631,5 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
    Kartensprünge ohne Animation regelt js/map.js. */
 @media (prefers-reduced-motion: reduce) {
   .status.loading::before { animation-duration: 3s; }
+  .panel, .leaflet-bottom { transition: none !important; }
 }

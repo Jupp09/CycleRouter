@@ -19,6 +19,7 @@
  *   routesView.js     gespeicherte Routen, „Meine Routen“, Teilen-Links
  *   linkView.js       Route als Link in der Adresse (#v=1&…), ohne Konto
  *   planView.js       Eingaben nach dem Berechnen zu einer Zeile einklappen
+ *   sheetView.js      Handy: Panel als Blatt über der Karte (drei Stufen)
  *   accountView.js    Anmelden, Passwort, Konto löschen, Einstellungs-Abgleich
  *   homeView.js       Heimatadresse und Vorrat auf dem Server
  *   settingsDialog.js Einstellungsdialog
@@ -39,6 +40,7 @@ import './app/importView.js';
 import './app/history.js';
 import './app/routesView.js';
 import './app/planView.js';
+import './app/sheetView.js';
 import { openLinkFromUrl } from './app/linkView.js';
 import { initAccount } from './app/accountView.js';
 import { initHome } from './app/homeView.js';

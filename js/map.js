@@ -262,14 +262,16 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
       m.openPopup();
     },
 
-    fitRoute(coords) {
+    /** `bottom`: unten von Blatt und Höhenprofil verdeckte Höhe (px, nur Handy) – dort nicht hineinlegen. */
+    fitRoute(coords, { bottom = 0 } = {}) {
       const bounds = L.latLngBounds(coords.map(c => [c[0], c[1]]));
       const mobile = window.matchMedia('(max-width: 800px)').matches;
+      const pad = mobile ? 20 : 50;
       // Kurze Routen nicht bis in die höchste Stufe einpassen. Viertelstufen nur hier: Mit ganzen Stufen
       // (jede verdoppelt den Maßstab) füllte die Route je nach Lage nur 50–100 % der Karte. Plus/Minus rasten
       // danach wieder auf ganze Stufen ein; Kacheln werden dazwischen höchstens um 2^0,25 ≈ 1,19 vergrößert.
       map.options.zoomSnap = 0.25;
-      map.fitBounds(bounds, { padding: mobile ? [20, 20] : [50, 50], maxZoom: 16, ...motion() });
+      map.fitBounds(bounds, { paddingTopLeft: [pad, pad], paddingBottomRight: [pad, pad + bottom], maxZoom: 16, ...motion() });
       map.options.zoomSnap = 1;
     },
 

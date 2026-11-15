@@ -158,27 +158,50 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
   check('Eingabefelder 16 px (kein Auto-Zoom)', fs.split(',').every(v => v === '16px'), fs);
   const btn = await ev(`(() => { const r = document.querySelector('#btn-locate').getBoundingClientRect(); return Math.round(r.width) + '×' + Math.round(r.height); })()`);
   check('Tippfläche Standort-Knopf ≥ 44 px', btn.split('×').every(v => +v >= 44), btn);
-  const mapH = await ev(`Math.round(document.querySelector('.map-area').getBoundingClientRect().height)`);
-  check('Ohne Route: Kartenhöhe 45 % (dvh)', Math.abs(mapH - 852 * 0.45) <= 2, `${mapH} px`);
-  const startBox = await ev(`(() => { const r = document.querySelector('#start-input').getBoundingClientRect(); return Math.round(r.bottom); })()`);
-  check('Start-Feld ohne Scrollen sichtbar', startBox <= 852, `Unterkante bei ${startBox} px`);
+  // Blatt über der Karte (sheetView.js): Stufe, sichtbare Oberkante des Blatts, Griff
+  const SHEET = `(() => { const p = document.querySelector('#panel'), h = document.querySelector('#sheet-handle');
+    return { state: p.dataset.sheet, top: Math.round(p.getBoundingClientRect().top), map: Math.round(document.querySelector('#map').getBoundingClientRect().height),
+      expanded: h.getAttribute('aria-expanded'), label: h.getAttribute('aria-label') }; })()`;
+  let sheet = await ev(SHEET);
+  check('Karte füllt den Bildschirm, Blatt auf „Halb“', sheet.map >= 850 && sheet.state === 'half' && Math.abs(sheet.top - 852 * 0.45) <= 3, JSON.stringify(sheet));
+  const startBox = await ev(`(() => { const r = document.querySelector('#start-input').getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; })()`);
+  check('Start-Feld im halb offenen Blatt ohne Scrollen sichtbar', startBox.top >= sheet.top && startBox.bottom <= 852, JSON.stringify(startBox));
   check('Keine waagerechte Scrollleiste', await ev(`document.documentElement.scrollWidth <= innerWidth`));
+  await page.shot('3b-blatt-halb');
+
+  step('iPhone: Griff schaltet die Stufen');
+  const states = [];
+  for (let i = 0; i < 3; i++) { await ev(`document.querySelector('#sheet-handle').click(); true`); await sleep(400); states.push(await ev(SHEET)); }
+  check('Griff: Halb → Voll → Kurz → Halb', states.map(s => s.state).join(',') === 'full,peek,half', states.map(s => s.state).join(','));
+  check('Griff ist ein Knopf mit Namen und Zustand', states[0].expanded === 'true' && states[0].label === 'Panel verkleinern' && states[1].expanded === 'false'
+    && states[1].label === 'Panel vergrößern' && states[1].top >= 852 - 152, JSON.stringify(states[1]));
 
   step('iPhone: Route per Fingertipp, eigene Dialoge');
-  await page.clickMapAt(0.35, 0.25, { touch: true }); await sleep(900);
-  await page.clickMapAt(0.6, 0.7, { touch: true });
+  // Oberhalb des halb offenen Blatts tippen (es verdeckt die unteren 55 %)
+  await page.clickMapAt(0.35, 0.12, { touch: true }); await sleep(900);
+  await page.clickMapAt(0.6, 0.38, { touch: true });
   check('Route per Fingertipp gesetzt', await waitFor(HAS_ROUTE), await page.text('#stat-dist'));
-  await sleep(500);
-  const withRoute = await ev(`(() => { const s = document.querySelector('#route-summary'), r = s.getBoundingClientRect();
-    return { map: Math.round(document.querySelector('.map-area').getBoundingClientRect().height), shown: getComputedStyle(s).display !== 'none' && r.bottom <= innerHeight,
-      text: document.querySelector('#route-summary-text').textContent }; })()`);
-  check('Mit Route: Karte 62 %, Kurzzeile mit km sichtbar', Math.abs(withRoute.map - 852 * 0.62) <= 2 && withRoute.shown && /km · ↑ (\d+|< 5) m · /.test(withRoute.text), JSON.stringify(withRoute));
+  await sleep(800);
+  const text = await ev(`document.querySelector('#route-summary-text').textContent`);
+  check('Kennzahlen oben im Blatt', /km · ↑ (\d+|< 5) m · /.test(text), text);
+  // Die Route liegt im freien Teil der Karte, nicht unter dem Blatt (Einpassen mit sheetCovered)
+  const fit = await ev(`(() => { const r = document.querySelector('#map path.route-hit').getBoundingClientRect(), p = document.querySelector('#panel').getBoundingClientRect();
+    return { routeBottom: Math.round(r.bottom), sheetTop: Math.round(p.top) }; })()`);
+  check('Route nicht unter dem Blatt eingepasst', fit.routeBottom <= fit.sheetTop, JSON.stringify(fit));
+  await ev(`document.querySelector('#sheet-handle').click(); document.querySelector('#sheet-handle').click(); true`); await sleep(500); // Halb → Voll → Kurz
+  sheet = await ev(SHEET);
+  const peek = await ev(`(() => { const e = document.querySelector('#elevation').getBoundingClientRect(), s = document.querySelector('#route-summary').getBoundingClientRect();
+    return { elevBottom: Math.round(e.bottom), elevH: Math.round(e.height), summaryBottom: Math.round(s.bottom) }; })()`);
+  check('Stufe „Kurz“: Kennzahlen sichtbar, Höhenprofil direkt darüber', sheet.state === 'peek' && peek.summaryBottom <= 852 && Math.abs(peek.elevBottom - sheet.top) <= 2 && peek.elevH >= 100,
+    JSON.stringify({ ...peek, sheetTop: sheet.top }));
   await page.shot('4-iphone');
   const hashBefore = await ev(`location.hash`);
   await ev(`document.querySelector('#btn-summary-details').click(); true`); await sleep(800);
-  const details = await ev(`(() => { const r = document.querySelector('#results').getBoundingClientRect(); return { top: Math.round(r.top), focus: document.activeElement.id, hash: location.hash }; })()`);
-  check('„Details“ springt zum Ergebnis, Adresse behält den Routen-Link', details.top >= -2 && details.top < 852 && details.focus === 'results'
+  const details = await ev(`(() => ({ focus: document.activeElement.id, hash: location.hash, state: document.querySelector('#panel').dataset.sheet,
+    statsTop: Math.round(document.querySelector('.stats').getBoundingClientRect().top), handleBottom: Math.round(document.querySelector('#sheet-handle').getBoundingClientRect().bottom) }))()`);
+  check('„Details“ öffnet das Blatt ganz und springt zum Ergebnis, Adresse behält den Routen-Link', details.focus === 'results' && details.state === 'full'
     && details.hash === hashBefore && hashBefore.startsWith('#v=1'), JSON.stringify(details));
+  check('Kacheln nicht unter dem Griff', details.statsTop >= details.handleBottom, JSON.stringify(details));
   await page.shot('4b-iphone-details');
 
   check('Konto angelegt', await register(page, 'ios_user'));
