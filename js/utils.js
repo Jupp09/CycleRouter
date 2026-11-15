@@ -142,7 +142,8 @@ export const formatKm = m => (m / 1000).toLocaleString('de-DE', { maximumFractio
 export const formatM = m => Math.round(m).toLocaleString('de-DE') + ' m';
 export const formatInt = n => n.toLocaleString('de-DE');
 export function formatDuration(s) {
-  const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60);
+  // Erst auf ganze Minuten runden, dann teilen – sonst wird aus 8 h 59,6 min „8 h 60 min“
+  const total = Math.round(s / 60), h = Math.floor(total / 60), m = total % 60;
   return h ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`;
 }
 /** „14:20“ */

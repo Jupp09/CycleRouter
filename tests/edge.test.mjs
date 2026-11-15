@@ -32,6 +32,11 @@ export default async function ({ app, page: newPage, check, step }) {
   check('Booking: Nacht der Zeitumstellung im Oktober geht bis zum nächsten Tag', dst.bookingAutumn === '2026-10-25 → 2026-10-26', dst.bookingAutumn);
   check('Booking: Nacht der Zeitumstellung im März', dst.bookingSpring === '2026-03-29 → 2026-03-30', dst.bookingSpring);
 
+  step('Dauer');
+  const durations = await page.ev(`(async () => { const { formatDuration } = await import('${JS}utils.js');
+    return [8 * 3600 + 59.6 * 60, 3599.9, 3600, 59 * 60 + 29, 0].map(formatDuration); })()`);
+  check('Gerundet wird vor dem Teilen, nie „60 min“', durations.join(' | ') === '9 h 00 min | 1 h 00 min | 1 h 00 min | 59 min | 0 min', durations.join(' | '));
+
   step('Öffnungszeiten');
   const hours = await page.ev(`(async () => {
     const { openState } = await import('${JS}openingHours.js');
