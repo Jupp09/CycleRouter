@@ -19,6 +19,8 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Kopfzeile: Rückgängig, Wiederholen, GPX öffnen, Einstellungen als Symbole in einer Zeile',
     head.tools.join('|') === 'Rückgängig|Wiederholen|GPX-Datei öffnen|Einstellungen' && head.oneRow, JSON.stringify(head));
   check('„Mehr Optionen“ zugeklappt, EuroVelo und Routing-Dienst darin', !head.more && head.inMore);
+  check('Satz für neue Besucher sichtbar', await ev(`getComputedStyle(document.querySelector('#tagline')).display !== 'none' && document.querySelector('#tagline').textContent.startsWith('Radrouten planen')`));
+  check('„Mehr Optionen“ sagt, wo die Verpflegungsstopps sind', await ev(`[...document.querySelectorAll('#more-options .hint')].some(p => p.textContent.includes('Stopps unterwegs'))`));
   await ev(`(() => { const e = document.querySelector('#eurovelo'); e.value = 'prefer'; e.dispatchEvent(new Event('change')); return true; })()`);
   check('Zugeklappt nennt die Überschrift die aktive Option', await ev(`document.querySelector('#more-options summary').textContent`) === 'Mehr Optionen · EuroVelo bevorzugt',
     await ev(`document.querySelector('#more-options summary').textContent`));
@@ -30,6 +32,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Start gesetzt, Marker da', await waitFor(`document.querySelectorAll('.marker-pin.start').length === 1`, 5000));
   await page.clickMap(50.76, 7.07);
   check('Route berechnet', await waitFor(HAS_ROUTE), await text('#stat-dist'));
+  check('Mit Route ist der Satz weg', await ev(`getComputedStyle(document.querySelector('#tagline')).display === 'none'`));
   check('Name vorgeschlagen', /^Route \d+ km/.test(await ev(`${q('#route-name')}.value`)), await ev(`${q('#route-name')}.value`));
   check('Aufschlüsselung sichtbar', await ev(`!${q('#breakdown')}.hidden && document.querySelectorAll('#breakdown-legend li').length > 0`));
   const legendKm = await ev(`[...document.querySelectorAll('#breakdown-legend .km')].map(s => s.textContent)`);
