@@ -23,7 +23,7 @@ import { map, relayout, drawRouteLine, updateMarkers } from './mapView.js';
 import { setPoint } from './waypoints.js';
 import { routeSummary } from './resultsView.js';
 import { checkpoint } from './history.js';
-import { sheetCovered } from './sheetView.js';
+import { sheetCovered, sheetAfterRoute } from './sheetView.js';
 
 let controller = null;
 
@@ -68,8 +68,8 @@ export function showRoute(r, { fit = true } = {}) {
   relayout();
   // Erst im nächsten Bild einpassen: Mit der Route erscheint das Höhenprofil, am Handy wächst die Karte (CSS) –
   // sofort eingepasst gälte die alte Kartengröße, und die Route füllte nur einen Teil der Karte
-  // Handy: nicht unter das Blatt und das Höhenprofil legen (sheetView.js)
-  if (fit) requestAnimationFrame(() => { map.invalidateSize(); map.fitRoute(r.coords, { bottom: sheetCovered() }); });
+  // Handy: Blatt auf „Kurz“ und die Route darüber einpassen, nicht unter Blatt und Höhenprofil (sheetView.js)
+  if (fit) requestAnimationFrame(() => { sheetAfterRoute(); map.invalidateSize(); map.fitRoute(r.coords, { bottom: sheetCovered() }); });
 }
 
 /** Route verwerfen – samt Bezug zu einer gespeicherten Route und Mehrtagesplanung. */

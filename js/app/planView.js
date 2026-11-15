@@ -10,6 +10,7 @@
  */
 import { state, on, BIKE_LABELS } from './state.js';
 import { $ } from './dom.js';
+import { setSheet, sheetState } from './sheetView.js';
 
 const plan = $('#plan'), summary = $('#plan-summary'), text = $('#plan-summary-text');
 const edit = $('#btn-plan-edit'), reroll = $('#btn-reroll-summary');
@@ -37,8 +38,9 @@ function render() {
   edit.setAttribute('aria-expanded', String(!collapsed));
   reroll.hidden = !route || state.mode === 'ab';
   if (route) text.textContent = summaryText();
-  // Fokus nicht im verschwundenen Formular lassen (z. B. nach Enter in der Zielsuche)
-  if (collapsed && focusInside) edit.focus({ preventScroll: true });
+  // Fokus nicht im verschwundenen Formular lassen (z. B. nach Enter in der Zielsuche). Am Handy auf den Griff des
+  // Blatts: „Ändern“ läge in Stufe „Kurz“ unter dem Bildschirmrand, und Fokus dort öffnete das Blatt wieder ganz
+  if (collapsed && focusInside) (sheetState() ? $('#sheet-handle') : edit).focus({ preventScroll: true });
 }
 
 on('route', r => {
@@ -48,6 +50,7 @@ on('route', r => {
 
 edit.addEventListener('click', () => {
   openedByUser = plan.hidden;
+  if (openedByUser) setSheet('full'); // Handy: zum Ändern das ganze Blatt
   render();
   if (!plan.hidden) plan.querySelector('[aria-checked="true"], input, button')?.focus({ preventScroll: true });
 });

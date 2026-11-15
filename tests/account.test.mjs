@@ -205,11 +205,13 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
   const text = await ev(`document.querySelector('#route-summary-text').textContent`);
   check('Kennzahlen oben im Blatt', /km · ↑ (\d+|< 5) m · /.test(text), text);
   // Die Route liegt im freien Teil der Karte, nicht unter dem Blatt (Einpassen mit sheetCovered)
-  const fit = await ev(`(() => { const r = document.querySelector('#map path.route-hit').getBoundingClientRect(), p = document.querySelector('#panel').getBoundingClientRect();
-    return { routeBottom: Math.round(r.bottom), sheetTop: Math.round(p.top) }; })()`);
-  check('Route nicht unter dem Blatt eingepasst', fit.routeBottom <= fit.sheetTop, JSON.stringify(fit));
-  await ev(`document.querySelector('#sheet-handle').click(); document.querySelector('#sheet-handle').click(); true`); await sleep(500); // Halb → Voll → Kurz
+  // Nach dem Berechnen von selbst auf „Kurz“, die Route liegt über Blatt und Höhenprofil (sheetAfterRoute)
   sheet = await ev(SHEET);
+  const fit = await ev(`(() => { const r = document.querySelector('#map path.route-hit').getBoundingClientRect(),
+    c = document.querySelector('.leaflet-bottom.leaflet-right').getBoundingClientRect();
+    return { routeBottom: Math.round(r.bottom), controlsTop: Math.round(c.top) }; })()`);
+  check('Nach dem Berechnen von selbst „Kurz“, Route über Blatt, Profil und Quellenangabe eingepasst', sheet.state === 'peek' && fit.routeBottom <= fit.controlsTop,
+    JSON.stringify({ ...fit, state: sheet.state }));
   const peek = await ev(`(() => { const e = document.querySelector('#elevation').getBoundingClientRect(), s = document.querySelector('#route-summary').getBoundingClientRect();
     return { elevBottom: Math.round(e.bottom), elevH: Math.round(e.height), summaryBottom: Math.round(s.bottom) }; })()`);
   check('Stufe „Kurz“: Kennzahlen sichtbar, Höhenprofil direkt darüber', sheet.state === 'peek' && peek.summaryBottom <= 852 && Math.abs(peek.elevBottom - sheet.top) <= 2 && peek.elevH >= 100,
@@ -223,6 +225,12 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
     && details.hash === hashBefore && hashBefore.startsWith('#v=1'), JSON.stringify(details));
   check('Kacheln nicht unter dem Griff', details.statsTop >= details.handleBottom, JSON.stringify(details));
   await page.shot('4b-iphone-details');
+  // „Ändern“ öffnet das ganze Blatt mit dem Formular
+  await ev(`document.querySelector('#sheet-handle').click(); true`); await sleep(400); // Voll → Kurz
+  await ev(`document.querySelector('#btn-plan-edit').click(); true`); await sleep(500);
+  const edit = await ev(`({ state: document.querySelector('#panel').dataset.sheet, plan: !document.querySelector('#plan').hidden })`);
+  check('„Ändern“ öffnet das Blatt ganz mit dem Formular', edit.state === 'full' && edit.plan, JSON.stringify(edit));
+  await ev(`document.querySelector('#btn-plan-edit').click(); true`); await sleep(300); // wieder einklappen
 
   check('Konto angelegt', await register(page, 'ios_user'));
   await ev(`document.querySelector('#settings-dialog').close(); true`);
@@ -244,4 +252,7 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
   await ev(`document.querySelector('#my-routes-list [title=Löschen]').click(); true`); await sleep(300);
   await ev(`document.querySelector('#ask-dialog form').requestSubmit(document.querySelector('#ask-ok')); true`);
   check('Bestätigt: Route gelöscht', await waitFor(`document.querySelectorAll('#my-routes-list li').length === 0`, 10000));
+  // Ohne Route wieder „Halb“: Start und Ziel sichtbar
+  await ev(`document.querySelector('#btn-clear').click(); true`); await sleep(600);
+  check('Nach „Löschen“ wieder „Halb“', (await ev(SHEET)).state === 'half');
 }

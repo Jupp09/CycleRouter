@@ -36,9 +36,14 @@ export function sheetState() {
   return phone.matches ? current : null;
 }
 
-/** Wie viel der Karte unten verdeckt ist (px) – für das Einpassen der Route; am Rechner 0. */
+/**
+ * Wie viel der Karte unten verdeckt ist (px) – für das Einpassen der Route; am Rechner 0. Dazu die Leiste mit
+ * Maßstab und Quellenangabe, die über der Blattkante sitzt – sonst landet z. B. der Zielmarker darunter.
+ */
 export function sheetCovered() {
-  return phone.matches ? parseFloat(document.documentElement.style.getPropertyValue('--map-covered')) || 0 : 0;
+  if (!phone.matches) return 0;
+  const controls = document.querySelector('.leaflet-bottom.leaflet-right')?.offsetHeight || 0;
+  return (parseFloat(document.documentElement.style.getPropertyValue('--map-covered')) || 0) + controls;
 }
 
 function apply() {
@@ -124,8 +129,19 @@ panel.addEventListener('focusin', e => {
   if (phone.matches && current !== 'full' && e.target !== handle && !e.target.closest('.route-summary')) setSheet('full');
 });
 
-// Das Höhenprofil erscheint und verschwindet mit der Route
-on('route', () => requestAnimationFrame(apply));
+/**
+ * Nach einer neu angezeigten Route (showRoute mit Einpassen): auf „Kurz“, damit die Route frei auf der Karte
+ * liegt. Ruft pipeline.js vor dem Einpassen auf, damit sheetCovered() schon die neue Stufe kennt.
+ */
+export function sheetAfterRoute() {
+  if (phone.matches) setSheet('peek');
+}
+
+// Das Höhenprofil erscheint und verschwindet mit der Route; ohne Route wieder „Halb“ (Start/Ziel sichtbar)
+on('route', r => {
+  if (!r && phone.matches) current = 'half';
+  requestAnimationFrame(apply);
+});
 window.addEventListener('resize', apply);
 phone.addEventListener('change', apply);
 apply();

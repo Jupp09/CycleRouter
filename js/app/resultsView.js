@@ -13,6 +13,7 @@ import { state, on, defaultName, departureDate, activeBreakdown } from './state.
 import { $, ui, rowButton, span } from './dom.js';
 import { map, elevation, drawRouteLine } from './mapView.js';
 import { syncUi } from './controls.js';
+import { setSheet } from './sheetView.js';
 
 on('route', r => {
   const summary = $('#route-summary');
@@ -42,6 +43,7 @@ on('route', r => {
  */
 function goToResults(e) {
   e.preventDefault();
+  setSheet('full'); // Handy: Ergebnis im ganzen Blatt (sheetView.js)
   const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   ui.results.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
   ui.results.focus({ preventScroll: true });
