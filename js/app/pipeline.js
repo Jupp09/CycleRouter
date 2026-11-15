@@ -65,7 +65,9 @@ export function showRoute(r, { fit = true } = {}) {
   updateMarkers();
   emit('route', r);
   relayout();
-  if (fit) map.fitRoute(r.coords);
+  // Erst im nächsten Bild einpassen: Mit der Route erscheint das Höhenprofil, am Handy wächst die Karte (CSS) –
+  // sofort eingepasst gälte die alte Kartengröße, und die Route füllte nur einen Teil der Karte
+  if (fit) requestAnimationFrame(() => { map.invalidateSize(); map.fitRoute(r.coords); });
 }
 
 /** Route verwerfen – samt Bezug zu einer gespeicherten Route und Mehrtagesplanung. */

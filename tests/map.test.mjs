@@ -16,7 +16,40 @@ async function zoomToMax(p, sleep) {
   return { zoom: await zoom(p), disabled: await p.ev(`document.querySelector('.leaflet-control-zoom-in').classList.contains('leaflet-disabled')`) };
 }
 
+/** Anteil der Kartenfläche, den die gezeichnete Route einnimmt (Breite bzw. Höhe, 0…1). */
+const FILL = `(() => { const m = document.querySelector('#map').getBoundingClientRect();
+  const r = document.querySelector('#map path.route-hit').getBoundingClientRect();
+  return { w: +(r.width / m.width).toFixed(2), h: +(r.height / m.height).toFixed(2) }; })()`;
+/** Eine Runde als GPX (keine Routing-Anfrage) – auf die Karte gelegt wie per Datei-Auswahl. */
+const loopGpx = '<gpx><trk><name>Runde</name><trkseg>'
+  + [[50.80, 7.00, 50], [50.80, 7.06, 62], [50.84, 7.06, 80], [50.84, 7.00, 66], [50.80, 7.00, 50]]
+    .map(([la, lo, ele]) => `<trkpt lat="${la}" lon="${lo}"><ele>${ele}</ele></trkpt>`).join('') + '</trkseg></trk></gpx>';
+const openGpx = p => p.ev(`(() => { const dt = new DataTransfer(); dt.items.add(new File([${JSON.stringify(loopGpx)}], 'runde.gpx'));
+  const input = document.querySelector('#gpx-file'); input.files = dt.files; input.dispatchEvent(new Event('change')); return true; })()`);
+
 export default async function ({ app, page: newPage, check, step, sleep }) {
+  step('Standard-Kartenstil, Route füllt die Karte');
+  for (const mobile of [false, true]) {
+    const q = await newPage({ mobile });
+    await q.open(app, { view: { center: [51.0, 9.0], zoom: 6 } }); // weit weg und klein: einpassen muss zoomen
+    const base = await q.ev(`({ checked: [...document.querySelectorAll('.leaflet-control-layers-base label')].find(l => l.querySelector('input').checked)?.textContent.trim(),
+      calm: !!document.querySelector('.leaflet-tile-pane .tiles-calm'), filter: getComputedStyle(document.querySelector('.leaflet-tile-pane .tiles-calm') || document.body).filter })`);
+    if (!mobile) check('Standard ist „CyclOSM ruhig“ (blass), CyclOSM bleibt wählbar', base.checked === 'CyclOSM ruhig' && base.calm && /saturate/.test(base.filter)
+      && await q.ev(`!!${baseInput('CyclOSM')}`), JSON.stringify(base));
+    await openGpx(q);
+    await q.waitFor(`!document.querySelector('#results').hidden && !!document.querySelector('#map path.route-hit')`, 15000); await sleep(1200);
+    const fill = await q.ev(FILL);
+    check(`${mobile ? 'Handy' : 'Rechner'}: Route füllt die Karte (≥ 60 % Breite oder Höhe)`, Math.max(fill.w, fill.h) >= 0.6, JSON.stringify(fill));
+    if (!mobile) {
+      const tip = await q.ev(`[...document.querySelectorAll('.leaflet-marker-icon')].map(m => m.title).join(' | ')`);
+      check('Marker erklären sich: „ziehen …“ im Tooltip', /Start.* – ziehen zum Verschieben/.test(tip), tip);
+      check('Profil-Punkt weiß mit dunklem Rand', await q.ev(`(() => { document.querySelector('#elevation-chart').focus();
+        document.querySelector('#elevation-chart').dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+        return [...document.querySelectorAll('#map .leaflet-overlay-pane path')].some(p => p.getAttribute('fill') === '#fff' && p.getAttribute('stroke') === '#111827'); })()`));
+      await q.shot('0-ruhig');
+    }
+  }
+
   const p = await newPage();
   // Ländliche Gegend: Dort hat CyclOSM für 19/20 fast nichts vorgerendert
   await p.open(app, { view: { center: [52.10, 13.70], zoom: 15 } });

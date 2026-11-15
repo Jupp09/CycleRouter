@@ -5,12 +5,20 @@ const L = window.L;
 
 const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende';
 
+const cyclosm = (extra = {}) => L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {
+  // Ab Stufe 19 rendert der Server fast jede Kachel erst auf Anfrage (2–4 s je Kachel) – der Bildschirm
+  // bliebe lange grau. Stufe 19 zeigt daher die Kacheln von 18 vergrößert (maxNativeZoom).
+  maxNativeZoom: 18, maxZoom: 19, attribution: `${OSM_ATTR} · Stil: <a href="https://www.cyclosm.org">CyclOSM</a>`, ...extra,
+});
+
+/** Standard für neue Nutzer; wer einen Stil gewählt hat, behält ihn (storage 'baseLayer'). */
+const DEFAULT_BASE = 'CyclOSM ruhig';
+
 const BASE_LAYERS = {
-  'CyclOSM': L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {
-    // Ab Stufe 19 rendert der Server fast jede Kachel erst auf Anfrage (2–4 s je Kachel) – der Bildschirm
-    // bliebe lange grau. Stufe 19 zeigt daher die Kacheln von 18 vergrößert (maxNativeZoom).
-    maxNativeZoom: 18, maxZoom: 19, attribution: `${OSM_ATTR} · Stil: <a href="https://www.cyclosm.org">CyclOSM</a>`,
-  }),
+  // Dieselben Kacheln, per CSS entsättigt (.tiles-calm in style.css): Auf dem bunten CyclOSM ging die Route
+  // unter. Kein weiterer Dienst, keine weiteren Nutzungsbedingungen; der Browser teilt sich die Kacheln.
+  'CyclOSM ruhig': cyclosm({ className: 'tiles-calm' }),
+  'CyclOSM': cyclosm(),
   'OpenStreetMap': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: OSM_ATTR,
   }),
@@ -52,6 +60,8 @@ function named(marker, name) {
 }
 const DASH = { dashed: '8 12', dotted: '0 11' };
 const KIND_NAME = { start: 'Start', end: 'Ziel', via: 'Wegpunkt', manual: 'Zwischenstopp' };
+/** Zusatz im Tooltip (nicht im aria-label: per Tastatur lässt sich ein Marker nicht ziehen). */
+const DRAG_HINT = { start: 'ziehen zum Verschieben', end: 'ziehen zum Verschieben', via: 'ziehen, um die Route zu ändern', manual: 'ziehen zum Verschieben' };
 
 /**
  * „Bewegung reduzieren“ im System: Kartensprünge (Route einpassen, zu einem Ort springen) ohne
@@ -68,8 +78,8 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
   L.control.zoom({ position: 'topright' }).addTo(map);
   L.control.scale({ imperial: false, position: 'bottomright' }).addTo(map);
 
-  const baseName = storage.get('baseLayer', 'CyclOSM');
-  (BASE_LAYERS[baseName] || BASE_LAYERS.CyclOSM).addTo(map);
+  const baseName = storage.get('baseLayer', DEFAULT_BASE);
+  (BASE_LAYERS[baseName] || BASE_LAYERS[DEFAULT_BASE]).addTo(map);
   L.control.layers(BASE_LAYERS, OVERLAYS, { position: 'topright' }).addTo(map);
   map.on('baselayerchange', e => storage.set('baseLayer', e.name));
   map.on('moveend', () => {
@@ -89,7 +99,8 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
   const searchLayer = L.layerGroup().addTo(map);
   const searchMarkers = new Map();
   // Nicht interaktiv: Er sitzt genau unter dem Mauszeiger und würde der Routenlinie sonst die Maus wegnehmen
-  const hoverMarker = L.circleMarker([0, 0], { radius: 7, color: '#111827', weight: 3, fillColor: ROUTE_COLOR, fillOpacity: 1, interactive: false });
+  // Weiß gefüllt: In Routenfarbe ginge er auf der Linie unter, auf der er sitzt
+  const hoverMarker = L.circleMarker([0, 0], { radius: 8, color: '#111827', weight: 3, fillColor: '#fff', fillOpacity: 1, interactive: false });
 
   return {
     /**
@@ -104,7 +115,7 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
           icon: m.kind === 'via' ? viaIcon : m.kind === 'manual' ? manualIcon(escapeHtml(m.text)) : icon(m.kind),
           draggable: true,
           zIndexOffset: m.kind === 'via' ? 0 : m.kind === 'manual' ? 600 : 1000,
-          title: name,
+          title: `${name} – ${DRAG_HINT[m.kind]}`,
         }), name);
         marker
           .on('dragend', e => {
@@ -254,8 +265,12 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
     fitRoute(coords) {
       const bounds = L.latLngBounds(coords.map(c => [c[0], c[1]]));
       const mobile = window.matchMedia('(max-width: 800px)').matches;
-      // Kurze Routen nicht bis in die höchste Stufe einpassen
+      // Kurze Routen nicht bis in die höchste Stufe einpassen. Viertelstufen nur hier: Mit ganzen Stufen
+      // (jede verdoppelt den Maßstab) füllte die Route je nach Lage nur 50–100 % der Karte. Plus/Minus rasten
+      // danach wieder auf ganze Stufen ein; Kacheln werden dazwischen höchstens um 2^0,25 ≈ 1,19 vergrößert.
+      map.options.zoomSnap = 0.25;
       map.fitBounds(bounds, { padding: mobile ? [20, 20] : [50, 50], maxZoom: 16, ...motion() });
+      map.options.zoomSnap = 1;
     },
 
     /** Ausschnitt auf ein Stück der Route einpassen (z. B. einen Anstieg). */

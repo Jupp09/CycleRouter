@@ -85,7 +85,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Maus nahe dem Ende der Linie: Profil zeigt das Ende', atEnd.shown && Math.abs(atEnd.km - atEnd.total) < 0.6, `${atEnd.text} / ${atEnd.total.toFixed(1)} km`);
   check('Infofeld nennt die Steigung', / · −?\d+ %$/.test(atEnd.text), atEnd.text);
   const mid = await hover(0.5);
-  check('Punkt auf der Karte folgt', mid.shown && await page.ev(`[...document.querySelectorAll('#map .leaflet-overlay-pane path')].some(p => p.getAttribute('fill') === '#e6007e')`));
+  check('Punkt auf der Karte folgt', mid.shown && await page.ev(`[...document.querySelectorAll('#map .leaflet-overlay-pane path')].some(p => p.getAttribute('fill') === '#fff')`));
   await page.shot('0-karte-profil');
   await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 5, y: 5 }); await sleep(200);
   check('Maus weg: Anzeige verschwindet', await page.ev(`document.querySelector('.elevation-tip').hidden`));
@@ -119,8 +119,9 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Routenlinie nach Steigung eingefärbt', dashed >= 4, `${dashed} Farben`);
 
   step('Einstellung bleibt, Zusammenfassung stimmt');
+  // „|| 0“: Eine winzige negative Differenz rundet zu −0, und das liefert die DevTools-Schnittstelle nicht als Wert
   const sum = await page.ev(`(async () => { const r = ${STATE}.route; const { summarize } = await import('/js/surfaces.js');
-    return Math.round(summarize(r, 'grade').reduce((s, i) => s + i.distance, 0) - r.distance); })()`);
+    return Math.round(summarize(r, 'grade').reduce((s, i) => s + i.distance, 0) - r.distance) || 0; })()`);
   check('Summe der Klassen = Distanz', sum === 0, sum);
   await page.reload();
   check('Nach dem Neuladen ist „Steigung“ gemerkt', await page.ev(`JSON.parse(localStorage.getItem('cyclerouter.breakdown'))`) === 'grade');

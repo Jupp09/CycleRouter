@@ -391,6 +391,8 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
 /* ---------- Map ---------- */
 .map-area { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 #map { flex: 1; min-height: 0; background: var(--surface); }
+/* Kartenstil „CyclOSM ruhig“ (map.js): dieselben Kacheln, blasser – die Route hebt sich deutlich ab */
+.leaflet-tile-pane .tiles-calm { filter: saturate(.45) brightness(1.06); }
 /* Kurzzeile unter der Karte: nur auf dem Handy (siehe Mobile), am Rechner steht das Ergebnis daneben */
 .route-summary { display: none; }
 /* Unsichtbare Trefferfläche über der Route (map.js): zeigt die Stelle im Höhenprofil */
