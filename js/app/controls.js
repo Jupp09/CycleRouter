@@ -41,6 +41,15 @@ export function syncUi() {
   const hint = $('#provider-hint');
   hint.hidden = !(state.provider === 'ors' && state.bike === 'gravel');
   hint.textContent = 'OpenRouteService hat kein Gravel-Profil – es wird das allgemeine Fahrrad-Profil verwendet. Für echte Gravel-Routen BRouter wählen.';
+
+  // „Mehr Optionen“ ist meist zugeklappt: Abweichungen vom Standard in der Überschrift nennen, damit sichtbar
+  // bleibt, dass etwas eingestellt ist (nur, was für das aktuelle Fahrrad und den Dienst auch gilt)
+  const active = [
+    !$('#traffic-field').hidden && state.traffic !== 'normal' && `Verkehr meiden: ${$('#traffic').selectedOptions[0].textContent}`,
+    !$('#eurovelo-field').hidden && state.eurovelo !== 'off' && `EuroVelo ${state.eurovelo === 'strong' ? 'stark bevorzugt' : 'bevorzugt'}`,
+    state.provider !== 'brouter' && $('#provider').selectedOptions[0].textContent,
+  ].filter(Boolean);
+  $('#more-options-active').textContent = active.length ? ` · ${active.join(' · ')}` : '';
 }
 
 /**

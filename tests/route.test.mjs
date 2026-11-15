@@ -11,6 +11,18 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   await page.open(app, { view: BONN, storage: { bike: 'trekking', mode: 'ab' } });
 
   check('Startzustand: keine Ergebnisse', await ev(`${q('#results')}.hidden`));
+
+  // Kopfzeile mit Symbolknöpfen, Routing-Optionen zugeklappt
+  const head = await ev(`({ tools: [...document.querySelectorAll('.brand-tools button')].map(b => b.getAttribute('aria-label')),
+    more: document.querySelector('#more-options').open, inMore: ['#eurovelo', '#provider'].every(s => document.querySelector(s).closest('#more-options')),
+    oneRow: (() => { const t = [...document.querySelectorAll('.brand > *')].map(e => Math.round(e.getBoundingClientRect().top)); return Math.max(...t) - Math.min(...t) < 12; })() })`);
+  check('Kopfzeile: Rückgängig, Wiederholen, GPX öffnen, Einstellungen als Symbole in einer Zeile',
+    head.tools.join('|') === 'Rückgängig|Wiederholen|GPX-Datei öffnen|Einstellungen' && head.oneRow, JSON.stringify(head));
+  check('„Mehr Optionen“ zugeklappt, EuroVelo und Routing-Dienst darin', !head.more && head.inMore);
+  await ev(`(() => { const e = document.querySelector('#eurovelo'); e.value = 'prefer'; e.dispatchEvent(new Event('change')); return true; })()`);
+  check('Zugeklappt nennt die Überschrift die aktive Option', await ev(`document.querySelector('#more-options summary').textContent`) === 'Mehr Optionen · EuroVelo bevorzugt',
+    await ev(`document.querySelector('#more-options summary').textContent`));
+  await ev(`(() => { const e = document.querySelector('#eurovelo'); e.value = 'off'; e.dispatchEvent(new Event('change')); return true; })()`);
   check('Routenart A → B aktiv', await ev(`${q('#mode-tabs [aria-checked=true]')}.dataset.mode`) === 'ab');
 
   step('A → B per Kartenklick');

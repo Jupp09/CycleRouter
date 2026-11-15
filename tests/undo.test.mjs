@@ -6,7 +6,7 @@ import { STATE, BONN, HAS_ROUTE, IDLE } from './lib/app.mjs';
 export const title = 'Rückgängig und Wiederholen';
 
 const BUTTONS = `(() => { const u = document.querySelector('#btn-undo'), r = document.querySelector('#btn-redo');
-  return (u.disabled ? '-' : u.title) + ' | ' + (r.disabled ? '-' : r.title); })()`;
+  return (u.disabled ? '-' : u.getAttribute('aria-label')) + ' | ' + (r.disabled ? '-' : r.getAttribute('aria-label')); })()`;
 /** Stand der App; `window.__keep` hält Routen-Objekte zum Vergleich fest. */
 const NOW = `(async () => { const s = ${STATE}; window.__keep ??= {};
   return { route: Object.keys(window.__keep).find(k => window.__keep[k] === s.route) || (s.route ? 'andere' : 'keine'),

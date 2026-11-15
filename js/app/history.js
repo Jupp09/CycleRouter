@@ -51,10 +51,13 @@ function restore(snap) {
 }
 
 function updateButtons() {
-  for (const [id, stack, verb] of [['#btn-undo', undoStack, 'Rückgängig'], ['#btn-redo', redoStack, 'Wiederholen']]) {
+  // Symbolknöpfe in der Kopfzeile: Name und Tooltip nennen, was rückgängig gemacht bzw. wiederholt würde
+  for (const [id, stack, verb, key] of [['#btn-undo', undoStack, 'Rückgängig', 'Strg+Z'], ['#btn-redo', redoStack, 'Wiederholen', 'Strg+Umschalt+Z']]) {
     const button = $(id), top = stack[stack.length - 1];
     button.disabled = !top;
-    button.title = top ? `${verb}: ${top.label}` : '';
+    const name = top ? `${verb}: ${top.label}` : verb;
+    button.setAttribute('aria-label', name);
+    button.title = `${name} (${key})`;
   }
 }
 

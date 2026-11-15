@@ -41,9 +41,21 @@
         <path d="M8 21l6-10h7l3 10M14 11l-2-4h-3"/>
       </svg>
       <h1>CycloRouter</h1>
-      <button id="btn-settings" class="icon-btn" title="Einstellungen" aria-label="Einstellungen">
-        <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
-      </button>
+      <!-- Nebenfunktionen als Symbole (Strg+Z / Strg+Umschalt+Z und GPX auf die Karte ziehen gehen weiterhin) -->
+      <div class="brand-tools">
+        <button id="btn-undo" class="icon-btn" aria-label="Rückgängig" title="Rückgängig (Strg+Z)" disabled>
+          <svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        </button>
+        <button id="btn-redo" class="icon-btn" aria-label="Wiederholen" title="Wiederholen (Strg+Umschalt+Z)" disabled>
+          <svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+        </button>
+        <button id="btn-import" class="icon-btn" aria-label="GPX-Datei öffnen" title="GPX-Datei öffnen – eine vorhandene Strecke öffnen und Stopps oder Unterkünfte entlang davon planen (oder die Datei auf die Karte ziehen)">
+          <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 16v-5M9.5 13.5 12 11l2.5 2.5"/></svg>
+        </button>
+        <button id="btn-settings" class="icon-btn" title="Einstellungen" aria-label="Einstellungen">
+          <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+        </button>
+      </div>
     </header>
 
     <div class="tabs" id="mode-tabs" role="radiogroup" aria-label="Art der Route">
@@ -69,7 +81,6 @@
 
       <div class="via-list" id="via-list" data-show="ab"></div>
       <button id="btn-add-via" class="link-btn" data-show="ab" title="Zwischenstopp hinzufügen – alternativ bei gesetztem Start und Ziel auf die Karte klicken">+ Zwischenstopp</button>
-      <button id="btn-import" class="link-btn" title="Eine vorhandene Strecke öffnen und Stopps oder Unterkünfte entlang davon planen – oder die Datei auf die Karte ziehen">GPX-Datei öffnen</button>
       <input id="gpx-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden>
 
       <div class="field" data-show="ab">
@@ -81,12 +92,6 @@
           </button>
           <ul class="suggestions" hidden></ul>
         </div>
-      </div>
-
-      <!-- Unter dem Ziel-Feld; in den Modi ohne Ziel-Feld steht die Zeile an derselben Stelle -->
-      <div class="history">
-        <button id="btn-undo" class="link-btn" disabled>↶ Rückgängig</button>
-        <button id="btn-redo" class="link-btn" disabled>↷ Wiederholen</button>
       </div>
 
       <div class="field" data-show="distance loop">
@@ -128,23 +133,33 @@
         <button role="radio" data-value="trekking" title="Trekking-, Touren- und Alltagsrad">Fahrrad</button>
         <button role="radio" data-value="ebike" title="Pedelec mit Unterstützung bis 25 km/h – Anstiege werden kaum gemieden">E-Bike</button>
       </div>
-      <label class="field inline" id="traffic-field">
-        <span>Verkehr meiden</span>
-        <select id="traffic">
-          <option value="normal">Normal</option>
-          <option value="low">Stark</option>
-          <option value="verylow">Sehr stark</option>
-        </select>
-      </label>
-      <label class="field inline" id="eurovelo-field" title="Bevorzugt die europäischen Radfernwege (EuroVelo, in OSM als internationale Radrouten erfasst). Die Strecke wird dadurch etwas länger.">
-        <span>EuroVelo-Radfernwege</span>
-        <select id="eurovelo">
-          <option value="off">Normal</option>
-          <option value="prefer">Bevorzugen</option>
-          <option value="strong">Stark bevorzugen</option>
-        </select>
-      </label>
-      <p class="hint" id="provider-hint" hidden></p>
+      <details class="more-options" id="more-options">
+        <summary>Mehr Optionen<span id="more-options-active"></span></summary>
+        <label class="field inline" id="traffic-field">
+          <span>Verkehr meiden</span>
+          <select id="traffic">
+            <option value="normal">Normal</option>
+            <option value="low">Stark</option>
+            <option value="verylow">Sehr stark</option>
+          </select>
+        </label>
+        <label class="field inline" id="eurovelo-field" title="Bevorzugt die europäischen Radfernwege (EuroVelo, in OSM als internationale Radrouten erfasst). Die Strecke wird dadurch etwas länger.">
+          <span>EuroVelo-Radfernwege</span>
+          <select id="eurovelo">
+            <option value="off">Normal</option>
+            <option value="prefer">Bevorzugen</option>
+            <option value="strong">Stark bevorzugen</option>
+          </select>
+        </label>
+        <p class="hint" id="provider-hint" hidden></p>
+        <label class="field inline">
+          <span>Routing</span>
+          <select id="provider">
+            <option value="brouter">BRouter</option>
+            <option value="ors">OpenRouteService</option>
+          </select>
+        </label>
+      </details>
     </section>
 
     <section class="group supply">
@@ -275,16 +290,6 @@
       <ul class="route-list" id="my-routes-list"></ul>
       <p class="hint" id="my-routes-empty" hidden>Noch keine Routen gespeichert – nach dem Berechnen „Route speichern“ wählen.</p>
     </details>
-
-    <footer class="panel-footer">
-      <label class="field inline">
-        <span>Routing</span>
-        <select id="provider">
-          <option value="brouter">BRouter</option>
-          <option value="ors">OpenRouteService</option>
-        </select>
-      </label>
-    </footer>
   </aside>
 
   <main class="map-area" aria-label="Karte">
