@@ -568,6 +568,9 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
     background: var(--panel); cursor: grab; touch-action: none;
   }
   .sheet-handle span { width: 40px; height: 5px; border-radius: 3px; background: var(--muted); opacity: .6; }
+  /* Ziehen (sheetView.js): Das Blatt folgt dem Finger ohne Verzögerung; die Kennzahlen-Zeile ist Ziehfläche */
+  .panel.dragging { transition: none; }
+  .route-summary { touch-action: none; }
   /* Beim Springen zum Ergebnis nicht unter dem stehenbleibenden Griff landen */
   #results { scroll-margin-top: 36px; }
   .brand h1 { font-size: 1.125rem; }

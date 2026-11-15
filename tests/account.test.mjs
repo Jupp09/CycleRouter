@@ -176,6 +176,26 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
   check('Griff ist ein Knopf mit Namen und Zustand', states[0].expanded === 'true' && states[0].label === 'Panel verkleinern' && states[1].expanded === 'false'
     && states[1].label === 'Panel vergrößern' && states[1].top >= 852 - 152, JSON.stringify(states[1]));
 
+  step('iPhone: Blatt ziehen');
+  // Finger am Griff aufsetzen und in `steps` Schritten zu `toY` ziehen (langsam: Lage zählt; schnell: Richtung)
+  const swipe = async (toY, { steps = 20, stepMs = 50 } = {}) => {
+    const h = await ev(`(() => { const r = document.querySelector('#sheet-handle').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`);
+    await page.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: h.x, y: h.y }] });
+    for (let i = 1; i <= steps; i++) {
+      await page.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: h.x, y: Math.round(h.y + (toY - h.y) * i / steps) }] });
+      await sleep(stepMs);
+    }
+    await page.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await sleep(500);
+    return (await ev(SHEET)).state;
+  };
+  check('Langsam von „Halb“ weit nach oben gezogen → „Voll“', await swipe(80) === 'full');
+  check('Langsam ganz nach unten gezogen → „Kurz“', await swipe(840) === 'peek');
+  check('Kurz nach oben gewischt → nächste Stufe „Halb“', await swipe(640, { steps: 3, stepMs: 16 }) === 'half');
+  const handleY = await ev(`Math.round(document.querySelector('#sheet-handle').getBoundingClientRect().top + 14)`);
+  check('Kleines Wackeln (3 px) bleibt ein Tippen auf den Griff: „Halb“ → „Voll“', await swipe(handleY - 3, { steps: 2, stepMs: 20 }) === 'full');
+  await ev(`document.querySelector('#sheet-handle').click(); document.querySelector('#sheet-handle').click(); true`); await sleep(500); // Voll → Kurz → Halb
+
   step('iPhone: Route per Fingertipp, eigene Dialoge');
   // Oberhalb des halb offenen Blatts tippen (es verdeckt die unteren 55 %)
   await page.clickMapAt(0.35, 0.12, { touch: true }); await sleep(900);

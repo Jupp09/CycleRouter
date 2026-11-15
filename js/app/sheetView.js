@@ -1,7 +1,7 @@
 /**
  * Handy: Die Karte füllt den Bildschirm, das Panel liegt als Blatt darüber und rastet in drei Stufen ein –
  * „Kurz“ (Griff, Kennzahlen bzw. Kopfzeile), „Halb“ (Start/Ziel und Fahrrad ohne Scrollen) und „Voll“. Der Griff
- * ist ein Knopf, der die Stufen durchschaltet (Tastatur, Screenreader); Ziehen kommt in einem eigenen Schritt.
+ * ist ein Knopf, der die Stufen durchschaltet (Tastatur, Screenreader); dazu lässt sich das Blatt ziehen (unten).
  *
  * Die Stufe steht als `data-sheet` am Panel, die sichtbare Höhe als CSS-Variable `--sheet-visible` (das Blatt
  * schiebt sich per transform hoch). `--map-covered` ist, was davon die Karte unten verdeckt – in Stufe „Kurz“
@@ -58,7 +58,66 @@ function apply() {
   handle.setAttribute('aria-label', current === 'full' ? 'Panel verkleinern' : 'Panel vergrößern');
 }
 
-handle.addEventListener('click', () => setSheet(NEXT[current]));
+// Ein Tippen auf den Griff schaltet weiter – außer es war das Ende eines Ziehens
+let dragged = false;
+handle.addEventListener('click', () => {
+  if (dragged) { dragged = false; return; }
+  setSheet(NEXT[current]);
+});
+
+// ---------- Ziehen ----------
+// Am Griff und an der Kennzahlen-Zeile (nicht an deren Knopf): Das Blatt folgt dem Finger, beim Loslassen rastet
+// es ein – nach schnellem Wischen eine Stufe in Wischrichtung, sonst auf der nächstgelegenen Stufe. Nur diese
+// Flächen haben touch-action: none; Karte und Inhalt des Blatts scrollen wie gewohnt.
+const FLICK = 0.5;   // px/ms: ab dieser Geschwindigkeit zählt die Richtung, nicht die Lage
+const SLOP = 6;      // px: kleinere Bewegungen sind ein Tippen
+const ORDER = ['peek', 'half', 'full'];
+let drag = null;
+
+function startDrag(e) {
+  if (!phone.matches || e.button > 0 || e.target.closest('button:not(#sheet-handle), a')) return;
+  drag = { id: e.pointerId, y0: e.clientY, h0: visible(current), y: e.clientY, t: e.timeStamp, v: 0, moved: false };
+  e.currentTarget.setPointerCapture(e.pointerId);
+}
+
+function moveDrag(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dy = drag.y0 - e.clientY;
+  if (!drag.moved && Math.abs(dy) < SLOP) return;
+  if (!drag.moved) { drag.moved = true; panel.classList.add('dragging'); }
+  const dt = Math.max(1, e.timeStamp - drag.t);
+  drag.v = (drag.y - e.clientY) / dt; // positiv = nach oben
+  drag.y = e.clientY; drag.t = e.timeStamp;
+  const height = Math.min(visible('full'), Math.max(PEEK, drag.h0 + dy));
+  document.documentElement.style.setProperty('--sheet-visible', `${height}px`);
+}
+
+function endDrag(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const { moved, v } = drag;
+  drag = null;
+  panel.classList.remove('dragging');
+  if (!moved) return; // Tippen: erledigt der click-Handler
+  dragged = true;
+  setTimeout(() => { dragged = false; }, 0); // kein click danach (z. B. außerhalb des Griffs losgelassen)
+  const height = parseFloat(document.documentElement.style.getPropertyValue('--sheet-visible'));
+  let target;
+  if (Math.abs(v) >= FLICK) {
+    // Wischen: von der aktuellen Lage aus die nächste Stufe in Wischrichtung
+    const above = ORDER.filter(s => visible(s) > height + 1), below = ORDER.filter(s => visible(s) < height - 1);
+    target = v > 0 ? (above[0] ?? 'full') : (below.at(-1) ?? 'peek');
+  } else {
+    target = ORDER.reduce((a, b) => (Math.abs(visible(b) - height) < Math.abs(visible(a) - height) ? b : a));
+  }
+  setSheet(target);
+}
+
+for (const el of [handle, $('#route-summary')]) {
+  el.addEventListener('pointerdown', startDrag);
+  el.addEventListener('pointermove', moveDrag);
+  el.addEventListener('pointerup', endDrag);
+  el.addEventListener('pointercancel', endDrag);
+}
 
 // Ein Feld oder Knopf, der per Tastatur den Fokus bekommt, läge sonst unter dem Bildschirmrand
 panel.addEventListener('focusin', e => {
