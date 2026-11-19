@@ -197,7 +197,7 @@ export const brouter = {
   perLeg: true,
 
   /**
-   * points: [{lat, lon}, ...] → {coords: [[lat, lon, ele], ...], segments}.
+   * points: [{lat, lon}, ...] → {coords: [[lat, lon, ele], ...], segments, server}.
    * Fehler tragen `busy: true`, wenn BRouter ausgelastet bzw. nicht erreichbar war.
    */
   async route(points, { bike, traffic, eurovelo = 'off', retries = true }, signal) {
@@ -216,8 +216,9 @@ export const brouter = {
       return r;
     };
 
-    let r = null;
+    let r = null, server = 'brouter.de';
     if (await abortable(ownAvailable(), signal)) {
+      server = 'own';
       // Eigener Server ohne neue Versuche: Klappt es nicht, ist brouter.de schneller als Warten
       try {
         r = await attempt(OWN, false);
@@ -232,6 +233,7 @@ export const brouter = {
         // Sonst z. B. fehlende Kartendaten oder ein fehlendes Profil auf dem eigenen Server
         console.info(`Eigener BRouter: ${r.text.trim().slice(0, 120)} – rechne mit brouter.de`);
         r = null;
+        server = 'brouter.de';
       }
     }
     r ??= await attempt(PUBLIC, retries);
@@ -240,7 +242,8 @@ export const brouter = {
 
     const feature = JSON.parse(text).features[0];
     const coords = feature.geometry.coordinates.map(([lon, lat, ele]) => [lat, lon, ele ?? null]);
-    return { coords, segments: parseSegments(feature.properties.messages, coords) };
+    // `server`: wer gerechnet hat – 'own' (eigener Server über /api/brouter) oder 'brouter.de' (resultsView zeigt es)
+    return { coords, segments: parseSegments(feature.properties.messages, coords), server };
   },
 };
 

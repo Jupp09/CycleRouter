@@ -2,6 +2,8 @@
 // Ohne TEST_BROUTER_URL: Der Weg antwortet mit 404, danach geht alles direkt an brouter.de.
 // Mit TEST_BROUTER_URL=http://… (npm test -- brouter): Teilstücke und Profil-Uploads laufen über den eigenen
 // Server; was dort fehlt (Profil, Kartendaten), rechnet brouter.de.
+import { HAS_ROUTE, IDLE } from './lib/app.mjs';
+
 export const title = 'Eigener BRouter, Ausweich brouter.de';
 
 const POINTS = `[{ lat: 50.73, lon: 7.10 }, { lat: 50.70, lon: 7.15 }]`;
@@ -44,6 +46,14 @@ export default async function ({ app, page: newPage, check, step }) {
   // Fehlt das Profil auf dem eigenen Server, springt brouter.de ein – berechnet wird die Route in jedem Fall
   const road = await page.ev(leg({ bike: 'road', traffic: 'low' }));
   check('Route berechnet', road.ok, JSON.stringify(road));
+
+  step('Anzeige, wer gerechnet hat');
+  await page.ev(`(async () => { const w = await import('/js/app/waypoints.js');
+    w.setPoint('start', { lat: 50.73, lon: 7.10, label: 'Bonn' }); w.setPoint('end', { lat: 50.70, lon: 7.15, label: 'Bad Godesberg' }); return true; })()`);
+  check('Route in der App', await page.waitFor(`${HAS_ROUTE} && ${IDLE}`, 90000));
+  const line = await page.ev(`(() => { const el = document.querySelector('#routing-server'); return el.hidden ? '(versteckt)' : el.textContent; })()`);
+  check(own ? 'Hinweis nennt den CycloRouter-Server' : 'Hinweis nennt brouter.de',
+    own ? /CycloRouter-Server/.test(line) : line === 'Berechnet mit BRouter auf brouter.de', line);
 
   step('Punkt abseits jeder Straße');
   const sea = await page.ev(`(async () => {

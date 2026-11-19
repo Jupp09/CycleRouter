@@ -70,6 +70,25 @@ export function routeSummary(r) {
  */
 const heightText = (m, r) => (!hasElevation(r) ? '–' : m > 0 ? formatM(m) : '< 5 m');
 
+/**
+ * Welcher BRouter-Server gerechnet hat (route.servers, routing/index.js): der eigene über den CycloRouter-Server
+ * (BROUTER_URL) oder brouter.de, bei beiden die Anteile nach Strecke. Ohne Angabe (ORS, importierter Weg, nur Valhalla) weg.
+ */
+function renderServer(r) {
+  const el = $('#routing-server');
+  const own = r.servers?.own || 0, pub = r.servers?.['brouter.de'] || 0;
+  el.hidden = own + pub <= 0;
+  if (el.hidden) return;
+  const OWN = 'dem CycloRouter-Server';
+  if (!pub) el.textContent = `Berechnet mit BRouter auf ${OWN}`;
+  else if (!own) el.textContent = 'Berechnet mit BRouter auf brouter.de';
+  else {
+    const pctOwn = Math.round(own / (own + pub) * 100);
+    el.textContent = `Berechnet mit BRouter: ${pctOwn} % auf ${OWN}, ${100 - pctOwn} % auf brouter.de `
+      + '(wo der eigene Server ausgelastet war oder ihm Daten fehlten)';
+  }
+}
+
 function renderStats(r) {
   // Teilstücke vom Ausweichdienst (routing/index.js): offen sagen, dass die Route anders bewertet wurde
   const fb = $('#routing-fallback');
@@ -78,6 +97,7 @@ function renderStats(r) {
     fb.textContent = `BRouter war ausgelastet – die Route wurde ganz oder teilweise mit ${r.fallback} berechnet. `
       + 'Valhalla bewertet Wege etwas anders, eine EuroVelo-Bevorzugung gibt es dort nicht. Spätere Berechnungen versuchen es wieder mit BRouter.';
   }
+  renderServer(r);
   $('#stat-dist').textContent = formatKm(r.distance);
   $('#stat-up').textContent = heightText(r.ascent, r);
   $('#stat-down').textContent = heightText(r.descent, r);

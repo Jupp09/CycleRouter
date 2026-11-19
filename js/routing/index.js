@@ -15,8 +15,9 @@ const FALLBACK = { brouter: valhalla };
 
 /**
  * Einheitliches Routenergebnis aller Provider:
- * { coords: [[lat, lon, ele]], cum: [m], distance, ascent, descent, waypoints, fallback? }
+ * { coords: [[lat, lon, ele]], cum: [m], distance, ascent, descent, waypoints, fallback?, servers? }
  * `fallback`: Name des Ausweichdiensts, falls Teilstücke nicht mit dem gewählten Dienst berechnet wurden.
+ * `servers`: Meter je BRouter-Server ({own, 'brouter.de'}), siehe `serverShares`.
  */
 export function withStats(result, waypoints) {
   return { ...result, ...computeStats(result.coords), waypoints };
@@ -65,7 +66,25 @@ export async function route(provider, points, opts, signal) {
   const result = withStats(joinLegs(legs), points);
   const fallback = legs.find(l => l.fallback)?.fallback;
   if (fallback) result.fallback = fallback;
+  const servers = serverShares(legs, result.cum);
+  if (servers) result.servers = servers;
   return result;
+}
+
+/**
+ * Wie viele Meter jeder BRouter-Server berechnet hat (`server` der Teilstücke, brouter.js): {own?, 'brouter.de'?}.
+ * Teilstücke vom Ausweichdienst und aus einem importierten Weg zählen nicht. null, wenn kein Teilstück einen Server nennt.
+ * Die Indizes folgen `joinLegs`: Jedes weitere Teilstück beginnt am letzten Punkt des vorigen.
+ */
+function serverShares(legs, cum) {
+  const out = {};
+  let start = 0;
+  for (const l of legs) {
+    const end = start + Math.max(0, l.coords.length - 1);
+    if (l.server && !l.fallback) out[l.server] = (out[l.server] || 0) + (cum[end] - cum[start]);
+    start = end;
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 // ---------- Teilstücke ----------
