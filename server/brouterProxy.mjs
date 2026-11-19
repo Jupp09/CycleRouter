@@ -69,21 +69,28 @@ const NAME = /^[\w-]{1,64}$/;
 const PARAM = /^profile:\w{1,40}$/;
 const VALUE = /^[\w.-]{1,20}$/;
 
-/** Nur bekannte Parameter weiterreichen – der eigene Server soll nichts anderes zu sehen bekommen. */
+/**
+ * Nur bekannte Parameter weiterreichen – der eigene Server soll nichts anderes zu sehen bekommen.
+ * Die Schlüssel bleiben unkodiert: URLSearchParams machte aus `profile:x` ein `profile%3Ax`. BRouter decodiert
+ * seit 1.7.11 (#1008, 11/2026) nur noch die Werte, nicht die Schlüssel – der Profilparameter fiel dann still weg
+ * (E-Bike-Routen waren normale Trekking-Routen). brouter.de mit älterer Version verstand beides.
+ * Schlüssel und Werte sind oben per Muster geprüft, die Werte werden trotzdem kodiert.
+ */
 function upstreamQuery(params) {
-  const out = new URLSearchParams();
   const lonlats = params.get('lonlats'), profile = params.get('profile');
   if (!lonlats || !LONLATS.test(lonlats) || !profile || !NAME.test(profile)) throw new HttpError(400, 'Ungültige Anfrage');
-  out.set('lonlats', lonlats);
-  out.set('profile', profile);
-  out.set('alternativeidx', /^[0-3]$/.test(params.get('alternativeidx') ?? '') ? params.get('alternativeidx') : '0');
-  out.set('format', 'geojson');
+  const out = new Map([
+    ['lonlats', lonlats],
+    ['profile', profile],
+    ['alternativeidx', /^[0-3]$/.test(params.get('alternativeidx') ?? '') ? params.get('alternativeidx') : '0'],
+    ['format', 'geojson'],
+  ]);
   for (const [key, value] of params) {
     if (!PARAM.test(key)) continue;
     if (!VALUE.test(value)) throw new HttpError(400, 'Ungültiger Profilparameter');
     out.set(key, value);
   }
-  return out;
+  return [...out].map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join('&');
 }
 
 /** Abbruch, sobald der Browser die Verbindung schließt (neue Berechnung, Seite verlassen). */

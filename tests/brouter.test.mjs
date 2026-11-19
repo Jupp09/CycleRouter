@@ -42,6 +42,17 @@ export default async function ({ app, page: newPage, check, step }) {
   check('Route mit hochgeladenem Profil', ev.ok, JSON.stringify(ev));
   if (own) check('Upload beim eigenen Server', ev.own.includes('/api/brouter/profile'), JSON.stringify(ev));
 
+  if (own) {
+    step('Profilparameter kommen beim eigenen Server an');
+    // E-Bike-Parameter (brouter.js PARAMS): Ohne Höhenmeter-Kosten sinken die Kosten der Route Köln → Koblenz
+    // (brouter.de: 103611 → 103346). Früher kodierte der Weiterleiter `profile:` zu `profile%3A`, und BRouter
+    // überging den Parameter still – E-Bike-Routen waren dann normale Trekking-Routen.
+    const cost = extra => page.ev(`fetch('/api/brouter?lonlats=6.95,50.94|7.59,50.36&profile=trekking${extra}')
+      .then(r => r.json()).then(d => Number(d.features[0].properties.cost))`);
+    const [plain, ebike] = [await cost(''), await cost('&profile:consider_elevation=0')];
+    check('consider_elevation=0 kommt an (Kosten sinken)', plain > 0 && ebike > 0 && ebike < plain, `${plain} / ${ebike}`);
+  }
+
   step('Rennrad, wenig Verkehr');
   // Fehlt das Profil auf dem eigenen Server, springt brouter.de ein – berechnet wird die Route in jedem Fall
   const road = await page.ev(leg({ bike: 'road', traffic: 'low' }));
