@@ -17,7 +17,31 @@ function abortable(p, signal) {
   });
 }
 
-const ENDPOINT = 'https://brouter.de/brouter';
+const PUBLIC = 'https://brouter.de/brouter';
+/**
+ * Eigener BRouter-Server über den CycloRouter-Server (server/brouterProxy.mjs, BROUTER_URL). Er wird zuerst
+ * gefragt, brouter.de ist der Ausweich: bei Ausfall, Überlastung, fehlenden Kartendaten oder Profilen dort.
+ * Ohne Server bzw. ohne BROUTER_URL antwortet der Weg mit 404 – dann gilt für die Sitzung nur brouter.de.
+ */
+const OWN = String(new URL('../../api/brouter', import.meta.url));
+/** Nach einem Ausfall bzw. „ausgelastet“ des eigenen Servers so lange gleich brouter.de nehmen */
+const OWN_PAUSE = 60 * 1000;
+
+let ownCheck = null, ownPausedUntil = 0;
+
+/** Ist ein eigener BRouter eingerichtet? Einmal je Sitzung gefragt (geteilt von allen Teilstücken). */
+function ownAvailable() {
+  if (Date.now() < ownPausedUntil) return Promise.resolve(false);
+  ownCheck ??= fetch(OWN, { signal: AbortSignal.timeout(5000) })
+    .then(res => (res.ok ? res.json() : null))
+    .then(data => data?.enabled === true)
+    .catch(() => { // Server gerade nicht erreichbar → später noch einmal fragen
+      ownCheck = null;
+      ownPausedUntil = Date.now() + OWN_PAUSE;
+      return false;
+    });
+  return ownCheck;
+}
 
 const PROFILES = {
   road: { normal: 'fastbike', low: 'fastbike-lowtraffic', verylow: 'fastbike-verylowtraffic' },
@@ -41,8 +65,11 @@ const BUSY_STATUS = new Set([429, 502, 503, 504]);
 /** Wartezeiten vor dem 2. und 3. Versuch, wenn BRouter ausgelastet ist */
 const RETRY_DELAYS = [2000, 5000];
 
+/** Punkt liegt abseits befahrbarer Wege – andere Server kämen zum selben Ergebnis. */
+const NOT_ROUTABLE = /not mapped|no track found|position not/i;
+
 function translateError(text) {
-  if (/not mapped|no track found|position not/i.test(text)) {
+  if (NOT_ROUTABLE.test(text)) {
     return 'Ein Punkt liegt zu weit von einem befahrbaren Weg entfernt.';
   }
   if (BUSY_TEXT.test(text)) {
@@ -68,7 +95,7 @@ const NCN_SHARE = 0.15;
 const PROFILE_TTL = 6 * 3600 * 1000; // hochgeladene Profile werden serverseitig irgendwann gelöscht
 
 const sources = new Map();
-const uploaded = new Map(); // `${profil}|${faktor}` → {id, t}
+const uploaded = new Map(); // `${server}|${profil}|${faktor}` → {id, t} (Profil-IDs gelten nur auf ihrem Server)
 
 function loadSource(name) {
   if (!sources.has(name)) {
@@ -99,10 +126,10 @@ export function patchProfile(src, penalty) {
     + src.slice(end);
 }
 
-const uploading = new Map(); // `${profil}|${faktor}` → laufender Upload (Teilstücke fragen gleichzeitig an)
+const uploading = new Map(); // `${server}|${profil}|${faktor}` → laufender Upload (Teilstücke fragen gleichzeitig an)
 
-async function customProfile(name, penalty, signal, force = false) {
-  const key = `${name}|${penalty}`;
+async function customProfile(endpoint, name, penalty, signal, force = false) {
+  const key = `${endpoint}|${name}|${penalty}`;
   const hit = uploaded.get(key);
   if (!force && hit && Date.now() - hit.t < PROFILE_TTL) return hit.id;
   if (!uploading.has(key)) {
@@ -111,7 +138,7 @@ async function customProfile(name, penalty, signal, force = false) {
       const text = patchProfile(await loadSource(name), penalty);
       let res;
       try {
-        res = await fetch(`${ENDPOINT}/profile`, { method: 'POST', body: text, signal: withTimeout(null, UPLOAD_TIMEOUT) });
+        res = await fetch(`${endpoint}/profile`, { method: 'POST', body: text, signal: withTimeout(null, UPLOAD_TIMEOUT) });
       } catch {
         throw Object.assign(new Error('BRouter ist nicht erreichbar (Internetverbindung oder Server überlastet).'), { busy: true });
       }
@@ -130,21 +157,21 @@ async function customProfile(name, penalty, signal, force = false) {
 }
 
 /** Eine Anfrage → {ok, text, busy}. `busy`: ausgelastet bzw. nicht erreichbar (neuer Versuch sinnvoll). */
-async function requestOnce(points, profile, signal, params = {}) {
+async function requestOnce(endpoint, points, profile, signal, params = {}) {
   const lonlats = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join('|');
   const extra = Object.entries(params).map(([k, v]) => `&profile:${k}=${encodeURIComponent(v)}`).join('');
-  const url = `${ENDPOINT}?lonlats=${encodeURIComponent(lonlats)}&profile=${profile}${extra}&alternativeidx=0&format=geojson`;
+  const url = `${endpoint}?lonlats=${encodeURIComponent(lonlats)}&profile=${profile}${extra}&alternativeidx=0&format=geojson`;
   let res;
   try {
     res = await fetch(url, { signal });
   } catch (e) {
     if (e.name === 'AbortError') throw e;
     // Unter Last bricht brouter.de Verbindungen auch einfach ab – wie „ausgelastet“ behandeln
-    return { ok: false, busy: true, text: 'BRouter ist nicht erreichbar (Internetverbindung oder Server überlastet).' };
+    return { ok: false, busy: true, status: 0, text: 'BRouter ist nicht erreichbar (Internetverbindung oder Server überlastet).' };
   }
   const text = await res.text();
   const ok = res.ok && text.trimStart().startsWith('{');
-  return { ok, text, busy: !ok && (BUSY_STATUS.has(res.status) || BUSY_TEXT.test(text)) };
+  return { ok, text, status: res.status, busy: !ok && (BUSY_STATUS.has(res.status) || BUSY_TEXT.test(text)) };
 }
 
 /**
@@ -152,9 +179,9 @@ async function requestOnce(points, profile, signal, params = {}) {
  * 5 s klappt es meist; erst danach gilt die Anfrage als gescheitert (und index.js weicht auf Valhalla aus).
  * `retries: false` (BRouter gerade als ausgelastet bekannt): nur ein Versuch.
  */
-async function request(points, profile, signal, retries = true, params = {}) {
+async function request(endpoint, points, profile, signal, retries = true, params = {}) {
   for (let attempt = 0; ; attempt++) {
-    const r = await requestOnce(points, profile, signal, params);
+    const r = await requestOnce(endpoint, points, profile, signal, params);
     if (r.ok || !r.busy || !retries || attempt >= RETRY_DELAYS.length) return r;
     routingNotice(`BRouter ist ausgelastet – neuer Versuch in ${RETRY_DELAYS[attempt] / 1000} s …`);
     await sleep(RETRY_DELAYS[attempt], signal);
@@ -177,13 +204,38 @@ export const brouter = {
     const base = PROFILES[bike][traffic] || PROFILES[bike].normal;
     const penalty = EUROVELO_PENALTY[eurovelo];
     const params = PARAMS[bike] || {};
-    let profile = penalty ? await customProfile(base, penalty, signal) : base;
-    let { ok, text, busy } = await request(points, profile, signal, retries, params);
-    // Abgelaufenes eigenes Profil → einmal neu hochladen
-    if (!ok && !busy && penalty && /profile/i.test(text)) {
-      profile = await customProfile(base, penalty, signal, true);
-      ({ ok, text, busy } = await request(points, profile, signal, retries, params));
+    /** Profil (ggf. hochgeladen) und Anfrage bei einem Server */
+    const attempt = async (endpoint, retry) => {
+      let profile = penalty ? await customProfile(endpoint, base, penalty, signal) : base;
+      let r = await request(endpoint, points, profile, signal, retry, params);
+      // Abgelaufenes hochgeladenes Profil → einmal neu hochladen
+      if (!r.ok && !r.busy && penalty && /profile/i.test(r.text)) {
+        profile = await customProfile(endpoint, base, penalty, signal, true);
+        r = await request(endpoint, points, profile, signal, retry, params);
+      }
+      return r;
+    };
+
+    let r = null;
+    if (await abortable(ownAvailable(), signal)) {
+      // Eigener Server ohne neue Versuche: Klappt es nicht, ist brouter.de schneller als Warten
+      try {
+        r = await attempt(OWN, false);
+      } catch (e) {
+        if (e.name === 'AbortError') throw e;
+        r = { ok: false, busy: true, text: e.message }; // Upload gescheitert
+      }
+      if (!r.ok) {
+        if (NOT_ROUTABLE.test(r.text)) throw new Error(translateError(r.text));
+        if (r.busy) ownPausedUntil = Date.now() + OWN_PAUSE;
+        if (r.status === 404) ownCheck = Promise.resolve(false); // Weg abgeschaltet (BRouter selbst antwortet mit 400)
+        // Sonst z. B. fehlende Kartendaten oder ein fehlendes Profil auf dem eigenen Server
+        console.info(`Eigener BRouter: ${r.text.trim().slice(0, 120)} – rechne mit brouter.de`);
+        r = null;
+      }
     }
+    r ??= await attempt(PUBLIC, retries);
+    const { ok, text, busy } = r;
     if (!ok) throw Object.assign(new Error(translateError(text)), { busy });
 
     const feature = JSON.parse(text).features[0];

@@ -42,8 +42,10 @@ const serverLog = createWriteStream(join(OUT, 'server.log'));
 const server = spawn(process.execPath, ['server.mjs'], {
   cwd: ROOT,
   // Gesetzte Variablen gehen vor .env (server/env.mjs): keine Verbindung zur echten Datenbank,
-  // kein Download des Datenauszugs. Konten kommen aus lib/fakeAccount.mjs.
-  env: { ...process.env, PORT: String(PORT), DB_HOST: '', POI_EXTRACT_URL: 'off' },
+  // kein Download des Datenauszugs. Eigener BRouter nur mit TEST_BROUTER_URL (sonst gehen die Anfragen an
+  // brouter.de, wie die meisten Tests es erwarten; brouter.test.mjs prüft beide Fälle).
+  // Konten kommen aus lib/fakeAccount.mjs.
+  env: { ...process.env, PORT: String(PORT), DB_HOST: '', POI_EXTRACT_URL: 'off', BROUTER_URL: process.env.TEST_BROUTER_URL ?? '' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 server.stdout.pipe(serverLog);

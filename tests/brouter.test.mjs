@@ -1,0 +1,57 @@
+// Eigener BRouter über /api/brouter (server/brouterProxy.mjs) und brouter.de als Ausweich (js/routing/brouter.js).
+// Ohne TEST_BROUTER_URL: Der Weg antwortet mit 404, danach geht alles direkt an brouter.de.
+// Mit TEST_BROUTER_URL=http://… (npm test -- brouter): Teilstücke und Profil-Uploads laufen über den eigenen
+// Server; was dort fehlt (Profil, Kartendaten), rechnet brouter.de.
+export const title = 'Eigener BRouter, Ausweich brouter.de';
+
+const POINTS = `[{ lat: 50.73, lon: 7.10 }, { lat: 50.70, lon: 7.15 }]`;
+/** Teilstück berechnen und zählen, welche Server dafür angefragt wurden */
+const leg = opts => `(async () => {
+  const { brouter } = await import('/js/routing/brouter.js');
+  performance.clearResourceTimings();
+  try {
+    const r = await brouter.route(${POINTS}, ${JSON.stringify(opts)}, new AbortController().signal);
+    // Nur Anfragen für dieses Teilstück (lonlats=7.1…) und Uploads – nicht die Prüfanfragen des Tests oben
+    const urls = performance.getEntriesByType('resource').map(e => e.name).filter(u => u.includes('lonlats=7.1') || u.endsWith('/profile'));
+    return { ok: r.coords.length > 10, own: urls.filter(u => u.includes('/api/brouter')).map(u => new URL(u).pathname),
+      pub: urls.filter(u => u.includes('brouter.de')).length };
+  } catch (e) { return { error: e.message }; }
+})()`;
+
+export default async function ({ app, page: newPage, check, step }) {
+  const page = await newPage();
+  await page.open(app);
+
+  step('Eigener Server eingerichtet?');
+  const probe = await page.ev(`fetch('/api/brouter').then(async r => ({ status: r.status, ...(await r.json()) }))`);
+  const own = probe.enabled === true;
+  check(own ? 'Weg meldet eigenen BRouter' : 'Ohne BROUTER_URL: 404', own ? probe.status === 200 : probe.status === 404, JSON.stringify(probe));
+  const bad = await page.ev(`fetch('/api/brouter?lonlats=1&profile=../x').then(r => r.status)`);
+  check('Ungültige Anfrage abgelehnt', own ? bad === 400 : bad === 404, String(bad));
+
+  step('Teilstück Fahrrad');
+  const trek = await page.ev(leg({ bike: 'trekking', traffic: 'normal' }));
+  check('Route berechnet', trek.ok, JSON.stringify(trek));
+  if (own) check('Über den eigenen Server, ohne brouter.de', trek.own.length === 1 && trek.pub === 0, JSON.stringify(trek));
+  else check('Direkt bei brouter.de', trek.pub === 1 && trek.own.length === 0, JSON.stringify(trek));
+
+  step('EuroVelo-Profil');
+  const ev = await page.ev(leg({ bike: 'trekking', traffic: 'normal', eurovelo: 'prefer' }));
+  check('Route mit hochgeladenem Profil', ev.ok, JSON.stringify(ev));
+  if (own) check('Upload beim eigenen Server', ev.own.includes('/api/brouter/profile'), JSON.stringify(ev));
+
+  step('Rennrad, wenig Verkehr');
+  // Fehlt das Profil auf dem eigenen Server, springt brouter.de ein – berechnet wird die Route in jedem Fall
+  const road = await page.ev(leg({ bike: 'road', traffic: 'low' }));
+  check('Route berechnet', road.ok, JSON.stringify(road));
+
+  step('Punkt abseits jeder Straße');
+  const sea = await page.ev(`(async () => {
+    const { brouter } = await import('/js/routing/brouter.js');
+    performance.clearResourceTimings();
+    try { await brouter.route([{ lat: 54.5, lon: 5.0 }, { lat: 54.6, lon: 5.1 }], { bike: 'trekking', traffic: 'normal' }, new AbortController().signal); return { ok: true }; }
+    catch (e) { return { message: e.message, busy: !!e.busy,
+      pub: performance.getEntriesByType('resource').filter(e => e.name.includes('brouter.de')).length }; }
+  })()`);
+  check('Verständliche Meldung, nicht „ausgelastet“', !sea.ok && !sea.busy && /zu weit|BRouter-Fehler/.test(sea.message), JSON.stringify(sea));
+}

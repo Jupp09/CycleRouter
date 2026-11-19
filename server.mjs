@@ -2,6 +2,7 @@
 // Zusätzlich: POST /api/pois – Verpflegungsstellen je Kachel aus dem Datei-Cache (server/poiCache.mjs),
 // /api/warm – Vorrat für Heimatregionen, /api/warm-route – Vorrat entlang einer Route,
 // /api/regions – Land/Bundesland je Punkt für die Feiertagsprüfung (server/regions.mjs),
+// /api/brouter – Weiterleitung an einen eigenen BRouter-Server (server/brouterProxy.mjs, BROUTER_URL),
 // /api/account|settings|routes|shared – Konten (server/accountApi.mjs).
 import './server/env.mjs'; // muss der erste Import bleiben (.env laden, bevor andere Module Werte lesen)
 import { createServer } from 'node:http';
@@ -19,6 +20,7 @@ import { setSecurityHeaders, contentSecurityPolicy } from './server/security.mjs
 import { createLimiter } from './server/rateLimit.mjs';
 import { serveStatic } from './server/static.mjs';
 import { getRegions, isRegionKey } from './server/regions.mjs';
+import { handleBrouter, brouterEnabled } from './server/brouterProxy.mjs';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 8000;
@@ -179,6 +181,7 @@ createServer(async (req, res) => {
   if (path === '/api/warm') return handleWarm(req, res, url);
   if (path === '/api/warm-route') return handleWarmRoute(req, res);
   if (path === '/api/regions') return handleRegions(req, res);
+  if (await handleBrouter(req, res, url)) return;
   if (await handleAccountApi(req, res, url)) return;
   if (path === '/') path = '/index.html';
   const file = normalize(join(ROOT, path));
@@ -197,6 +200,7 @@ createServer(async (req, res) => {
   }
 }).listen(PORT, () => {
   console.log(`CycloRouter läuft auf http://localhost:${PORT}`);
+  if (brouterEnabled) console.log('Routing: eigener BRouter über /api/brouter (BROUTER_URL), brouter.de als Ausweich');
   // Erst den Datenauszug einlesen – sonst lädt der Vorrat Kacheln, die der Auszug schon hat
   initExtract(msg => console.log(msg))
     .catch(e => console.warn(`Datenauszug: ${e.message}`))
