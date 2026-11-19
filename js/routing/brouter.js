@@ -58,6 +58,16 @@ const PROFILES = {
  */
 const PARAMS = { ebike: { consider_elevation: 0 } };
 
+/**
+ * Suchparameter nur für den eigenen Server: BRouter sucht standardmäßig in zwei Durchgängen – zielgerichtet
+ * (pass1coefficient 1,5, Gravel-Profil 4) und danach Dijkstra mit Kostengrenze, der die meiste Zeit kostet.
+ * Ein einziger Durchgang mit 1,2 ist fast so genau. Gemessen auf dem eigenen Server (2 vCPU), 11/2026:
+ * Köln → Koblenz Trekking 3,4 → 1,8 s, Gravel 9,9 → 7,1 s, Rennrad 4,4 → 2,8 s; Bremen → München 79 → 34 s.
+ * Kosten der Route +0 bis 0,2 %. brouter.de behält die Standardsuche (keine Last- oder Ergebnisänderung dort).
+ * Wirkt auch auf hochgeladene EuroVelo-Profile: URL-Parameter gehen der ersten Zuweisung im Profil vor.
+ */
+const OWN_SEARCH = { pass1coefficient: 1.2, pass2coefficient: -1 };
+
 /** Antwort, die nur „zu viel los“ bedeutet – ein neuer Versuch oder ein anderer Dienst kann helfen. */
 const BUSY_TEXT = /retry later|watchdog|timeout|timed out|too many|busy|overload/i;
 const BUSY_STATUS = new Set([429, 502, 503, 504]);
@@ -207,11 +217,12 @@ export const brouter = {
     /** Profil (ggf. hochgeladen) und Anfrage bei einem Server */
     const attempt = async (endpoint, retry) => {
       let profile = penalty ? await customProfile(endpoint, base, penalty, signal) : base;
-      let r = await request(endpoint, points, profile, signal, retry, params);
+      const p = endpoint === OWN ? { ...params, ...OWN_SEARCH } : params;
+      let r = await request(endpoint, points, profile, signal, retry, p);
       // Abgelaufenes hochgeladenes Profil → einmal neu hochladen
       if (!r.ok && !r.busy && penalty && /profile/i.test(r.text)) {
         profile = await customProfile(endpoint, base, penalty, signal, true);
-        r = await request(endpoint, points, profile, signal, retry, params);
+        r = await request(endpoint, points, profile, signal, retry, p);
       }
       return r;
     };

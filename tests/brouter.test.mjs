@@ -16,7 +16,10 @@ const leg = opts => `(async () => {
     // Nur Anfragen für dieses Teilstück (lonlats=7.1…) und Uploads – nicht die Prüfanfragen des Tests oben
     const urls = performance.getEntriesByType('resource').map(e => e.name).filter(u => u.includes('lonlats=7.1') || u.endsWith('/profile'));
     return { ok: r.coords.length > 10, own: urls.filter(u => u.includes('/api/brouter')).map(u => new URL(u).pathname),
-      pub: urls.filter(u => u.includes('brouter.de')).length };
+      pub: urls.filter(u => u.includes('brouter.de')).length,
+      // Schnellere Suche (OWN_SEARCH in brouter.js) nur beim eigenen Server
+      fastOwn: urls.some(u => u.includes('/api/brouter?') && u.includes('profile:pass2coefficient=-1')),
+      fastPub: urls.some(u => u.includes('brouter.de') && u.includes('pass2coefficient')) };
   } catch (e) { return { error: e.message }; }
 })()`;
 
@@ -34,8 +37,13 @@ export default async function ({ app, page: newPage, check, step }) {
   step('Teilstück Fahrrad');
   const trek = await page.ev(leg({ bike: 'trekking', traffic: 'normal' }));
   check('Route berechnet', trek.ok, JSON.stringify(trek));
-  if (own) check('Über den eigenen Server, ohne brouter.de', trek.own.length === 1 && trek.pub === 0, JSON.stringify(trek));
-  else check('Direkt bei brouter.de', trek.pub === 1 && trek.own.length === 0, JSON.stringify(trek));
+  if (own) {
+    check('Über den eigenen Server, ohne brouter.de', trek.own.length === 1 && trek.pub === 0, JSON.stringify(trek));
+    check('Eigener Server bekommt die schnellere Suche', trek.fastOwn, JSON.stringify(trek));
+  } else {
+    check('Direkt bei brouter.de', trek.pub === 1 && trek.own.length === 0, JSON.stringify(trek));
+    check('brouter.de behält die Standardsuche', !trek.fastPub, JSON.stringify(trek));
+  }
 
   step('EuroVelo-Profil');
   const ev = await page.ev(leg({ bike: 'trekking', traffic: 'normal', eurovelo: 'prefer' }));
