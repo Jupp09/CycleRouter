@@ -13,6 +13,8 @@
 // POST /api/brouter/profile        → Profil hochladen (EuroVelo-Bevorzugung)
 //
 // Fällt der eigene Server aus, antwortet der Weg mit 503; der Browser rechnet dann mit brouter.de.
+import { brotliCompress, gzip, constants as zlibConstants } from 'node:zlib';
+import { promisify } from 'node:util';
 import { HttpError, readBody, sendJson } from './http.mjs';
 import { clientIp } from './auth.mjs';
 import { createLimiter } from './rateLimit.mjs';
@@ -91,7 +93,7 @@ function clientGone(res) {
   return ctrl.signal;
 }
 
-async function forward(res, url, init, timeout) {
+async function forward(req, res, url, init, timeout) {
   let upstream;
   try {
     upstream = await fetch(url, { ...init, signal: AbortSignal.any([init.signal, AbortSignal.timeout(timeout)]) });
@@ -101,12 +103,33 @@ async function forward(res, url, init, timeout) {
     console.warn(`/api/brouter: eigener BRouter nicht erreichbar (${e.cause?.code || e.message})`);
     throw new HttpError(503, 'BRouter nicht erreichbar, retry later');
   }
-  const text = await upstream.text();
+  const text = await upstream.text(); // fetch entpackt eine komprimierte Antwort von BRouter/Caddy selbst
+  if (res.writableEnded || res.destroyed) return;
+  const { body, encoding } = await compress(text, req.headers['accept-encoding']);
   if (res.writableEnded || res.destroyed) return;
   res.writeHead(upstream.status, {
     'Content-Type': upstream.headers.get('content-type') || 'text/plain; charset=utf-8',
     'Cache-Control': 'no-store',
-  }).end(text);
+    Vary: 'Accept-Encoding',
+    ...(encoding && { 'Content-Encoding': encoding }),
+  }).end(body);
+}
+
+const brotli = promisify(brotliCompress), gzipAsync = promisify(gzip);
+
+/**
+ * Antwort komprimieren, wenn der Browser es kann. Eine Route mit Wegdaten (GeoJSON samt `messages`) hat einige
+ * 100 KB und schrumpft auf etwa ein Fünftel – das zählt vor allem auf dem Handy. Apache/Plesk komprimiert
+ * diesen Inhaltstyp nicht von sich aus. Brotli mit mittlerer Stufe: fast so klein wie die höchste, aber nur
+ * wenige Millisekunden Rechenzeit.
+ */
+async function compress(text, accept = '') {
+  if (text.length < 1024) return { body: text, encoding: null };
+  if (/\bbr\b/.test(accept)) {
+    return { body: await brotli(text, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 } }), encoding: 'br' };
+  }
+  if (/\bgzip\b/.test(accept)) return { body: await gzipAsync(text), encoding: 'gzip' };
+  return { body: text, encoding: null };
 }
 
 /** true, wenn die Anfrage diesem Weg gehört (auch dann, wenn kein eigener Server eingerichtet ist). */
@@ -131,7 +154,7 @@ export async function handleBrouter(req, res, url) {
     if (path === '/api/brouter/profile') {
       if (req.method !== 'POST') throw new HttpError(405, 'Nur POST');
       const body = await readBody(req, MAX_PROFILE);
-      await forward(res, `${BASE}/brouter/profile`,
+      await forward(req, res, `${BASE}/brouter/profile`,
         { method: 'POST', body, headers: { 'Content-Type': 'text/plain; charset=utf-8' }, signal }, UPLOAD_TIMEOUT);
       return true;
     }
@@ -139,7 +162,7 @@ export async function handleBrouter(req, res, url) {
     const query = upstreamQuery(url.searchParams);
     await acquire(signal);
     try {
-      await forward(res, `${BASE}/brouter?${query}`, { signal }, TIMEOUT);
+      await forward(req, res, `${BASE}/brouter?${query}`, { signal }, TIMEOUT);
     } finally {
       release();
     }
