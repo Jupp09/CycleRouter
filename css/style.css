@@ -294,12 +294,16 @@ body:has(#results:not([hidden])) .tagline { display: none; }
 details.more summary { cursor: pointer; width: fit-content; font-size: 0.75rem; font-weight: 600; color: var(--accent-text); }
 details.more[open] summary { margin-bottom: 4px; }
 
-/* Route weiterverwenden: GPX als Hauptaktion, darunter eine Reihe; Löschen rechts abgesetzt */
+/* Route weiterverwenden: Name, gleich breite Knöpfe, darunter leise „Route löschen“ */
 .route-actions { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
 .route-actions > .label { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
-.action-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.action-row .action-group { display: contents; }
-.action-row .push-end { margin-left: auto; }
+.action-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+/* Angemeldet: „Route speichern“ über die ganze Breite, darunter Link und Roadbook je zur Hälfte */
+.action-row .action-group { grid-column: 1 / -1; display: grid; }
+/* Löschen: leise, links unter den Knöpfen, mit Papierkorb – Farbe und Symbol, nicht nur die Farbe */
+/* (.link-btn.danger-link: link-btn steht weiter unten und setzte sonst die Akzentfarbe) */
+.link-btn.danger-link { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; color: var(--error-text); }
+.link-btn.danger-link svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 .breakdown { display: flex; flex-direction: column; gap: 8px; }
 .segmented.small button { padding: 5px 8px; font-size: 0.8125rem; }

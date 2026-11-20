@@ -56,7 +56,12 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
     const rowTop = id => document.getElementById(id).getBoundingClientRect().top;
     const fits = [...document.querySelectorAll('.stats > div')].every(d => d.scrollWidth <= d.clientWidth + 1);
     return { tiles, facts, icon, dayCheck, fits, more: more.length, closed: more.every(d => !d.open), order,
-      oneRow: Math.abs(rowTop('btn-roadbook') - rowTop('btn-clear')) < 2,
+      // Link und Roadbook nebeneinander und gleich breit, „Route löschen“ darunter
+      pair: Math.abs(rowTop('btn-share-link') - rowTop('btn-roadbook')) < 2
+        && Math.abs(document.getElementById('btn-share-link').offsetWidth - document.getElementById('btn-roadbook').offsetWidth) < 2,
+      clearBelow: rowTop('btn-clear') > rowTop('btn-roadbook'),
+      // Ohne Konto (Testserver ohne Datenbank) kein „Route speichern“ – auch nicht durch eine display-Regel trotz hidden
+      saveShown: document.querySelector('#btn-save-route').getClientRects().length > 0,
       updown: document.querySelector('#stat-up').textContent + ' | ' + document.querySelector('#stat-down').textContent };
   })()`);
   check('Drei Kacheln ohne Abfahrt (keine „Ankunft“), Anstieg und Abstieg zusammen', layout.tiles.join('|') === 'Distanz|Höhenmeter|Reine Fahrzeit' && /^\d+ m \| \d+ m$/.test(layout.updown), `${layout.tiles.join('|')} – ${layout.updown}`);
@@ -64,8 +69,10 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Hinweise als Liste mit Symbol', ['eurovelo-share', 'routing-fallback', 'station-hint', 'weather'].every(id => layout.facts.includes(id)), layout.facts.join(', '));
   check('Tageslicht direkt unter den Kacheln, mit Symbol', layout.dayCheck && /☀/.test(layout.icon), layout.icon);
   check('Erklärtexte eingeklappt', layout.more >= 2 && layout.closed, String(layout.more));
-  check('Block „Route weiterverwenden“: Name, GPX, dann Roadbook … Löschen in einer Reihe',
-    layout.order.join(',') === 'h-route-actions,route-name,btn-roadbook,btn-share-link,btn-clear' && layout.oneRow, layout.order.join(','));
+  check('Block „Route weiterverwenden“: Name, Link und Roadbook gleich breit nebeneinander, „Route löschen“ darunter',
+    layout.order.join(',') === 'h-route-actions,route-name,btn-share-link,btn-roadbook,btn-clear' && layout.pair && layout.clearBelow,
+    `${layout.order.join(',')} – nebeneinander ${layout.pair}, Löschen darunter ${layout.clearBelow}`);
+  check('Ohne Konto kein „Route speichern“', !layout.saveShown);
   // Eingaben eingeklappt, Zusammenfassung mit „Ändern“; Stopps an einer Stelle
   const plan = `({ hidden: document.querySelector('#plan').hidden, summary: document.querySelector('#plan-summary').hidden ? null : document.querySelector('#plan-summary-text').textContent,
     button: document.querySelector('#btn-plan-edit').textContent, expanded: document.querySelector('#btn-plan-edit').getAttribute('aria-expanded') })`;
