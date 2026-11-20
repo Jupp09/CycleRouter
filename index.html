@@ -45,6 +45,8 @@
     <div class="route-summary" id="route-summary" hidden>
       <span id="route-summary-text"></span>
       <button type="button" class="link-btn" id="btn-summary-details">Details ↓</button>
+      <!-- Reicht das Tageslicht nicht, steht das schon in der Stufe „Kurz“ (resultsView.js, renderDaylight) -->
+      <span class="route-summary-warn" id="route-summary-warn" hidden></span>
     </div>
     <header class="brand">
       <svg class="brand-icon" viewBox="0 0 32 32" aria-hidden="true">
@@ -332,6 +334,12 @@
       <ul class="route-list" id="my-routes-list"></ul>
       <p class="hint" id="my-routes-empty" hidden>Noch keine Routen gespeichert – nach dem Berechnen „Route speichern“ wählen.</p>
     </details>
+    <!-- Handy: die Hauptaktionen am unteren Rand des Blatts, ohne Scrollen erreichbar (stagesView.js); am Rechner aus.
+         Sie lösen die Knöpfe im Ergebnis aus (#btn-gpx, #btn-multiday). -->
+    <div class="sheet-actions" id="sheet-actions" hidden>
+      <button type="button" id="btn-sheet-gpx">GPX exportieren</button>
+      <button type="button" id="btn-sheet-multiday" class="primary" hidden>Mehrtagestour planen</button>
+    </div>
   </aside>
 
   <main class="map-area" aria-label="Karte und Höhenprofil">

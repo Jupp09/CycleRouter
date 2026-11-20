@@ -18,6 +18,7 @@ import { map } from './mapView.js';
 import { replanStops } from './pipeline.js';
 import { setDeparture } from './supplyView.js';
 import { exportGpx, gpxName } from './exportView.js';
+import { setSheet } from './sheetView.js';
 
 on('route', renderStages);
 on('stages', renderStages);
@@ -42,6 +43,7 @@ export function renderStages() {
   // Wird die Mehrtagestour angeboten, ist sie die Hauptaktion – „GPX exportieren“ tritt dann zurück
   const gpx = $('#btn-gpx');
   gpx.classList.add('primary');
+  syncSheetActions(false);
   const plan = r?.stays;
   map.setStays(plan ? plan.nights.filter(n => n.chosen).map(n => ({
     id: n.chosen.poi.id, lat: n.chosen.poi.lat, lon: n.chosen.poi.lon, icon: STAY_TYPES[n.chosen.poi.type].icon, popup: stayPopup(n),
@@ -59,6 +61,7 @@ export function renderStages() {
       : `Als Mehrtagestour planen (${days} Tage à ca. ${Math.round(origin.distance / days / 1000)} km)`;
   btn.className = state.multiDay && !state.staysLoading ? '' : 'primary';
   gpx.classList.toggle('primary', btn.className !== 'primary');
+  syncSheetActions(!state.multiDay && !state.staysLoading);
   // Fehler direkt am Knopf anzeigen (die Statuszeile oben ist auf dem Handy oft nicht im Blick)
   const err = $('#stages-error');
   err.hidden = !state.staysError || state.staysLoading;
@@ -201,6 +204,24 @@ function hideStay(night) {
   flashStatus(`„${poi.name || STAY_TYPES[poi.type].label}“ wird nicht mehr vorgeschlagen.`);
   replanStops();
 }
+
+/**
+ * Handy: die Hauptaktionen unten am Blatt (#sheet-actions) – GPX und, solange angeboten, die Mehrtagestour, dann
+ * als Hauptaktion. Sie lösen die Knöpfe im Ergebnis aus; Beschriftung von dort („GPX teilen“ je nach Gerät).
+ */
+function syncSheetActions(offer) {
+  $('#sheet-actions').hidden = !state.route;
+  const gpx = $('#btn-sheet-gpx');
+  gpx.textContent = $('#btn-gpx').textContent;
+  gpx.className = offer ? '' : 'primary';
+  $('#btn-sheet-multiday').hidden = !offer;
+}
+$('#btn-sheet-gpx').addEventListener('click', () => $('#btn-gpx').click());
+$('#btn-sheet-multiday').addEventListener('click', () => {
+  $('#btn-multiday').click();
+  setSheet('full'); // die Tage und Unterkünfte erscheinen im Ergebnis
+  $('#stages').scrollIntoView({ block: 'nearest' });
+});
 
 $('#btn-multiday').addEventListener('click', () => {
   state.multiDay = !state.multiDay;

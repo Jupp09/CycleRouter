@@ -1,6 +1,6 @@
 // Grundabläufe: A→B per Kartenklick, Aufschlüsselung, Höhenprofil, Café-Suche + Übernahme, Verpflegungsstopps,
 // Tempo, Löschen, Rundkurs, Heimat als Start.
-import { BONN, HAS_ROUTE, IDLE, STATE, departNextWednesday } from './lib/app.mjs';
+import { BONN, HAS_ROUTE, IDLE, STATE, departNextWednesday, markerCount } from './lib/app.mjs';
 
 export const title = 'A → B, Stopps, Tempo, Rundkurs';
 
@@ -111,7 +111,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Optionen eingeblendet', await ev(`!${q('#supply-options')}.hidden`));
   check('Stopps geplant', await waitFor(`!${q('#stops')}.hidden && (document.querySelectorAll('#stop-list li').length || !${q('#stop-gaps')}.hidden)`, 120000));
   check('Stopp-Hinweis', !!(await text('#stop-gaps')), await text('#stop-gaps'));
-  check('Stopp-Marker = Listenzeilen', await ev(`document.querySelectorAll('.stop-pin').length === document.querySelectorAll('#stop-list li').length`));
+  check('Stopp-Marker = Listenzeilen', await ev(`${markerCount('stop')} === document.querySelectorAll('#stop-list li').length`));
   await ev(`document.querySelector('#stop-list button.row')?.click(); true`);
   check('Stopp-Zeile öffnet den Stopp auf der Karte', await waitFor(`!!document.querySelector('.leaflet-popup .stop-popup')`, 5000));
   const label = await ev(`document.querySelector('.stop-pin')?.closest('.leaflet-marker-icon')?.getAttribute('aria-label') || ''`);

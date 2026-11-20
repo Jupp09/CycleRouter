@@ -1,6 +1,6 @@
 // Verpflegung: Trinkwasser nur angezeigt, Stopps nur mit Essen, Pausenstil zügig/gemütlich, Wasserlücken,
 // GPX mit Wasser; Stopps und Wasserstellen fest in die Route übernehmen.
-import { STATE, MAP, BONN, SUPPLY_DONE, departNextWednesday } from './lib/app.mjs';
+import { STATE, MAP, BONN, SUPPLY_DONE, departNextWednesday, markerCount } from './lib/app.mjs';
 
 export const title = 'Trinkwasser, Pausenstil, feste Stopps';
 
@@ -30,7 +30,7 @@ async function waterAndStyle(t) {
   let info = await ev(`(async () => { const r = ${STATE}.route; return {
     stops: r.stops.map(s => s.poi.type), water: r.water.length, dwell: r.dwellMin,
     onRoute: r.waypoints.filter(w => w.stop).length,
-    markers: document.querySelectorAll('.water-pin').length, rows: document.querySelectorAll('#water-list li').length,
+    markers: ${markerCount('water')}, rows: document.querySelectorAll('#water-list li').length,
     gapsText: document.querySelector('#stop-gaps').textContent }; })()`);
   check('Kein Trinkwasser als Stopp', !info.stops.includes('water'));
   check('Nur Stopps mit Essen', info.stops.every(x => FOOD.includes(x)), info.stops.join(','));
@@ -75,7 +75,7 @@ async function waterAndStyle(t) {
 
   step('Verpflegung aus');
   await ev(`document.querySelector('#supply-enabled').click(); true`);
-  check('Wasser-Marker und Liste weg', await waitFor(`document.querySelectorAll('.water-pin').length === 0 && document.querySelector('#water').hidden`, 10000));
+  check('Wasser-Marker und Liste weg', await waitFor(`${markerCount('water')} === 0 && document.querySelector('#water').hidden`, 10000));
 }
 
 async function fixedStops(t) {
@@ -123,7 +123,7 @@ async function fixedStops(t) {
   const after = await ev(`(async () => { const r = ${STATE}.route; return {
     via: r.waypoints.filter(p => p.manual && p.lat === ${w.lat} && p.lon === ${w.lon}).map(p => ({ icon: p.icon, food: !!p.food })),
     inList: r.water.some(x => x.poi.lat === ${w.lat} && x.poi.lon === ${w.lon}),
-    rows: document.querySelectorAll('#water-list li').length, markers: document.querySelectorAll('.water-pin').length, n: r.water.length }; })()`);
+    rows: document.querySelectorAll('#water-list li').length, markers: ${markerCount('water')}, n: r.water.length }; })()`);
   check('Wasserstelle ist Zwischenstopp (💧, kein food)', after.via.length === 1 && after.via[0].icon === '💧' && !after.via[0].food);
   check('Nicht doppelt in Liste und Markern', after.rows === after.n - (after.inList ? 1 : 0) && after.markers === after.rows,
     `${after.rows} Zeilen, ${after.markers} Marker, ${after.n} gesamt`);

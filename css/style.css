@@ -443,8 +443,8 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
 #map { flex: 1; min-height: 0; background: var(--surface); }
 /* Kartenstil „CyclOSM ruhig“ (map.js): dieselben Kacheln, blasser – die Route hebt sich deutlich ab */
 .leaflet-tile-pane .tiles-calm { filter: saturate(.45) brightness(1.06); }
-/* Kurzzeile und Griff des Blatts: nur auf dem Handy (siehe Mobile), am Rechner steht das Ergebnis daneben */
-.route-summary, .sheet-handle { display: none; }
+/* Kurzzeile, Griff und Aktionsleiste des Blatts: nur auf dem Handy (siehe Mobile), am Rechner steht das Ergebnis daneben */
+.route-summary, .sheet-handle, .sheet-actions { display: none; }
 /* Unsichtbare Trefferfläche über der Route (map.js): zeigt die Stelle im Höhenprofil */
 .leaflet-interactive.route-hit { cursor: crosshair; }
 
@@ -478,6 +478,12 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
   background: #fff; border: 2px solid #0072b2; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); font-size: 12px; line-height: 1;
 }
 .water-pin.warn { border-color: #b45309; border-style: dashed; }
+/* Zusammengefasste Marker (map.js, refreshPois): dunkler Kreis mit Anzahl – hebt sich von den weißen Einzelmarkern ab */
+.cluster-pin, .pin-cluster {
+  min-width: 30px; height: 30px; padding: 0 6px; border-radius: 15px; display: grid; place-items: center;
+  background: #1c1b22; color: #fff; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .45);
+  font: 700 13px/1 system-ui, sans-serif; font-variant-numeric: tabular-nums;
+}
 
 /* Legende der Kartensymbole (map.js, oben links, nur mit Route) */
 .map-legend {
@@ -638,6 +644,20 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
     font-weight: 700; font-variant-numeric: tabular-nums;
   }
   .route-summary .link-btn { align-self: center; }
+  /* Warnung zum Tageslicht als zweite Zeile der Kennzahlen (resultsView.js) */
+  .route-summary { flex-wrap: wrap; row-gap: 2px; }
+  .route-summary-warn { flex-basis: 100%; font-size: 0.8125rem; font-weight: 600; color: var(--warn-text); }
+  .route-summary-warn::before { content: "🌙 "; content: "🌙 " / ""; }
+  /* Hauptaktionen (GPX, Mehrtagestour) am unteren Rand des Blatts festhalten – wie .plan-actions. Solange das
+     Formular offen ist, hat es dort „Route erstellen“; dann weg, sonst lägen zwei Leisten übereinander. */
+  .sheet-actions {
+    display: flex; gap: 8px; position: sticky; bottom: 0; z-index: 2; flex: none;
+    margin: 0 -16px; padding: 10px 16px; background: var(--panel); border-top: 1px solid var(--border);
+  }
+  .sheet-actions[hidden], .panel:has(#plan:not([hidden])) .sheet-actions { display: none; }
+  .sheet-actions button { min-height: 44px; font-weight: 600; }
+  #btn-sheet-gpx { flex: none; }
+  #btn-sheet-gpx.primary, #btn-sheet-multiday { flex: 1; }
 }
 
 /* Handy im Browser (Safari-Tab oder Home-Bildschirm-Lesezeichen ohne „Als Web-App öffnen“): Platz für Safaris
@@ -689,7 +709,7 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
   .bar > span, .elevation-chart rect { forced-color-adjust: none; }
   /* Marker (Start, Ziel, Stopps usw.) – auf der (ohnehin farbigen) Karte unverändert lassen */
   .marker-pin, .via-pin, .stop-pin, .water-pin, .stay-pin, .search-pin,
-  .pin-marker, .pin-via, .pin-stop, .pin-water, .pin-stay { forced-color-adjust: none; }
+  .pin-marker, .pin-via, .pin-stop, .pin-water, .pin-stay, .cluster-pin, .pin-cluster { forced-color-adjust: none; }
   .elevation-chart .line { stroke: CanvasText; }
   .elevation-chart .area { fill: Canvas; }
   .elevation-chart .axis { fill: CanvasText; }

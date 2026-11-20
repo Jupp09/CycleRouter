@@ -127,10 +127,16 @@ function renderDaylight(r) {
   const el = $('#daylight');
   const first = r.coords[0], last = r.coords.at(-1);
   const day = !r.stageStarts?.length && (state.supply.enabled || state.multiDay) ? dayTimes(r, departureDate(), state.bike)[0] : null;
-  renderArrival(day);
+  const arrival = renderArrival(day);
   const note = r.stageStarts?.length ? null
     : day ? daylightNote(day, first, last)
     : daylightToday(first, estimateTime(r.distance, r.ascent, state.bike));
+  // Handy, Stufe „Kurz“: die Warnung als kurze Zeile unter den Kennzahlen – sonst sähe man sie erst im ganzen Blatt
+  const short = $('#route-summary-warn');
+  short.hidden = !note?.warn;
+  if (note?.warn) {
+    short.textContent = note.overnight ? `Über Nacht – Ankunft ${arrival}` : day ? 'Teil der Fahrt im Dunkeln' : 'Länger als der helle Tag';
+  }
   el.hidden = !note;
   if (!note) return;
   el.textContent = note.text;
@@ -140,15 +146,17 @@ function renderDaylight(r) {
 /**
  * Kachel „Ankunft“ (inkl. Pausen an den Stopps) – nur mit sichtbar festgelegter Abfahrt und an einem Stück; bei
  * Mehrtagestouren steht die Ankunft je Tag in der Tagesliste. Liegt sie an einem späteren Tag, mit Wochentag,
- * sonst läse sich „03:41“ wie heute Nacht.
+ * sonst läse sich „03:41“ wie heute Nacht. → der angezeigte Text (ohne Abfahrt leer)
  */
 function renderArrival(day) {
   const tile = $('#stat-arrival-tile');
   tile.hidden = !day;
-  if (!day) return;
+  if (!day) return '';
   const later = day.end.toDateString() !== day.start.toDateString();
-  $('#stat-arrival').textContent = later ? `${formatWeekday(day.end)} ${formatClock(day.end)}` : formatClock(day.end);
+  const text = later ? `${formatWeekday(day.end)} ${formatClock(day.end)}` : formatClock(day.end);
+  $('#stat-arrival').textContent = text;
   tile.title = 'Ankunft am Ziel inklusive Pausen an den Verpflegungsstopps';
+  return text;
 }
 
 /** So weit vom Ziel wird ein Bahnhof für die Rückfahrt noch genannt (m). */
