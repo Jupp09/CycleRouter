@@ -228,11 +228,15 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
       zIndexOffset: 600,
       title: name,
     }), name);
-    marker.on('click', () => {
+    const zoomIn = () => {
       // Per Tastatur: Nach dem Zoomen gibt es diesen Marker nicht mehr – der Fokus geht an die Karte statt verloren
       if (marker.getElement() === document.activeElement) map.once('zoomend', () => el.focus({ preventScroll: true }));
       map.fitBounds(bounds, { padding: [60, 60], maxZoom: CLUSTER_UNTIL + 1, ...motion() });
-    });
+    };
+    marker.on('click', zoomIn);
+    // Enter: Leaflet macht aus Enter nur bei Markern mit Popup einen Klick (bindPopup hört auf keypress) –
+    // dieser Marker hat keins
+    marker.on('keypress', e => { if (e.originalEvent.key === 'Enter') zoomIn(); });
     return marker;
   }
 
