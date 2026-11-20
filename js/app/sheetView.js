@@ -27,6 +27,11 @@ let current = 'half';
 const browserBar = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--browser-bar')) || 0;
 
 const inBrowser = window.matchMedia('(display-mode: browser) and (pointer: coarse)');
+// Die schwebende untere Leiste gibt es nur bei Safari auf iPhone/iPad (iOS 26/27; das iPad meldet sich als Mac mit
+// Touch). Auf Android liegen Adress- und Navigationsleiste nie über der Seite – dort bliebe der Abstand eine leere
+// Fläche, und bei Wischgesten-Navigation kann der Viewport durchaus bis auf 100 px an die Bildschirmhöhe reichen.
+// (bei jedem Messen gelesen, nicht einmal beim Laden: so lässt es sich im Test umschalten)
+const ios = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 /** Höhe, die Safaris Leiste unten verdeckt, wenn sie über der Seite schwebt (iOS 26/27; die Seite erfährt sie nicht). */
 const FLOATING_BAR = 64;
 
@@ -35,12 +40,12 @@ const FLOATING_BAR = 64;
  * wurde (z. B. über einen Link aus einer anderen App), endet der Viewport schon über der Leiste. Dann wären die
  * 64 px Abstand nur eine leere Fläche über der Leiste. Erkennbar am Viewport: Reicht er fast bis zum unteren
  * Bildschirmrand (es fehlt höchstens die Statusleiste oben), schwebt die Leiste darüber; sonst endet er davor.
- * Setzt --browser-bar am Wurzelelement; ohne Browser-Ansicht (installierte App, Rechner) 0.
+ * Setzt --browser-bar am Wurzelelement; ohne Browser-Ansicht (installierte App, Rechner) und außerhalb von iOS 0.
  */
 function measureBrowserBar() {
   const portrait = window.innerHeight >= window.innerWidth;
   const screenHeight = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
-  const floating = inBrowser.matches && screenHeight - window.innerHeight < 100;
+  const floating = ios() && inBrowser.matches && screenHeight - window.innerHeight < 100;
   document.documentElement.style.setProperty('--browser-bar', floating ? `${FLOATING_BAR}px` : '0px');
 }
 // „Kurz“ um die Browser-Leiste höher, sonst läge die Kennzahlen-Zeile darunter. „Halb“: 60 %, damit Start und Ziel
