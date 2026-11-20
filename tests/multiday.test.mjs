@@ -20,6 +20,8 @@ async function stagesAndStays({ app, page: newPage, check, step, sleep }) {
   check('Bei 100 km/Tag: Knopf sichtbar (Route > 110 km)', await ev(`!document.querySelector('#stages').hidden`),
     `${await text('#stat-dist')} – „${await text('#btn-multiday')}“`);
   check('Nicht automatisch aufgeteilt', await ev(`document.querySelector('#stages-body').hidden`));
+  check('Mehrtagestour ist die Hauptaktion, GPX tritt zurück', await ev(`document.querySelector('#btn-multiday').classList.contains('primary')
+    && !document.querySelector('#btn-gpx').classList.contains('primary')`));
 
   await ev(`document.querySelector('#btn-settings').click(); document.querySelector('#stage-max').value = 50; document.querySelector('#night-budget').value = 70;
     document.querySelector('#settings-dialog button[value=save]').click(); true`);
@@ -31,6 +33,7 @@ async function stagesAndStays({ app, page: newPage, check, step, sleep }) {
   const pins = await ev(`document.querySelectorAll('.stay-pin').length`);
   check('Unterkunfts-Marker auf der Karte', pins >= 2, `${pins} Marker`);
   check('Knopf heißt jetzt „aufheben“', await text('#btn-multiday') === 'Mehrtagestour aufheben');
+  check('GPX wieder Hauptaktion', await ev(`document.querySelector('#btn-gpx').classList.contains('primary')`));
   const priceHref = await ev(`document.querySelector('#stage-list .links a')?.href`);
   check('Preis-Link mit Datum', /booking\.com.*checkin=\d{4}-\d{2}-\d{2}|google\.com\/search/.test(priceHref || ''), priceHref?.slice(0, 110));
   await page.shot('1-etappen');

@@ -7,7 +7,7 @@ import { tileKey, isTileKey, cellOfTile, isLayer, LAYERS, layerOfType } from '..
 import { headwind } from '../../js/weather.js';
 import { findClimbs, gradeSegments } from '../../js/climbs.js';
 import { timeline } from '../../js/timeline.js';
-import { sunTimes } from '../../js/sun.js';
+import { sunTimes, darkMs, daylightNote } from '../../js/sun.js';
 import { SYNC_KEYS, MODES, BIKES } from '../../js/shared.js';
 
 // Montag, 16.11.2026, Ortszeit
@@ -130,6 +130,23 @@ test('Sonne: Aufgang vor Untergang, Bremen im November ~8 h Tageslicht', () => {
   assert.ok(t.rise < t.set);
   const hours = (t.set.getTime() - t.rise.getTime()) / 3.6e6;
   assert.ok(hours > 7.5 && hours < 9, `${hours} h`);
+});
+
+test('Sonne: Fahrt über Nacht – Dunkelzeit summiert, nie länger als die Fahrt, Ankunftstag genannt', () => {
+  const bremen = [53.08, 8.8], bonn = [50.74, 7.1];
+  // Fr 20.11.2026 12:45 → So 22.11. 03:41 (wie bei Bremen → Bonn an einem Stück)
+  const start = new Date(2026, 10, 20, 12, 45), end = new Date(2026, 10, 22, 3, 41);
+  const hours = darkMs(start, end, bremen, bonn) / 3.6e6;
+  const total = (end.getTime() - start.getTime()) / 3.6e6;
+  assert.ok(hours < total, `${hours} h dunkel bei ${total} h Fahrt`);
+  // Zwei Nächte im November: Fr ~16:40 bis Sa ~08:00 und Sa ~16:40 bis So 03:41 → gut 26 h
+  assert.ok(hours > 24 && hours < 28, `${hours} h`);
+  const note = daylightNote({ start, end }, bremen, bonn);
+  assert.ok(note.warn && note.overnight, JSON.stringify(note));
+  assert.match(note.text, /^Ankunft erst So\.? ca\. 03:41 – die Fahrt geht über Nacht, etwa 2\d h \d\d min davon im Dunkeln\.$/);
+  // Am selben Tag bleibt der bisherige Hinweis
+  const day = daylightNote({ start: new Date(2026, 10, 20, 9), end: new Date(2026, 10, 20, 14) }, bremen, bremen);
+  assert.ok(!day.overnight && !day.warn && day.text.startsWith('Tageslicht '), day.text);
 });
 
 test('Gemeinsame Werte von Browser und Server', () => {

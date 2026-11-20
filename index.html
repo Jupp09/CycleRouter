@@ -194,9 +194,33 @@
       <div class="stats">
         <div><span class="k">Distanz</span><span class="v" id="stat-dist"></span></div>
         <div><span class="k">Höhenmeter</span><span class="v updown"><span><span aria-hidden="true">↑ </span><span id="stat-up"></span></span><span class="sr-only"> / </span><span><span aria-hidden="true">↓ </span><span id="stat-down"></span></span></span></div>
-        <div><span class="k">Fahrzeit ca.</span><span class="v" id="stat-time"></span></div>
+        <div><span class="k">Reine Fahrzeit</span><span class="v" id="stat-time"></span></div>
+        <!-- Nur mit festgelegter Abfahrt (Verpflegungsstopps oder Mehrtagestour): Ankunft inkl. Pausen an den Stopps -->
+        <div id="stat-arrival-tile" hidden><span class="k">Ankunft</span><span class="v" id="stat-arrival"></span></div>
       </div>
-      <!-- Wichtigste Aktion nach dem Berechnen: direkt unter den Kennzahlen -->
+      <!-- Ist die Route an einem Tag zu schaffen? Tageslicht-Hinweis und „Als Mehrtagestour planen“ direkt unter den
+           Kacheln; bei einer Warnung zusammen als hervorgehobener Block (.day-check:has(> .warn)) -->
+      <div class="day-check" id="day-check">
+        <p class="hint daylight" id="daylight" hidden></p>
+        <div class="stages" id="stages" hidden>
+          <button id="btn-multiday" class="primary"></button>
+          <p class="hint warn" id="stages-error" hidden></p>
+          <div id="stages-body" hidden>
+            <p class="hint" id="stages-summary"></p>
+            <label class="field inline">
+              <span>Start</span>
+              <input id="stage-departure" type="datetime-local">
+            </label>
+            <ol class="stage-list" id="stage-list"></ol>
+            <p class="stages-export"><button type="button" class="link-btn inline" id="btn-stages-gpx">Alle Tage einzeln als GPX exportieren</button></p>
+            <details class="more">
+              <summary>So funktioniert's</summary>
+              <p class="hint">Preise sind Schätzungen nach Unterkunftsart und Sternen – den echten Preis zeigt „Preis prüfen“. Budget, km pro Tag und Unterkunftsarten unter Einstellungen.</p>
+            </details>
+          </div>
+        </div>
+      </div>
+      <!-- Wichtigste Aktion nach dem Berechnen: direkt darunter – sekundär, solange die Mehrtagestour angeboten wird -->
       <button id="btn-gpx" class="primary">GPX exportieren</button>
       <p class="hint" id="gpx-hint" hidden></p>
       <!-- Hinweise zur Route: Symbole per CSS (.facts > li#… ::before), damit textContent sie nicht löscht -->
@@ -204,7 +228,6 @@
         <li class="hint" id="eurovelo-share" hidden></li>
         <li class="hint warn" id="routing-fallback" hidden></li>
         <li class="hint" id="routing-server" hidden></li>
-        <li class="hint" id="daylight" hidden></li>
         <li class="hint" id="station-hint" hidden></li>
         <li class="weather" id="weather" hidden>
           <div id="weather-summary"></div>
@@ -222,23 +245,6 @@
           </details>
         </li>
       </ul>
-      <div class="stages" id="stages" hidden>
-        <button id="btn-multiday" class="primary"></button>
-        <p class="hint warn" id="stages-error" hidden></p>
-        <div id="stages-body" hidden>
-          <p class="hint" id="stages-summary"></p>
-          <label class="field inline">
-            <span>Start</span>
-            <input id="stage-departure" type="datetime-local">
-          </label>
-          <ol class="stage-list" id="stage-list"></ol>
-          <p class="stages-export"><button type="button" class="link-btn inline" id="btn-stages-gpx">Alle Tage einzeln als GPX exportieren</button></p>
-          <details class="more">
-            <summary>So funktioniert's</summary>
-            <p class="hint">Preise sind Schätzungen nach Unterkunftsart und Sternen – den echten Preis zeigt „Preis prüfen“. Budget, km pro Tag und Unterkunftsarten unter Einstellungen.</p>
-          </details>
-        </div>
-      </div>
       <div class="breakdown" id="breakdown">
         <div class="segmented small" id="breakdown-switch" role="radiogroup" aria-label="Aufschlüsselung">
           <button role="radio" data-value="surface">Untergrund</button>

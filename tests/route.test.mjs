@@ -41,21 +41,23 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
 
   // Aufbau des Ergebnisses: drei Kacheln, Hinweise als Liste, Erklärtexte eingeklappt, Aktionen gebündelt
   const layout = await ev(`(() => {
-    const tiles = [...document.querySelectorAll('.stats > div .k')].map(k => k.textContent);
+    const tiles = [...document.querySelectorAll('.stats > div:not([hidden]) .k')].map(k => k.textContent);
     const facts = [...document.querySelectorAll('.facts > li')].map(li => li.id);
     const icon = getComputedStyle(document.querySelector('#daylight'), '::before').content;
+    const dayCheck = !!document.querySelector('.stats + .day-check > #daylight');
     const more = [...document.querySelectorAll('details.more')];
     const block = document.querySelector('.route-actions');
     const order = [...block.querySelectorAll('h2, input, button')].filter(e => !e.closest('[hidden]')).map(e => e.id || e.tagName);
     const rowTop = id => document.getElementById(id).getBoundingClientRect().top;
     const fits = [...document.querySelectorAll('.stats > div')].every(d => d.scrollWidth <= d.clientWidth + 1);
-    return { tiles, facts, icon, fits, more: more.length, closed: more.every(d => !d.open), order,
+    return { tiles, facts, icon, dayCheck, fits, more: more.length, closed: more.every(d => !d.open), order,
       oneRow: Math.abs(rowTop('btn-roadbook') - rowTop('btn-clear')) < 2,
       updown: document.querySelector('#stat-up').textContent + ' | ' + document.querySelector('#stat-down').textContent };
   })()`);
-  check('Drei Kacheln, Anstieg und Abstieg zusammen', layout.tiles.join('|') === 'Distanz|Höhenmeter|Fahrzeit ca.' && /^\d+ m \| \d+ m$/.test(layout.updown), `${layout.tiles.join('|')} – ${layout.updown}`);
+  check('Drei Kacheln ohne Abfahrt (keine „Ankunft“), Anstieg und Abstieg zusammen', layout.tiles.join('|') === 'Distanz|Höhenmeter|Reine Fahrzeit' && /^\d+ m \| \d+ m$/.test(layout.updown), `${layout.tiles.join('|')} – ${layout.updown}`);
   check('Kacheln ohne Überlauf', layout.fits);
-  check('Hinweise als Liste mit Symbol', ['eurovelo-share', 'routing-fallback', 'daylight', 'station-hint', 'weather'].every(id => layout.facts.includes(id)) && /☀/.test(layout.icon), layout.icon);
+  check('Hinweise als Liste mit Symbol', ['eurovelo-share', 'routing-fallback', 'station-hint', 'weather'].every(id => layout.facts.includes(id)), layout.facts.join(', '));
+  check('Tageslicht direkt unter den Kacheln, mit Symbol', layout.dayCheck && /☀/.test(layout.icon), layout.icon);
   check('Erklärtexte eingeklappt', layout.more >= 2 && layout.closed, String(layout.more));
   check('Block „Route weiterverwenden“: Name, GPX, dann Roadbook … Löschen in einer Reihe',
     layout.order.join(',') === 'h-route-actions,route-name,btn-roadbook,btn-share-link,btn-clear' && layout.oneRow, layout.order.join(','));
@@ -72,7 +74,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   const stopsSection = await ev(`(() => { const s = document.querySelector('.stops-section');
     return ['#supply-enabled', '#stops', '#water', '#along-chips'].every(sel => s.contains(document.querySelector(sel))) && s.querySelector('h2').textContent; })()`);
   check('„Stopps unterwegs“: Verpflegung, Stoppliste, Trinkwasser und „Entlang der Route“ zusammen', stopsSection === 'Stopps unterwegs', String(stopsSection));
-  check('GPX-Export direkt unter den Kacheln', await ev(`document.querySelector('.stats').nextElementSibling?.id === 'btn-gpx'
+  check('GPX-Export direkt unter Kacheln und Tageslicht, ohne Mehrtagestour-Angebot als Hauptaktion', await ev(`document.querySelector('.day-check').nextElementSibling?.id === 'btn-gpx'
     && document.querySelector('#btn-gpx').classList.contains('primary')`));
   await page.shot('1-ergebnis');
   await ev(`document.querySelector('.route-actions').scrollIntoView({ block: 'end' }); true`); await sleep(200);
