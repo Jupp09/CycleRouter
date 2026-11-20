@@ -25,6 +25,24 @@ let current = 'half';
 
 /** Höhe von Safaris schwebender Leiste im Browser (CSS --browser-bar, in der installierten App 0). */
 const browserBar = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--browser-bar')) || 0;
+
+const inBrowser = window.matchMedia('(display-mode: browser) and (pointer: coarse)');
+/** Höhe, die Safaris Leiste unten verdeckt, wenn sie über der Seite schwebt (iOS 26/27; die Seite erfährt sie nicht). */
+const FLOATING_BAR = 64;
+
+/**
+ * Liegt Safaris untere Leiste über der Seite oder darunter? Beides kommt vor: Je nachdem, wie die Seite geöffnet
+ * wurde (z. B. über einen Link aus einer anderen App), endet der Viewport schon über der Leiste. Dann wären die
+ * 64 px Abstand nur eine leere Fläche über der Leiste. Erkennbar am Viewport: Reicht er fast bis zum unteren
+ * Bildschirmrand (es fehlt höchstens die Statusleiste oben), schwebt die Leiste darüber; sonst endet er davor.
+ * Setzt --browser-bar am Wurzelelement; ohne Browser-Ansicht (installierte App, Rechner) 0.
+ */
+function measureBrowserBar() {
+  const portrait = window.innerHeight >= window.innerWidth;
+  const screenHeight = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
+  const floating = inBrowser.matches && screenHeight - window.innerHeight < 100;
+  document.documentElement.style.setProperty('--browser-bar', floating ? `${FLOATING_BAR}px` : '0px');
+}
 // „Kurz“ um die Browser-Leiste höher, sonst läge die Kennzahlen-Zeile darunter. „Halb“: 60 %, damit Start und Ziel
 // samt Hinweis ohne Scrollen zu sehen sind (iPhone 393 × 852 im Browser; 55 % schnitten das Ziel-Feld ab)
 const visible = state => (state === 'full' ? window.innerHeight - TOP_GAP : state === 'half' ? Math.round(window.innerHeight * 0.6) : PEEK + browserBar());
@@ -52,6 +70,7 @@ export function sheetCovered() {
 
 function apply() {
   const root = document.documentElement.style;
+  measureBrowserBar();
   if (!phone.matches) {
     panel.removeAttribute('data-sheet');
     root.removeProperty('--sheet-visible');

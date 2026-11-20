@@ -121,7 +121,8 @@ async function newPage(send, listeners, { width = 1400, height = 900, mobile = f
   await s('Page.enable');
   if (mobile) {
     await s('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
-    await s('Emulation.setDeviceMetricsOverride', { width: 393, height: 852, deviceScaleFactor: 3, mobile: true });
+    // Bildschirm so groß wie der Viewport: Safaris Leiste schwebt über der Seite (sheetView.js, measureBrowserBar)
+    await s('Emulation.setDeviceMetricsOverride', { width: 393, height: 852, deviceScaleFactor: 3, mobile: true, screenWidth: 393, screenHeight: 852 });
     await s('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
   } else {
     await s('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
