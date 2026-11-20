@@ -20,7 +20,7 @@
 import { randomBytes } from 'node:crypto';
 import { query, dbEnabled } from './db.mjs';
 import {
-  hashPassword, verifyPassword, burnPasswordCheck, validateCredentials, passwordProblem,
+  hashPassword, verifyPassword, needsRehash, burnPasswordCheck, validateCredentials, passwordProblem,
   createSession, destroySession, destroyOtherSessions, currentUser, limitReached, countAttempt, clientIp,
 } from './auth.mjs';
 import { SYNC_KEYS, MODES, BIKES } from '../js/shared.js';
@@ -183,6 +183,17 @@ async function route(req, res, url) {
       throw new HttpError(401, 'Benutzername oder Passwort falsch.');
     }
     await createSession(req, res, rows[0].id);
+    // Ältere Hashes auf die aktuellen scrypt-Einstellungen umstellen (auth.mjs). Scheitert das (z. B. Server
+    // ausgelastet), bleibt der alte gültig und es klappt beim nächsten Mal. `pw_hash = ?`: Hat das Passwort sich
+    // inzwischen geändert (anderes Gerät), wird nichts überschrieben.
+    if (needsRehash(rows[0].pw_hash)) {
+      try {
+        await query('UPDATE users SET pw_hash = ? WHERE id = ? AND pw_hash = ?',
+          [await hashPassword(password), rows[0].id, rows[0].pw_hash]);
+      } catch (e) {
+        console.warn(`Konten: Passwort-Hash nicht umgestellt (${e.message})`);
+      }
+    }
     return json(res, 200, { user: { id: rows[0].id, username: rows[0].username } });
   }
 

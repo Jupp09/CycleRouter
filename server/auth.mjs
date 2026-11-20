@@ -9,7 +9,14 @@ import { HttpError } from './http.mjs';
 
 /** @type {(password: string, salt: Buffer, keylen: number, options: import('node:crypto').ScryptOptions) => Promise<Buffer>} */
 const scryptRaw = promisify(scrypt);
-const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
+/**
+ * scrypt-Einstellungen für neue Hashes. N=2¹⁴, r=8, p=5 ist eine der von OWASP als gleichwertig genannten
+ * Einstellungen (wie N=2¹⁷, p=1), braucht aber nur 16 MB je Prüfung statt 128 MB – bei 2 gleichzeitigen
+ * Prüfungen auf einem Webhosting-Paket ein Unterschied. Rechenzeit etwa 5× so lang wie mit p=1 (bis 11/2026),
+ * am Entwicklungsrechner ~170 ms. Die Einstellungen stehen in jedem Hash, ältere bleiben also prüfbar und
+ * werden bei der nächsten Anmeldung umgestellt (needsRehash).
+ */
+const SCRYPT = { N: 16384, r: 8, p: 5, keylen: 64 };
 const COOKIE = 'cr_session';
 const SESSION_DAYS = 30;
 
@@ -19,7 +26,7 @@ const SESSION_DAYS = 30;
  * Höchstens so viele Passwortprüfungen gleichzeitig, der Rest wartet. scrypt läuft in Nodes Thread-Pool
  * (standardmäßig 4 Threads), über den auch alle Dateizugriffe laufen (App-Dateien, POI-Cache). Viele
  * Anmeldeversuche auf einmal – auch mit unbekannten Namen, die ebenfalls eine Prüfung kosten – würden sonst
- * die ganze Seite ausbremsen. Eine Prüfung dauert einige 10 ms, 2 gleichzeitig reichen für Dutzende Anmeldungen
+ * die ganze Seite ausbremsen. Eine Prüfung dauert einige 100 ms, 2 gleichzeitig reichen für mehrere Anmeldungen
  * je Sekunde. Stehen zu viele an, antwortet der Server sofort mit 503, statt die Schlange wachsen zu lassen.
  */
 const MAX_HASHING = 2;
@@ -56,6 +63,16 @@ export async function verifyPassword(password, stored) {
   const expected = Buffer.from(hash, 'base64');
   const actual = await scryptAsync(password, Buffer.from(salt, 'base64'), expected.length, { N: +N, r: +r, p: +p });
   return timingSafeEqual(actual, expected);
+}
+
+/**
+ * Ist der Hash mit älteren (schwächeren) Einstellungen erzeugt? Dann nach erfolgreicher Anmeldung neu
+ * berechnen – nur dann ist das Passwort im Klartext bekannt.
+ */
+export function needsRehash(stored) {
+  const [alg, N, r, p, , hash] = String(stored).split('$');
+  return alg !== 'scrypt' || +N !== SCRYPT.N || +r !== SCRYPT.r || +p !== SCRYPT.p
+    || Buffer.from(hash ?? '', 'base64').length !== SCRYPT.keylen;
 }
 
 // Gleiche Laufzeit bei unbekanntem Benutzernamen (verrät nicht, ob es den Namen gibt)

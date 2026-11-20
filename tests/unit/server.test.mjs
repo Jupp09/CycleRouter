@@ -1,9 +1,9 @@
 // Unit-Tests der Server-Module (ohne Datenbank, ohne Netz): npm run test:unit
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes, scryptSync } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { limitKey, clientIp, passwordProblem, validateCredentials, hashPassword, verifyPassword } from '../../server/auth.mjs';
+import { limitKey, clientIp, passwordProblem, validateCredentials, hashPassword, verifyPassword, needsRehash } from '../../server/auth.mjs';
 import { createLimiter } from '../../server/rateLimit.mjs';
 import { browserOf } from '../../server/clientErrors.mjs';
 import { scrub } from '../../js/shared.js';
@@ -70,6 +70,20 @@ test('Passwort-Hash: prüfbar, salzig, und Überlast gibt 503 statt einer endlos
   assert.equal(results.length - rejected.length, 22, '2 laufen, 20 warten');
   assert.ok(rejected.every(r => r.reason.status === 503));
   assert.ok(await verifyPassword('Rad durch die Heide 7', hash), 'danach wieder normal');
+});
+
+test('Passwort-Hash: alte Einstellungen bleiben gültig und werden zum Umstellen erkannt', async () => {
+  // So sahen Hashes bis 11/2026 aus: N=2^14, r=8, p=1
+  const salt = randomBytes(16);
+  const old = scryptSync('Rad durch die Heide 7', salt, 64, { N: 16384, r: 8, p: 1 });
+  const stored = ['scrypt', 16384, 8, 1, salt.toString('base64'), old.toString('base64')].join('$');
+  assert.ok(await verifyPassword('Rad durch die Heide 7', stored));
+  assert.ok(!await verifyPassword('falsch falsch', stored));
+  assert.ok(needsRehash(stored));
+  const fresh = await hashPassword('Rad durch die Heide 7');
+  assert.deepEqual(fresh.split('$').slice(0, 4), ['scrypt', '16384', '8', '5']);
+  assert.ok(!needsRehash(fresh));
+  assert.ok(needsRehash('bcrypt$irgendwas'));
 });
 
 test('Fehlerberichte: keine Orte im Log', () => {
