@@ -13,7 +13,7 @@ export function routingNotice(text) { handler?.(text); }
 export function sleep(ms, signal) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new DOMException('Abgebrochen', 'AbortError'));
-    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(); }, ms);
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(undefined); }, ms);
     const onAbort = () => { clearTimeout(timer); reject(new DOMException('Abgebrochen', 'AbortError')); };
     signal?.addEventListener('abort', onAbort, { once: true });
   });

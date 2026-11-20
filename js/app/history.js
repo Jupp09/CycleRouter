@@ -52,7 +52,9 @@ function restore(snap) {
 
 function updateButtons() {
   // Symbolknöpfe in der Kopfzeile: Name und Tooltip nennen, was rückgängig gemacht bzw. wiederholt würde
-  for (const [id, stack, verb, key] of [['#btn-undo', undoStack, 'Rückgängig', 'Strg+Z'], ['#btn-redo', redoStack, 'Wiederholen', 'Strg+Umschalt+Z']]) {
+  /** @type {[string, any[], string, string][]} */
+  const buttons = [['#btn-undo', undoStack, 'Rückgängig', 'Strg+Z'], ['#btn-redo', redoStack, 'Wiederholen', 'Strg+Umschalt+Z']];
+  for (const [id, stack, verb, key] of buttons) {
     const button = $(id), top = stack[stack.length - 1];
     button.disabled = !top;
     const name = top ? `${verb}: ${top.label}` : verb;
@@ -98,7 +100,7 @@ document.addEventListener('keydown', e => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
   const key = e.key.toLowerCase();
   if (key !== 'z' && key !== 'y') return;
-  if (e.target.closest?.('input, textarea, select, [contenteditable]') || document.querySelector('dialog[open]')) return;
+  if (/** @type {Element} */ (e.target).closest?.('input, textarea, select, [contenteditable]') || document.querySelector('dialog[open]')) return;
   e.preventDefault();
   if (key === 'y' || e.shiftKey) redo(); else undo();
 });

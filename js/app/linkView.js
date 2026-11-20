@@ -50,7 +50,7 @@ export function encodeLink() {
   } else {
     q.set('d', state.distanceKm);
     q.set('r', state.direction);
-    q.set('x', state.seed);
+    q.set('x', String(state.seed));
   }
   if (state.supply.enabled) q.set('f', state.supply.intervalKm);
   if (state.multiDay) q.set('md', '1');

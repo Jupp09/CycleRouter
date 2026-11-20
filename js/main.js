@@ -27,6 +27,7 @@
  * Die Module hängen beim Laden nur ihre Ereignis-Handler an; Aufrufe zwischen ihnen passieren erst in
  * diesen Handlern. Deshalb sind die gegenseitigen Importe (z. B. pipeline ↔ waypoints) unproblematisch.
  */
+import './errorReport.js'; // zuerst: meldet auch Fehler, die die übrigen Module beim Start werfen
 import { syncUi } from './app/controls.js';
 import './app/waypoints.js';
 import './app/resultsView.js';

@@ -211,7 +211,7 @@ export async function updateDepartureHint() {
   const el = $('#departure-hint');
   const id = ++hintRequest; // nur die jüngste Anfrage darf den Hinweis setzen
   const date = new Date(state.supply.departure);
-  if (!state.supply.enabled || !state.start || isNaN(date)) { el.hidden = true; return; }
+  if (!state.supply.enabled || !state.start || Number.isNaN(date.getTime())) { el.hidden = true; return; }
   try {
     const region = await regionAt(state.start);
     const h = await holidayAt(region, date);

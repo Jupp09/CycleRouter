@@ -13,7 +13,7 @@ import { stageStats, dayTimes } from '../timeline.js';
 import { daylightNote } from '../sun.js';
 import { storage, indexAtDistance, formatKm, formatM, formatDuration, formatDayDate, osmNoteUrl } from '../utils.js';
 import { state, on, departureDate, originRoute } from './state.js';
-import { $, textLines, externalLink, linkButton, flashStatus, osmLinks } from './dom.js';
+import { $, $$, textLines, externalLink, linkButton, flashStatus, osmLinks } from './dom.js';
 import { map } from './mapView.js';
 import { replanStops } from './pipeline.js';
 import { setDeparture } from './supplyView.js';
@@ -224,7 +224,7 @@ export function renderStaySettings() {
   $('#stage-max').value = state.stays.maxKm;
   $('#night-budget').value = state.stays.budget;
   $('#end-stay').checked = state.stays.endStay;
-  for (const cb of document.querySelectorAll('#stay-types input')) cb.checked = state.stays.groups.includes(cb.value);
+  for (const cb of $$('#stay-types input')) cb.checked = state.stays.groups.includes(cb.value);
 }
 
 /** Werte aus dem Dialog übernehmen und speichern → true, wenn sich etwas geändert hat. */
@@ -233,7 +233,7 @@ export function saveStaySettings() {
   const next = {
     maxKm: clamp(Number($('#stage-max').value), 30, 300, state.stays.maxKm),
     budget: clamp(Number($('#night-budget').value), 10, 500, state.stays.budget),
-    groups: [...document.querySelectorAll('#stay-types input:checked')].map(cb => cb.value),
+    groups: $$('#stay-types input:checked').map(cb => cb.value),
     endStay: $('#end-stay').checked,
   };
   if (!next.groups.length) next.groups = state.stays.groups; // mindestens eine Art

@@ -3,6 +3,7 @@
 // /api/warm – Vorrat für Heimatregionen, /api/warm-route – Vorrat entlang einer Route,
 // /api/regions – Land/Bundesland je Punkt für die Feiertagsprüfung (server/regions.mjs),
 // /api/brouter – Weiterleitung an einen eigenen BRouter-Server (server/brouterProxy.mjs, BROUTER_URL),
+// /api/client-error – Fehlerberichte aus dem Browser ins Log (server/clientErrors.mjs),
 // /api/account|settings|routes|shared – Konten (server/accountApi.mjs).
 import './server/env.mjs'; // muss der erste Import bleiben (.env laden, bevor andere Module Werte lesen)
 import { createServer } from 'node:http';
@@ -21,6 +22,7 @@ import { createLimiter } from './server/rateLimit.mjs';
 import { serveStatic } from './server/static.mjs';
 import { getRegions, isRegionKey } from './server/regions.mjs';
 import { handleBrouter, brouterEnabled } from './server/brouterProxy.mjs';
+import { handleClientError } from './server/clientErrors.mjs';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 8000;
@@ -181,6 +183,7 @@ createServer(async (req, res) => {
   if (path === '/api/warm') return handleWarm(req, res, url);
   if (path === '/api/warm-route') return handleWarmRoute(req, res);
   if (path === '/api/regions') return handleRegions(req, res);
+  if (path === '/api/client-error') return handleClientError(req, res);
   if (await handleBrouter(req, res, url)) return;
   if (await handleAccountApi(req, res, url)) return;
   if (path === '/') path = '/index.html';

@@ -16,6 +16,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="CycloRouter">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1b1a22" media="(prefers-color-scheme: dark)">
   <script>
@@ -25,6 +26,8 @@
       const t = JSON.parse(localStorage.getItem('cyclerouter.theme'));
       if (t === 'light' || t === 'dark') {
         document.documentElement.dataset.theme = t;
+        // Auch dem Browser sagen: Hintergrund und Bildlaufleisten schon vor dem Laden von style.css im gewählten Schema
+        document.querySelector('meta[name="color-scheme"]').content = t;
         for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.content = t === 'dark' ? '#1b1a22' : '#ffffff';
       }
     } catch { /* privater Modus o. Ä. → System-Schema */ }

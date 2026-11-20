@@ -113,6 +113,9 @@ const tasks = new Map(); // `${ebene}/${kachel}` → Abfrage, die sie lädt (fü
  * Startet Overpass-Abfragen für Kacheln × Ebenen, die nicht schon geladen werden. Kacheln, denen dieselben
  * Ebenen fehlen, werden zusammengefasst – eine Abfrage für alle ihre Ebenen statt einer je Ebene.
  * `urgent`: ein Nutzer wartet darauf (Vorrang in der Warteschlange).
+ * @param {string[]} keys
+ * @param {string[]} layers
+ * @param {{log?: LogFn, urgent?: boolean}} [options]
  */
 function startFetch(keys, layers, { log, urgent = false } = {}) {
   // Kachel → fehlende Ebenen, gruppiert nach dieser Kombination
@@ -202,6 +205,8 @@ export async function tilesNeedingFetch(keys, layer) {
  * gemeldet (fehlt in `tiles`). Nur Anfragen ohne `cacheOnly` haben Vorrang (ein Nutzer wartet darauf).
  * `allowFetch(n)`: Kontingent des Nutzers – darf der Server n Kacheln × Ebenen neu bei Overpass laden?
  * Wenn nicht, wird nichts geladen und {limited: n} zurückgegeben.
+ * @param {string[]} keys
+ * @param {{layers?: string[], log?: LogFn, cacheOnly?: boolean, allowFetch?: (n: number) => boolean}} [options]
  */
 export async function getTiles(keys, { layers = ['supply'], log, cacheOnly = false, allowFetch } = {}) {
   await migrated;

@@ -166,7 +166,11 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
   signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Abgebrochen', 'AbortError')); }, { once: true });
 });
 
-/** `headers`: zusätzliche Header – der Server muss einen User-Agent mitschicken, sonst lehnt Overpass ab. */
+/**
+ * `headers`: zusätzliche Header – der Server muss einen User-Agent mitschicken, sonst lehnt Overpass ab.
+ * @param {string} query
+ * @param {{signal?: AbortSignal, headers?: Record<string, string>}} [options]
+ */
 async function overpass(query, { signal, headers = {} } = {}) {
   let lastError;
   for (const [n, endpoint] of OVERPASS.entries()) {
@@ -208,6 +212,8 @@ async function overpass(query, { signal, headers = {} } = {}) {
  * Restaurant), genau wie bei getrennten Abfragen. Flächen (z. B. Supermarkt-Gebäude) werden der Kachel ihres
  * Mittelpunkts zugeordnet; liegt der außerhalb der angefragten Kacheln, entfällt die Fläche – sie ist dann
  * ohnehin weiter als die maximale Entfernung von der Route weg.
+ * @param {string[]} keys
+ * @param {{layers?: string[], signal?: AbortSignal, headers?: Record<string, string>}} [options]
  */
 export async function fetchLayersFromOverpass(keys, { layers = ['supply'], ...opts } = {}) {
   const defs = layers.map(l => [l, LAYERS[l]]);
@@ -235,7 +241,11 @@ out center tags${meta ? ' meta' : ''};`, opts);
   return result;
 }
 
-/** Lädt eine Datenebene (`opts.layer`, Standard „supply“) für Kacheln von Overpass → Map key → [poi]. */
+/**
+ * Lädt eine Datenebene (`opts.layer`, Standard „supply“) für Kacheln von Overpass → Map key → [poi].
+ * @param {string[]} keys
+ * @param {{layer?: string, signal?: AbortSignal, headers?: Record<string, string>}} [options]
+ */
 export async function fetchTilesFromOverpass(keys, { layer = 'supply', ...opts } = {}) {
   return (await fetchLayersFromOverpass(keys, { layers: [layer], ...opts })).get(layer);
 }

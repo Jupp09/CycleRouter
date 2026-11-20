@@ -7,6 +7,7 @@ import { query } from './db.mjs';
 import { createLimiter } from './rateLimit.mjs';
 import { HttpError } from './http.mjs';
 
+/** @type {(password: string, salt: Buffer, keylen: number, options: import('node:crypto').ScryptOptions) => Promise<Buffer>} */
 const scryptRaw = promisify(scrypt);
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 const COOKIE = 'cr_session';
@@ -26,7 +27,7 @@ const MAX_HASH_WAITING = 20;
 let hashing = 0;
 const hashQueue = [];
 
-async function scryptAsync(...args) {
+async function scryptAsync(password, salt, keylen, options) {
   if (hashing < MAX_HASHING) hashing++;
   else {
     if (hashQueue.length >= MAX_HASH_WAITING) {
@@ -35,7 +36,7 @@ async function scryptAsync(...args) {
     await new Promise(resolve => hashQueue.push(resolve));
   }
   try {
-    return await scryptRaw(...args);
+    return await scryptRaw(password, salt, keylen, options);
   } finally {
     const next = hashQueue.shift();
     if (next) next(); // Platz direkt weitergeben, `hashing` bleibt gleich

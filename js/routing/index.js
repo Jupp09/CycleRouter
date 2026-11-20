@@ -18,6 +18,9 @@ const FALLBACK = { brouter: valhalla };
  * { coords: [[lat, lon, ele]], cum: [m], distance, ascent, descent, waypoints, fallback?, servers? }
  * `fallback`: Name des Ausweichdiensts, falls Teilstücke nicht mit dem gewählten Dienst berechnet wurden.
  * `servers`: Meter je BRouter-Server ({own, 'brouter.de'}), siehe `serverShares`.
+ * @param {{coords: Coord[], segments?: Segment[], fallback?: string, servers?: Record<string, number>}} result
+ * @param {Waypoint[]} waypoints
+ * @returns {Route}
  */
 export function withStats(result, waypoints) {
   return { ...result, ...computeStats(result.coords), waypoints };
@@ -29,6 +32,10 @@ export function withStats(result, waypoints) {
  * Stützpunkte, die `insertWaypoints` (routeGeometry.js) etwa jeden Kilometer setzt. Zwischen zwei solchen Punkten
  * liefert `route()` den Ausschnitt des Wegs, ohne einen Dienst zu fragen – nur die Abstecher werden berechnet.
  * Ohne `segments` gelten Untergrund und Wegtyp als unbekannt.
+ * @param {Coord[]} coords
+ * @param {Waypoint[]} waypoints
+ * @param {Segment[] | null} [segments]
+ * @returns {Route}
  */
 export function trackRoute(coords, waypoints, segments = null) {
   segments = segments?.length ? segments : [{ from: 0, to: coords.length - 1, surface: 'unknown', waytype: 'other' }];
@@ -56,6 +63,11 @@ function trackLeg(a, b) {
  * eine Übernachtung hinzu, ändert sich das Tempo oder schaltet man eine Option hin und zurück, sind nur
  * die geänderten Teilstücke neu – das entlastet brouter.de spürbar. ORS rechnet weiter am Stück, weil dort
  * jede Anfrage das Tageskontingent des Nutzers belastet.
+ * @param {any} provider Eintrag aus `providers`
+ * @param {Waypoint[]} points
+ * @param {any} opts routeOpts() (state.js)
+ * @param {AbortSignal} signal
+ * @returns {Promise<Route>}
  */
 export async function route(provider, points, opts, signal) {
   // Importierter Weg: immer Teilstück für Teilstück, auch bei ORS – sonst ginge der Weg verloren

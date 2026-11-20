@@ -104,6 +104,8 @@ function fetchKey(key) {
 /**
  * Regionen für Rasterschlüssel → {regions: {key: Ergebnis|null}, missing: [key], fetched}.
  * `allowFetch(n)`: darf der Nutzer n neue Nominatim-Abfragen auslösen? (Kontingent je IP, server.mjs)
+ * @param {string[]} keys
+ * @param {{allowFetch?: (n: number) => boolean}} [options]
  */
 export async function getRegions(keys, { allowFetch = () => true } = {}) {
   await load();

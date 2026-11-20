@@ -33,6 +33,7 @@ let state = { jobs: [], done: [] };
 const clientHits = new Map();       // `${art}|${ip}` → [Zeitpunkte]
 const work = new Map();             // Auftrag → {list: [[kachel, ebenen]], pos} – nur im Speicher
 let running = false;
+/** @type {LogFn} */
 let log = () => {};
 
 const isRoute = job => Array.isArray(job.tiles);

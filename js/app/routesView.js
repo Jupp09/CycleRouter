@@ -185,6 +185,7 @@ $('#btn-share-link').addEventListener('click', () => (account.enabled && account
 
 // ---------- Meine Routen ----------
 
+/** @type {RouteList} */
 let myRoutes = [];
 
 async function refreshMyRoutes() {

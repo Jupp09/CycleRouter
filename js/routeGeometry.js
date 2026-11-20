@@ -11,6 +11,9 @@ import { approxDist, sampleRoute, indexAtDistance } from './utils.js';
  * Gesucht wird vorwärts ab dem vorherigen Treffer; sobald der Punkt nah war und die Route sich
  * wieder entfernt, gilt er als passiert. Das ist wichtig bei Rundkursen und Hin-und-zurück-Strecken,
  * bei denen ein Ort mehrfach an der Route liegt.
+ * @param {Route} r
+ * @param {{lat: number, lon: number}[]} points
+ * @returns {number[]}
  */
 export function locateOnRoute(r, points) {
   let from = 0;
@@ -63,6 +66,10 @@ export function nearestSample(samples, lat, lon, maxLatDiff = 0.05) {
 /**
  * Orte, die höchstens `maxOffset(poi)` m neben der Route liegen → [{poi, along, offset}].
  * Jede Passage zählt einzeln: Ein Ort am Hin- und am Rückweg wird zweimal Kandidat.
+ * @param {Route} r
+ * @param {any[]} pois
+ * @param {(poi: any) => number} maxOffset
+ * @param {number} [step]
  */
 export function locateNearRoute(r, pois, maxOffset, step = 100) {
   const samples = sampleRoute(r, step);
@@ -127,6 +134,9 @@ function trackAnchors(r) {
 /**
  * Zusätzliche Wegpunkte an ihrer Position (`along`, m auf `base`) zwischen die vorhandenen Wegpunkte
  * einsortieren → neue Wegpunktliste für die Neuberechnung. items: [{along, point}]
+ * @param {Route} base
+ * @param {{along: number, point: Waypoint}[]} items
+ * @returns {Waypoint[]}
  */
 export function insertWaypoints(base, items) {
   const anchors = shapeAnchors(base);

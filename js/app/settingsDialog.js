@@ -6,7 +6,7 @@
  */
 import { storage, DEFAULT_SPEED, setAverageSpeed } from '../utils.js';
 import { state, emit, BIKE_LABELS } from './state.js';
-import { $ } from './dom.js';
+import { $, $$ } from './dom.js';
 import { showRoute, replanStops, recalc } from './pipeline.js';
 import { renderStaySettings, saveStaySettings } from './stagesView.js';
 import { openHomeSettings, saveHomeSettings, warmNewHome } from './homeView.js';
@@ -47,7 +47,7 @@ function refreshTimes() {
 let pendingTheme = savedTheme();
 
 function renderTheme() {
-  for (const b of document.querySelectorAll('#theme-switch button')) b.setAttribute('aria-checked', b.dataset.value === pendingTheme);
+  for (const b of $$('#theme-switch button')) b.setAttribute('aria-checked', String(b.dataset.value === pendingTheme));
 }
 
 $('#theme-switch').addEventListener('click', e => {
@@ -68,7 +68,7 @@ const STYLE_HINTS = {
 };
 
 function renderStyle() {
-  for (const b of document.querySelectorAll('#supply-style-switch button')) b.setAttribute('aria-checked', b.dataset.value === pendingStyle);
+  for (const b of $$('#supply-style-switch button')) b.setAttribute('aria-checked', String(b.dataset.value === pendingStyle));
   $('#supply-style-hint').textContent = STYLE_HINTS[pendingStyle] ?? '';
 }
 
@@ -83,18 +83,18 @@ $('#supply-style-switch').addEventListener('click', e => {
 // Welche Fahrradtypen und Routenarten die Umschalter zeigen (synchronisiert über visibleBikes/visibleModes).
 
 const VISIBLE = { bike: '#visible-bikes', mode: '#visible-modes' };
-const checkedIn = sel => [...document.querySelectorAll(`${sel} input:checked`)].map(cb => cb.value);
+const checkedIn = sel => $$(`${sel} input:checked`).map(cb => cb.value);
 
 /** Das letzte Häkchen einer Gruppe lässt sich nicht entfernen (mindestens eins bleibt sichtbar). */
 function lockLast(sel) {
-  const boxes = [...document.querySelectorAll(`${sel} input`)];
+  const boxes = $$(`${sel} input`);
   const on = boxes.filter(cb => cb.checked);
   for (const cb of boxes) cb.disabled = on.length === 1 && cb.checked;
 }
 
 function renderVisible() {
   for (const [sel, list] of [[VISIBLE.bike, state.visibleBikes], [VISIBLE.mode, state.visibleModes]]) {
-    for (const cb of document.querySelectorAll(`${sel} input`)) cb.checked = list.includes(cb.value);
+    for (const cb of $$(`${sel} input`)) cb.checked = list.includes(cb.value);
     lockLast(sel);
   }
 }

@@ -70,6 +70,11 @@ const DRAG_HINT = { start: 'ziehen zum Verschieben', end: 'ziehen zum Verschiebe
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const motion = () => ({ animate: !reduceMotion.matches });
 
+/**
+ * @param {HTMLElement} el
+ * @param {{onClick: (p: {lat: number, lon: number}) => void, onMarkerDrag: Function,
+ *   onRouteHover?: (p: {lat: number, lon: number} | null) => void}} handlers
+ */
 export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }) {
   const view = storage.get('view', { center: [51.1657, 10.4515], zoom: 6 });
   // Auch Zoomen per Mausrad/Knopf springt dann, statt zu animieren (gilt ab dem nächsten Laden der Seite)

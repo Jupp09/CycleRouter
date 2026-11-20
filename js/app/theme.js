@@ -24,8 +24,11 @@ export function applyTheme(theme) {
   const root = document.documentElement;
   if (theme === 'light' || theme === 'dark') root.dataset.theme = theme;
   else delete root.dataset.theme;
+  // color-scheme auch als <meta>: gilt schon, bevor style.css geladen ist (index.html setzt es beim Start ebenso)
+  const scheme = /** @type {HTMLMetaElement | null} */ (document.querySelector('meta[name="color-scheme"]'));
+  if (scheme) scheme.content = theme === 'light' || theme === 'dark' ? theme : 'light dark';
   // Die beiden theme-color-Angaben gelten je nach System-Schema (media); bei erzwungenem Schema beide gleich
-  for (const m of document.querySelectorAll('meta[name="theme-color"]')) {
+  for (const m of /** @type {NodeListOf<HTMLMetaElement>} */ (document.querySelectorAll('meta[name="theme-color"]'))) {
     const own = m.media.includes('dark') ? 'dark' : 'light';
     m.content = BAR_COLOR[theme === 'system' ? own : theme];
   }

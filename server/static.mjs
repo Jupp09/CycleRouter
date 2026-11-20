@@ -48,7 +48,7 @@ function matches(header, etag) {
 const IMPORT = /(?:^|[;\s])(?:import|export)\s*(?:[\w*{}\s,$]+\s*from\s*)?['"](\.{1,2}\/[^'"]+)['"]/g;
 
 /** Alle Module, die `entry` direkt oder indirekt importiert (Pfade relativ zu root, mit „/“). */
-async function moduleGraph(root, entry) {
+export async function moduleGraph(root, entry = ENTRY) {
   const seen = new Set([entry]);
   const queue = [entry];
   while (queue.length) {

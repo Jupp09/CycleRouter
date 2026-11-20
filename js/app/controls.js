@@ -5,7 +5,7 @@
  */
 import { storage, newSeed } from '../utils.js';
 import { state, provider, activeBreakdown } from './state.js';
-import { $, ui } from './dom.js';
+import { $, $$, ui } from './dom.js';
 import { clearRoute, calcAB, generate, recalc } from './pipeline.js';
 import { checkpoint } from './history.js';
 
@@ -19,7 +19,7 @@ export function syncUi() {
   showOnly('#bike-switch', 'value', state.visibleBikes, state.bike);
   showOnly('#mode-tabs', 'mode', state.visibleModes, state.mode);
   check('#breakdown-switch button', 'aria-checked', 'value', activeBreakdown());
-  for (const n of document.querySelectorAll('[data-show]')) n.hidden = !n.dataset.show.split(' ').includes(state.mode);
+  for (const n of $$('[data-show]')) n.hidden = !n.dataset.show.split(' ').includes(state.mode);
 
   $('#color-route').checked = state.colorRoute;
   $('#supply-enabled').checked = state.supply.enabled;

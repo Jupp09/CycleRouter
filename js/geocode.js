@@ -83,14 +83,14 @@ function fromNominatim(r) {
 
 /** Vorschläge beim Tippen (nur Photon). Wirft `unavailable`, wenn Photon nicht erreichbar ist. */
 export async function search(query, bias) {
-  const params = new URLSearchParams({ q: query, limit: 6, lang: 'de' });
+  const params = new URLSearchParams({ q: query, limit: '6', lang: 'de' });
   if (bias) { params.set('lat', bias.lat.toFixed(4)); params.set('lon', bias.lon.toFixed(4)); }
   return (await photon(`/api/?${params}`)).features.map(toPlace);
 }
 
 /** Ausweich-Suche über Nominatim – nur auf ausdrückliche Anforderung (Enter) aufrufen. */
 export async function searchFallback(query, bias) {
-  const params = new URLSearchParams({ q: query, format: 'jsonv2', addressdetails: 1, limit: 6, 'accept-language': 'de' });
+  const params = new URLSearchParams({ q: query, format: 'jsonv2', addressdetails: '1', limit: '6', 'accept-language': 'de' });
   if (bias) {
     // Bevorzugter Bereich (±1°) – Treffer außerhalb bleiben möglich
     params.set('viewbox', [bias.lon - 1, bias.lat + 1, bias.lon + 1, bias.lat - 1].map(v => v.toFixed(3)).join(','));

@@ -57,7 +57,7 @@ function checkOrigin(req) {
 // ---------- Einstellungen ----------
 
 // Nur SYNC_KEYS (js/shared.js) werden abgeglichen – der ORS-API-Key bleibt bewusst nur im Browser.
-function cleanSettings(data) {
+export function cleanSettings(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new HttpError(400, 'Ungültige Einstellungen');
   return Object.fromEntries(SYNC_KEYS.filter(k => k in data).map(k => [k, data[k]]));
 }
@@ -65,7 +65,7 @@ function cleanSettings(data) {
 // ---------- Routen ----------
 // Gültige Werte für mode/bike: MODES, BIKES (js/shared.js)
 
-function cleanRoute(body, partial = false) {
+export function cleanRoute(body, partial = false) {
   const out = {};
   if (!partial || 'name' in body) {
     const name = String(body.name ?? '').trim().slice(0, 200);

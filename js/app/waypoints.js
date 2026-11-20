@@ -20,6 +20,9 @@ import { checkpoint } from './history.js';
 /**
  * Start oder Ziel setzen. Ohne `label` wird die Adresse nachgeschlagen. `silent`: nur übernehmen, nicht
  * neu berechnen (z. B. wenn die Route den Punkt ohnehin schon enthält).
+ * @param {'start' | 'end'} which
+ * @param {{lat: number, lon: number}} point
+ * @param {{label?: string, silent?: boolean}} [options]
  */
 export async function setPoint(which, point, { label, silent = false } = {}) {
   const input = which === 'start' ? ui.startInput : ui.endInput;

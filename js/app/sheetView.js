@@ -45,7 +45,7 @@ export function sheetState() {
  */
 export function sheetCovered() {
   if (!phone.matches) return 0;
-  const controls = document.querySelector('.leaflet-bottom.leaflet-right')?.offsetHeight || 0;
+  const controls = $('.leaflet-bottom.leaflet-right')?.offsetHeight || 0;
   return (parseFloat(document.documentElement.style.getPropertyValue('--map-covered')) || 0) + controls;
 }
 

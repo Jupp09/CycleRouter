@@ -36,6 +36,7 @@ let meta = null;            // aktueller Stand oder null (kein Auszug)
 let covered = new Set();    // vorhandene Zellen
 let layersInExtract = new Set();
 const memo = new Map();     // zelle → Promise<{layers}> (zuletzt benutzte zuletzt)
+/** @type {LogFn} */
 let log = () => {};
 let updating = false;
 
@@ -123,7 +124,7 @@ async function update() {
     const hash = createHash('sha256');
     const gunzip = createGunzip();
     const lines = createInterface({ input: gunzip, crlfDelay: Infinity });
-    const download = pipeline(Readable.fromWeb(data.body), hashing(hash), gunzip);
+    const download = pipeline(Readable.fromWeb(/** @type {any} */ (data.body)), hashing(hash), gunzip);
     download.catch(() => {}); // Fehler kommen über die Zeilen bzw. `await download` unten an
     let head = null, count = 0;
     const counts = {}; // Orte je Ebene

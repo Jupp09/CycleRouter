@@ -67,14 +67,19 @@ export const state = {
   staysError: null,
 
   // Wegpunkte
+  /** @type {Waypoint | null} */
   start: null,                                    // {lat, lon, label}
+  /** @type {Waypoint | null} */
   end: null,
+  /** @type {Waypoint[]} */
   vias: [],                                       // A→B-Zwischenstopps {lat, lon, label, manual: true, icon?}; lat null = noch offen
 
   // Aktuelle Route (siehe CLAUDE.md: route.origin / route.base) und Bezug zu einer gespeicherten Route
+  /** @type {Route | null} */
   route: null,
   saved: null,                                    // geöffnete eigene gespeicherte Route {id, name, shareToken}
   loadedName: null,                               // Name einer geöffneten gespeicherten/geteilten Route
+  /** @type {Route | null} */
   track: null,                                    // importierter Weg (GPX, trackRoute) – siehe activeTrack()
 };
 
@@ -115,7 +120,7 @@ export function defaultDeparture() {
 /** Abfahrt als Date (aus den Verpflegungs-Einstellungen) – auch Start der Mehrtagestour. */
 export function departureDate() {
   const d = new Date(state.supply.departure || defaultDeparture());
-  return isNaN(d) ? new Date() : d;
+  return Number.isNaN(d.getTime()) ? new Date() : d;
 }
 
 /**

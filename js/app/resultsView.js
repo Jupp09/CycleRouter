@@ -10,7 +10,7 @@ import { fetchPoisNear } from '../poiTiles.js';
 import { dayTimes } from '../timeline.js';
 import { daylightNote, daylightToday } from '../sun.js';
 import { state, on, defaultName, departureDate, activeBreakdown } from './state.js';
-import { $, ui, rowButton, span } from './dom.js';
+import { $, $$, ui, rowButton, span } from './dom.js';
 import { map, elevation, drawRouteLine } from './mapView.js';
 import { syncUi } from './controls.js';
 import { setSheet } from './sheetView.js';
@@ -175,7 +175,7 @@ function renderBreakdown() {
   box.hidden = !surface && !grade;
   if (box.hidden) return;
   // Nur anbieten, wofür die Route Daten hat (importierter Weg ohne Höhen: keine Steigung)
-  for (const b of document.querySelectorAll('#breakdown-switch button')) b.hidden = b.dataset.value === 'grade' ? !grade : !surface;
+  for (const b of $$('#breakdown-switch button')) b.hidden = b.dataset.value === 'grade' ? !grade : !surface;
   const kind = activeBreakdown(r);
   renderClimbs(r, kind);
 

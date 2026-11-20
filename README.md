@@ -101,6 +101,14 @@ Für den Betrieb im Internet ist **HTTPS Pflicht** (z. B. über einen Reverse-Pr
 
 `npm test` startet einen eigenen Testserver (Port 8765, ohne Datenbank) und Edge oder Chrome ohne Fenster und prüft die App im Browser: Routen, Verpflegung, Popups, Einstellungen, Mehrtagestouren, Tageslicht, Wetter, GPX-Import, Fahrrad-Service und Bahnhöfe, Steigungen, Rückgängig, Roadbook, Offline-Start, Grenzfälle der Fachlogik (Zeitumstellung, Öffnungszeiten, Zeitlimits), Zoomgrenzen der Kartenstile, Konten (mit einer Konto-Attrappe im Speicher), Tastaturbedienung und Barrierefreiheit (axe-core, hell und dunkel). `npm test -- keyboard a11y` führt nur einzelne Tests aus, `--shots` legt Screenshots in `tests/out/` ab. Nach jedem Lauf zeigt `tests/out/bericht.html` die Ergebnisse grafisch: je Test Dauer, Prüfungen, Screenshots und der Verlauf der letzten Läufe. Die Tests nutzen die echten Routing- und Kartendienste, brauchen also Internet und dauern einige Minuten.
 
+`npm run check` ist die schnelle Prüfung ohne Browser und ohne Netz (wenige Sekunden): `npm run typecheck` prüft die Typen über die JSDoc-Angaben im Code ([jsconfig.json](jsconfig.json), TypeScript nur als Prüfwerkzeug – ausgeliefert werden weiter dieselben Dateien, ohne Build-Schritt), `npm run test:unit` führt die Unit-Tests in `tests/unit/` aus (Öffnungszeiten, Anstiege, Kacheln, Begrenzungen, BRouter-Weiterleitung, Konto-Eingaben …). Beides läuft bei jedem Push in GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)).
+
+Nach einem Deploy prüft `npm run check:live` die Installation von außen (Standard: https://cyclorouter.de, sonst Adresse angeben, z. B. `npm run check:live -- http://localhost:8000`): private Dateien wie `.env` gesperrt, `index.html` kommt von Node (CSP, ein `modulepreload` je Modul wie lokal – sonst fehlt ein Deploy oder Neustart), genau ein HSTS-Header, Schnittstellen erreichbar, Anfragen fremder Seiten abgelehnt, Weiterleitung von http://.
+
+### Fehlerberichte
+
+Ungefangene Fehler im Browser meldet die App an den eigenen Server (`POST /api/client-error`, [js/errorReport.js](js/errorReport.js)); er schreibt sie ins Server-Log (Zeile „Browserfehler: …“, bei Plesk im Log der Node-App) und speichert nichts weiter, auch keine IP. Gesendet werden nur Meldung, Stack, Fundstelle, ob die installierte App läuft, und – vom Server – grob Browser und System. Adressen werden ohne Abfrage und #-Teil gemeldet (darin stehen die Routenpunkte), Zahlen mit drei oder mehr Nachkommastellen (Koordinaten) werden durch „…“ ersetzt. Höchstens 5 Berichte je Seitenaufruf, gleiche Fehler stehen je Stunde einmal im Log. Ohne den Node-Server (statischer Server) sendet die App nichts.
+
 ## Routing
 
 | Dienst | Rennrad | Gravel | Fahrrad (Trekking/Alltag) | E-Bike | Hinweise |
@@ -170,11 +178,13 @@ js/holidays.js         Feiertage (date.nager.at)
 js/regions.js          Land/Bundesland entlang der Route (Nominatim)
 js/account.js          Konto-Schnittstelle (Client)
 js/offlineStore.js     Datenbank im Browser: Kachel-Cache und Offline-Speicher fürs Konto
-js/shared.js           Gemeinsame Konstanten für Browser und Server
+js/shared.js           Gemeinsame Konstanten und Helfer für Browser und Server
+js/errorReport.js      Fehlerberichte an den eigenen Server (ohne Ortsangaben)
 
-server.mjs             Server: App ausliefern, /api/pois, /api/warm, /api/brouter, Konten
-server/                POI-Cache, Datenauszug Europa, Vorrat-Warteschlange, BRouter-Weiterleitung, Datenbank, Anmeldung, HTTP-Helfer
-scripts/               Datenauszug Europa bauen (läuft wöchentlich in GitHub Actions)
+server.mjs             Server: App ausliefern, /api/pois, /api/warm, /api/brouter, /api/client-error, Konten
+server/                POI-Cache, Datenauszug Europa, Vorrat-Warteschlange, BRouter-Weiterleitung, Fehlerberichte, Datenbank, Anmeldung, HTTP-Helfer
+scripts/               Datenauszug Europa bauen (läuft wöchentlich in GitHub Actions), Prüfung einer Installation von außen
+types/                 Typen für die Typprüfung (Routenobjekt, Leaflet als globale Variable) – werden nicht ausgeliefert
 ```
 
 ## Datenquellen

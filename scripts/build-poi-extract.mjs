@@ -41,7 +41,7 @@ const OUT = opt('out') || 'dist';
 const WORK = opt('work') || 'tmp-extract';
 const onlyRegions = opt('regions')?.split(',');
 // Test: fertige GeoJSON-Zeilen statt Download + osmium, z. B. --geojson liechtenstein=li.geojsonseq
-const givenGeojson = new Map(args.flatMap((a, i) => (a === '--geojson' ? [args[i + 1].split('=')] : [])));
+const givenGeojson = new Map(args.flatMap((a, i) => (a === '--geojson' ? [/** @type {[string, string]} */ (args[i + 1].split('='))] : [])));
 
 const log = msg => console.log(`[${new Date().toISOString().slice(11, 19)}] ${msg}`);
 
@@ -49,7 +49,7 @@ function run(cmd, cmdArgs) {
   return new Promise((resolve, reject) => {
     const p = spawn(cmd, cmdArgs, { stdio: ['ignore', 'inherit', 'inherit'] });
     p.on('error', reject);
-    p.on('exit', code => (code === 0 ? resolve() : reject(new Error(`${cmd} endete mit Code ${code}`))));
+    p.on('exit', code => (code === 0 ? resolve(undefined) : reject(new Error(`${cmd} endete mit Code ${code}`))));
   });
 }
 

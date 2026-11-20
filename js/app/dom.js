@@ -6,7 +6,14 @@
 import { announce } from '../announce.js';
 import { osmUrl, osmEditUrl, osmNoteUrl } from '../utils.js';
 
+/**
+ * Erstes passende Element. Typ bewusst `any`: Die Aufrufer wissen, was sie holen (input, dialog …) – sonst
+ * bräuchte jeder Zugriff auf `.value` oder `.showModal()` eine eigene Typangabe.
+ * @type {(sel: string) => any}
+ */
 export const $ = sel => document.querySelector(sel);
+/** Alle passenden Elemente als Array (Typ wie bei `$`). @type {(sel: string) => any[]} */
+export const $$ = sel => [...document.querySelectorAll(sel)];
 
 /** Häufig genutzte Elemente. */
 export const ui = {
@@ -88,8 +95,8 @@ export function osmLinks(poi, extra = []) {
     externalLink('In OSM ansehen', osmUrl(poi.id)),
     externalLink('Bearbeiten', osmEditUrl(poi.id)),
     externalLink('Fehler melden', osmNoteUrl(poi)));
-  box.lastChild.title = 'Hinweis für Mapper vor Ort – ohne OpenStreetMap-Konto';
-  box.children[box.children.length - 2].title = 'Im Editor von OpenStreetMap öffnen, z. B. um Öffnungszeiten nachzutragen (OSM-Konto nötig)';
+  /** @type {HTMLElement} */ (box.lastChild).title = 'Hinweis für Mapper vor Ort – ohne OpenStreetMap-Konto';
+  /** @type {HTMLElement} */ (box.children[box.children.length - 2]).title = 'Im Editor von OpenStreetMap öffnen, z. B. um Öffnungszeiten nachzutragen (OSM-Konto nötig)';
   return box;
 }
 

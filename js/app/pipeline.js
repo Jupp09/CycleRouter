@@ -59,6 +59,8 @@ export function abortCalculation() {
 /**
  * Route auf Karte und im Panel zeigen. Karte und Marker werden hier gesetzt; alles Weitere (Kennzahlen,
  * Höhenprofil, Stopps, Etappen, Speichern …) erledigen die Ansichten über das Ereignis 'route'.
+ * @param {Route} r
+ * @param {{fit?: boolean}} [options]
  */
 export function showRoute(r, { fit = true } = {}) {
   state.route = r;

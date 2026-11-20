@@ -171,7 +171,7 @@ async function layerPois(keys, layer, signal, cacheOnly) {
 async function fetchPoisInTiles(keys, signal, layers, { cacheOnly = false } = {}) {
   const parts = await Promise.all(layers.map(l => layerPois(keys, l, signal, cacheOnly)));
   const seen = new Set();
-  const out = parts.flatMap(p => p.pois).filter(p => !seen.has(p.id) && seen.add(p.id));
+  const out = /** @type {PoiList} */ (parts.flatMap(p => p.pois).filter(p => !seen.has(p.id) && seen.add(p.id)));
   out.complete = parts.every(p => p.complete);
   return out;
 }
@@ -179,12 +179,21 @@ async function fetchPoisInTiles(keys, signal, layers, { cacheOnly = false } = {}
 /**
  * Orte der angegebenen Ebenen entlang der Route (Kacheln samt ~1 km Rand).
  * Das Ergebnis-Array trägt `complete` = false, wenn mit `cacheOnly` nicht alle Kacheln vorhanden waren.
+ * @param {{cacheOnly?: boolean}} [opts]
+ * @returns {Promise<PoiList>}
  */
 export function fetchPois(r, signal, layers = ['supply'], opts = {}) {
   return fetchPoisInTiles(routeTiles(r), signal, layers, opts);
 }
 
-/** Orte der Ebenen rund um einzelne Punkte (`margin` in Grad, z. B. 0,03 ≈ 3 km) – etwa um Etappenenden. */
+/**
+ * Orte der Ebenen rund um einzelne Punkte (`margin` in Grad, z. B. 0,03 ≈ 3 km) – etwa um Etappenenden.
+ * @param {{lat: number, lon: number}[]} points
+ * @param {AbortSignal} signal
+ * @param {string[]} layers
+ * @param {{margin?: number, cacheOnly?: boolean}} [options]
+ * @returns {Promise<PoiList>}
+ */
 export function fetchPoisNear(points, signal, layers, { margin = 0.03, ...opts } = {}) {
   return fetchPoisInTiles(tilesNear(points, margin), signal, layers, opts);
 }

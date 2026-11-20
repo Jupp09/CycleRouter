@@ -76,7 +76,7 @@ const VALUE = /^[\w.-]{1,20}$/;
  * (E-Bike-Routen waren normale Trekking-Routen). brouter.de mit älterer Version verstand beides.
  * Schlüssel und Werte sind oben per Muster geprüft, die Werte werden trotzdem kodiert.
  */
-function upstreamQuery(params) {
+export function upstreamQuery(params) {
   const lonlats = params.get('lonlats'), profile = params.get('profile');
   if (!lonlats || !LONLATS.test(lonlats) || !profile || !NAME.test(profile)) throw new HttpError(400, 'Ungültige Anfrage');
   const out = new Map([

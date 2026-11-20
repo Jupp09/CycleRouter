@@ -83,10 +83,14 @@ function describe(p) {
  * Route vollständig, kommen die Treffer von dort; sonst von Photon, während der Server die fehlenden
  * Kacheln im Hintergrund nachlädt (beim nächsten Mal sind sie da). Kategorien ohne Photon-Filter liefern,
  * was der Cache schon hat (`partial`).
+ * @param {object} r Route
+ * @param {string} category Schlüssel aus PLACE_CATEGORIES
+ * @param {{maxOffset?: number, signal?: AbortSignal}} [options]
+ * @returns {Promise<PlaceResults>}
  */
 export async function searchAlongRoute(r, category, { maxOffset = categoryReach(category), signal } = {}) {
   const samples = sampleRoute(r, 100);
-  let cached = [];
+  let cached = /** @type {PoiList} */ ([]);
   try {
     cached = await fetchPois(r, signal, [layerOfType(category)], { cacheOnly: true });
   } catch (e) {
@@ -94,7 +98,7 @@ export async function searchAlongRoute(r, category, { maxOffset = categoryReach(
   }
   const typed = withTypicalHours(cached).filter(p => p.type === category);
   const fromCache = () => {
-    const out = [];
+    const out = /** @type {PlaceResults} */ ([]);
     for (const poi of typed) {
       const { along, offset } = nearest(samples, poi.lat, poi.lon, maxOffset);
       if (offset > maxOffset) continue;
@@ -142,7 +146,7 @@ async function searchPhoton(r, category, samples, known, { maxOffset, signal }) 
   if (failed === boxes.length) throw new Error('Die Ortssuche ist gerade nicht erreichbar.');
 
   const seen = new Set();
-  const out = [];
+  const out = /** @type {PlaceResults} */ ([]);
   for (const f of features) {
     const p = f.properties;
     const id = `${OSM_TYPE[p.osm_type] || 'node'}/${p.osm_id}`;

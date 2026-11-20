@@ -56,7 +56,7 @@ export function daylightNote({ start, end }, startAt, endAt) {
 export function daylightToday(at, rideSeconds, today = new Date()) {
   const t = sunTimes(at[0], at[1], today);
   if (!t) return null;
-  const long = rideSeconds * 1000 > t.set - t.rise;
+  const long = rideSeconds * 1000 > t.set.getTime() - t.rise.getTime();
   return {
     text: `Tageslicht heute am Start: ${formatClock(t.rise)}–${formatClock(t.set)} (${span(t.rise, t.set)})`
       + (long ? ' – die Fahrzeit ist länger als der helle Tag.' : ''),

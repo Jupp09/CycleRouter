@@ -330,7 +330,7 @@ export function applyHolidays(stopped, ctx) {
  * eine halbe Minute, und das soll die Planung nicht aufhalten. Fehlendes wird im Hintergrund nachgeladen
  * (`foodPartial`).
  */
-export async function addStops(base, { provider, opts, interval, departure, bike, style: styleId, signal, holidays = null, mark = () => {} }) {
+export async function addStops(base, { provider, opts, interval, departure, bike, style: styleId, signal, holidays = null, mark = _step => {} }) {
   const style = styleOf(styleId);
   const [supply, food] = await Promise.all([
     fetchPois(base, signal, ['supply']),
@@ -381,6 +381,7 @@ export async function addStops(base, { provider, opts, interval, departure, bike
   }
 
   // Route durch die Stopps führen
+  /** @type {Waypoint[]} */
   const points = stops.map(s => ({ lat: s.poi.lat, lon: s.poi.lon, stop: true }));
   const wps = insertWaypoints(base, stops.map((s, i) => ({ along: s.along, point: points[i] })));
   const routed = await route(provider, wps, opts, signal);

@@ -58,9 +58,10 @@ function signedOut(message) {
 
 $('#btn-login').addEventListener('click', () => authenticate('login'));
 $('#btn-register').addEventListener('click', () => authenticate('register'));
-// Enter im Passwortfeld meldet an (statt den Einstellungsdialog abzuschicken)
+// Enter im Passwortfeld meldet an (statt den Einstellungsdialog abzuschicken). Nicht während einer
+// Eingabe per IME (z. B. Japanisch): Dort bestätigt Enter erst die Zeichenauswahl.
 for (const id of ['#account-user', '#account-pass']) {
-  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); authenticate('login'); } });
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); authenticate('login'); } });
 }
 $('#btn-logout').addEventListener('click', async () => {
   try { await logout(); } catch { account.user = null; }
@@ -77,7 +78,7 @@ const sessionsText = n => (n === 1 ? '1 anderes Gerät wurde abgemeldet.' : n ? 
 $('#btn-change-password').addEventListener('click', () => { showPasswordForm(true); $('#account-pass-old').focus(); });
 $('#btn-password-cancel').addEventListener('click', () => renderAccount());
 for (const id of ['#account-pass-old', '#account-pass-new']) {
-  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#btn-password-confirm').click(); } });
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); $('#btn-password-confirm').click(); } });
 }
 $('#btn-password-confirm').addEventListener('click', async () => {
   let count;
