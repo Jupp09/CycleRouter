@@ -213,6 +213,16 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
   await ev(`document.querySelector('#mode-tabs [data-mode=ab]').click(); true`); await sleep(300);
   while ((await ev(SHEET)).state !== 'half') { await ev(`document.querySelector('#sheet-handle').click(); true`); await sleep(400); }
 
+  step('iPhone: Safaris Leiste unter der Seite (z. B. über einen Link aus einer anderen App geöffnet)');
+  // Der Viewport endet über der Leiste: kein zusätzlicher Abstand, sonst bliebe darüber eine leere Fläche
+  const metrics = { width: 393, deviceScaleFactor: 3, mobile: true, screenWidth: 393, screenHeight: 852 };
+  await page.send('Emulation.setDeviceMetricsOverride', { ...metrics, height: 708 }); await sleep(400);
+  const below = await ev(`({ bar: getComputedStyle(document.documentElement).getPropertyValue('--browser-bar').trim(),
+    gap: parseFloat(getComputedStyle(document.querySelector('#panel')).borderBottomWidth) })`);
+  check('Kein Platz für eine schwebende Leiste reserviert', below.bar === '0px' && below.gap < 64, JSON.stringify(below));
+  await page.send('Emulation.setDeviceMetricsOverride', { ...metrics, height: 852 }); await sleep(400);
+  check('Wieder schwebend: 64 px frei', (await ev(`getComputedStyle(document.documentElement).getPropertyValue('--browser-bar').trim()`)) === '64px');
+
   step('iPhone: Blatt ziehen');
   // Finger am Griff aufsetzen und in `steps` Schritten zu `toY` ziehen (langsam: Lage zählt; schnell: Richtung)
   const swipe = async (toY, { steps = 20, stepMs = 50 } = {}) => {

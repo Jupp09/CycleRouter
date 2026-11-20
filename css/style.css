@@ -655,10 +655,10 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
     background: var(--panel); cursor: grab; touch-action: none;
   }
   .sheet-handle span { width: 40px; height: 5px; border-radius: 3px; background: var(--muted); opacity: .6; }
-  /* Unten frei halten: Home-Balken und – nur im Browser, nicht in der installierten App – Safaris schwebende
-     Leiste, deren Höhe die Seite nicht erfährt (iOS 26/27; env() deckt nur den Home-Balken ab). sheetView.js liest
-     --browser-bar für die Stufe „Kurz“. */
-  :root { --browser-bar: 0px; --bottom-gap: max(env(safe-area-inset-bottom), 8px); }
+  /* Unten frei halten: Home-Balken und – nur wenn sie über der Seite schwebt – Safaris untere Leiste, deren Höhe
+     die Seite nicht erfährt (iOS 26/27; env() deckt nur den Home-Balken ab). Ob sie schwebt, misst sheetView.js
+     (measureBrowserBar) und setzt --browser-bar am Wurzelelement; es liest den Wert auch für die Stufe „Kurz“. */
+  :root { --browser-bar: 0px; --bottom-gap: calc(max(env(safe-area-inset-bottom), 8px) + var(--browser-bar)); }
   /* Distanz/Rundkurs: „Route erstellen“ und „Neu würfeln“ am unteren Rand des Blatts festhalten (über dem Rand) */
   .panel::after { content: ""; flex: none; height: 16px; margin-top: -12px; }
   .plan-actions {
@@ -691,12 +691,6 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
   .sheet-actions button { min-height: 44px; font-weight: 600; }
   #btn-sheet-gpx { flex: none; }
   #btn-sheet-gpx.primary, #btn-sheet-multiday { flex: 1; }
-}
-
-/* Handy im Browser (Safari-Tab oder Home-Bildschirm-Lesezeichen ohne „Als Web-App öffnen“): Platz für Safaris
-   schwebende untere Leiste. In der installierten App (display-mode: standalone) gibt es sie nicht. */
-@media (max-width: 800px) and (display-mode: browser) and (pointer: coarse) {
-  :root { --browser-bar: 64px; --bottom-gap: calc(max(env(safe-area-inset-bottom), 8px) + 64px); }
 }
 
 /* Roadbook drucken (js/app/roadbookView.js): Solange html.print-roadbook gesetzt ist, zeigt der Druck nur die
