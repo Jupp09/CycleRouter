@@ -35,7 +35,10 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Tooltip Fahrzeit nennt E-Bike-Tempo', /22 km\/h/.test(await ev(`document.querySelector('#stat-time').title`)), await ev(`document.querySelector('#stat-time').title`));
 
   step('Pfeiltasten');
+  // Mit angezeigter Route ist das Eingabeformular eingeklappt (planView.js) – ein versteckter Knopf nimmt keinen Fokus
+  await ev(`document.querySelector('#plan').hidden && document.querySelector('#btn-plan-edit').click(); true`);
   await ev(`document.querySelector('#bike-switch [data-value=ebike]').focus(); true`);
+  check('Fokus auf E-Bike', await ev(`document.activeElement?.dataset.value === 'ebike'`));
   await page.key('ArrowLeft'); await sleep(300);
   check('Pfeil links: E-Bike → Fahrrad', await ev(bike) === 'trekking');
   await page.key('ArrowRight'); await sleep(300);
@@ -51,7 +54,9 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Umschalter zeigt nur Fahrrad|E-Bike', await ev(visible('#bike-switch')) === 'Fahrrad|E-Bike', await ev(visible('#bike-switch')));
   check('Routenarten: A → B|Rundkurs', await ev(visible('#mode-tabs')) === 'A → B|Rundkurs', await ev(visible('#mode-tabs')));
   check('Gespeichert', await ev(`localStorage.getItem('cyclerouter.visibleBikes')`) === '["trekking","ebike"]');
+  await ev(`document.querySelector('#plan').hidden && document.querySelector('#btn-plan-edit').click(); true`);
   await ev(`document.querySelector('#bike-switch [data-value=ebike]').focus(); true`);
+  check('Fokus auf E-Bike (nach dem Speichern)', await ev(`document.activeElement?.dataset.value === 'ebike'`));
   await page.key('ArrowRight'); await sleep(300);
   check('Pfeiltasten überspringen ausgeblendete (E-Bike → Fahrrad)', await ev(bike) === 'trekking');
   await page.key('ArrowRight'); await sleep(300);
