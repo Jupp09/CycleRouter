@@ -40,11 +40,13 @@ const OVERLAYS = {
 // Kräftiges Magenta: kommt in CyclOSM/Topo/Satellit praktisch nicht vor und sticht daher heraus.
 const ROUTE_COLOR = '#e6007e';
 
-const icon = cls => L.divIcon({ className: '', html: `<div class="marker-pin ${cls}"></div>`, iconSize: [22, 22], iconAnchor: [11, 11] });
-const viaIcon = L.divIcon({ className: '', html: '<div class="marker-pin via"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+// Trefferfläche größer als der sichtbare Punkt (.marker-hit zentriert ihn): mindestens 24 px (WCAG 2.5.8), Start,
+// Ziel und Zwischenstopps 32 px – sie werden mit dem Finger gezogen, 22 px waren auf dem Handy zu knapp.
+const icon = cls => L.divIcon({ className: 'marker-hit', html: `<div class="marker-pin ${cls}"></div>`, iconSize: [32, 32], iconAnchor: [16, 16] });
+const viaIcon = L.divIcon({ className: 'marker-hit', html: '<div class="marker-pin via"></div>', iconSize: [24, 24], iconAnchor: [12, 12] });
 /** Manuell hinzugefügter Zwischenstopp: Nummer oder Kategorie-Symbol. */
 const manualIcon = text => L.divIcon({
-  className: '', iconSize: [26, 26], iconAnchor: [13, 13],
+  className: 'marker-hit', iconSize: [32, 32], iconAnchor: [16, 16],
   html: `<div class="via-pin">${text}</div>`,
 });
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -80,18 +82,60 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
   // Auch Zoomen per Mausrad/Knopf springt dann, statt zu animieren (gilt ab dem nächsten Laden der Seite)
   const calm = reduceMotion.matches ? { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false } : {};
   const map = L.map(el, { zoomControl: false, ...calm }).setView(view.center, view.zoom);
-  L.control.zoom({ position: 'topright' }).addTo(map);
+  // Die Karte ist fokussierbar (Leaflet: Pfeiltasten verschieben, +/− zoomt) – mit Namen und Bedienhinweis
+  // (#map-help in index.html), sonst läse ein Screenreader beim Fokus nur den ganzen Inhalt vor
+  el.setAttribute('role', 'group');
+  el.setAttribute('aria-label', 'Karte');
+  el.setAttribute('aria-describedby', 'map-help');
+  // Leaflets eigene Texte sind englisch; ein deutscher Screenreader läse sie mit deutscher Aussprache vor
+  L.control.zoom({ position: 'topright', zoomInTitle: 'Vergrößern', zoomOutTitle: 'Verkleinern' }).addTo(map);
+  map.attributionControl.setPrefix(String(map.attributionControl.options.prefix)
+    .replace('A JavaScript library for interactive maps', 'JavaScript-Bibliothek für interaktive Karten'));
   L.control.scale({ imperial: false, position: 'bottomright' }).addTo(map);
 
   const baseName = storage.get('baseLayer', DEFAULT_BASE);
   (BASE_LAYERS[baseName] || BASE_LAYERS[DEFAULT_BASE]).addTo(map);
-  L.control.layers(BASE_LAYERS, OVERLAYS, { position: 'topright' }).addTo(map);
+  const layers = L.control.layers(BASE_LAYERS, OVERLAYS, { position: 'topright' }).addTo(map);
+  const layersToggle = layers.getContainer().querySelector('.leaflet-control-layers-toggle');
+  layersToggle.title = 'Kartenstil und Ebenen';
+  layersToggle.setAttribute('aria-label', 'Kartenstil und Ebenen');
   map.on('baselayerchange', e => storage.set('baseLayer', e.name));
   map.on('moveend', () => {
     const c = map.getCenter();
     storage.set('view', { center: [c.lat, c.lng], zoom: map.getZoom() });
   });
   map.on('click', e => onClick({ lat: e.latlng.lat, lon: e.latlng.lng }));
+
+  // Popups per Tastatur: Öffnet ein per Tastatur fokussiertes Element das Popup (Listenzeile, Enter auf einem
+  // Marker), wandert der Fokus hinein – sonst läge sein Inhalt hinter dem ganzen Panel und allen Markern in der
+  // Tab-Reihenfolge, und niemand erführe, dass es aufging. Escape schließt es, der Fokus geht zurück zum Auslöser.
+  // Mit Maus oder Finger (kein :focus-visible) bleibt der Fokus, wo er ist.
+  let popupOpener = null;
+  map.on('popupopen', e => {
+    const box = e.popup.getElement();
+    const close = box?.querySelector('.leaflet-popup-close-button');
+    if (close) { close.setAttribute('aria-label', 'Schließen'); close.title = 'Schließen'; }
+    const from = document.activeElement;
+    popupOpener = from instanceof HTMLElement && from.matches(':focus-visible') ? from : null;
+    const content = box?.querySelector('.leaflet-popup-content');
+    if (!popupOpener || !content) return;
+    content.tabIndex = -1;
+    content.focus({ preventScroll: true });
+  });
+  map.on('popupclose', e => {
+    const opener = popupOpener;
+    popupOpener = null;
+    const active = document.activeElement;
+    const box = e.popup.getElement();
+    if (opener?.isConnected && (!active || active === document.body || box?.contains(active))) opener.focus({ preventScroll: true });
+  });
+  // Leaflet fängt Escape nur ab, solange die Karte selbst den Fokus hat, nicht ein Element im Popup
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && e.target instanceof Element && e.target.closest('.leaflet-popup')) {
+      e.stopPropagation();
+      map.closePopup();
+    }
+  });
 
   const markerLayer = L.layerGroup().addTo(map);
   const routeLayer = L.layerGroup().addTo(map);
@@ -193,7 +237,7 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
       for (const w of points) {
         const marker = named(L.marker([w.lat, w.lon], {
           icon: L.divIcon({
-            className: '', iconSize: [22, 22], iconAnchor: [11, 11], popupAnchor: [0, -11],
+            className: 'marker-hit', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -11],
             html: `<div class="water-pin${w.warn ? ' warn' : ''}">💧</div>`,
           }),
           zIndexOffset: 300,

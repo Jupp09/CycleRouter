@@ -48,12 +48,21 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Ansage „Route berechnet“', await waitFor(`[...document.querySelectorAll('body > .sr-only')].some(e => e.textContent.startsWith('Route berechnet'))`, 120000), await spoken());
   const markerNames = await ev(`[...document.querySelectorAll('.leaflet-marker-draggable')].map(m => m.getAttribute('aria-label')).join(' | ')`);
   check('Start-/Zielmarker haben Namen', /Start/.test(markerNames) && /Ziel/.test(markerNames), markerNames);
-  check('Alle fokussierbaren Marker benannt', await ev(`[...document.querySelectorAll('.leaflet-marker-icon[tabindex]')].every(m => m.getAttribute('aria-label'))`));
+  check('Karte benannt, mit Bedienhinweis', await ev(`(m => m.getAttribute('aria-label') === 'Karte' && !!document.getElementById(m.getAttribute('aria-describedby'))?.textContent)(document.querySelector('#map'))`));
+  check('Kartenknöpfe auf Deutsch', await ev(`['.leaflet-control-zoom-in', '.leaflet-control-zoom-out', '.leaflet-control-layers-toggle'].map(s => document.querySelector(s).title).join('|')`) === 'Vergrößern|Verkleinern|Kartenstil und Ebenen',
+    await ev(`['.leaflet-control-zoom-in', '.leaflet-control-zoom-out', '.leaflet-control-layers-toggle'].map(s => document.querySelector(s).title).join('|')`));
+  check('Start-/Zielmarker mindestens 24 px', await ev(`[...document.querySelectorAll('.leaflet-marker-draggable')].every(m => m.offsetWidth >= 24 && m.offsetHeight >= 24)`));
+  check('Alle fokussierbaren Marker benannt',await ev(`[...document.querySelectorAll('.leaflet-marker-icon[tabindex]')].every(m => m.getAttribute('aria-label'))`));
   if (await ev(`document.querySelectorAll('#stop-list li').length`)) {
     await ev(`document.querySelector('#stop-list button.row').focus(); true`);
     check('Stopp-Zeile ist fokussierbar', (await focused()).startsWith('row'), await focused());
     await page.key('Enter');
     check('Enter öffnet den Stopp auf der Karte', await waitFor(`!!document.querySelector('.leaflet-popup .stop-popup')`, 5000));
+    check('Fokus wandert ins Popup', await ev(`!!document.activeElement?.closest('.leaflet-popup')`), await focused());
+    check('Schließen-Knopf auf Deutsch', await ev(`document.querySelector('.leaflet-popup-close-button')?.getAttribute('aria-label')`) === 'Schließen');
+    await page.key('Escape'); await sleep(400);
+    check('Escape schließt das Popup', await ev(`!document.querySelector('.leaflet-popup')`));
+    check('Fokus zurück auf der Stopp-Zeile', (await focused()).startsWith('row'), await focused());
   } else console.log('     (keine Stopps auf dieser Route)');
   await ev(`document.activeElement.blur(); document.querySelector('.skip-link').focus(); true`);
   check('Sprunglink sichtbar bei Fokus', await ev(`getComputedStyle(document.querySelector('.skip-link')).display !== 'none' && document.querySelector('.skip-link').getBoundingClientRect().top >= 0`));

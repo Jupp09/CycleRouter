@@ -117,6 +117,10 @@ input:focus, select:focus { border-color: var(--accent); }
    oben outline: none – deshalb hier mit höherer Spezifität. */
 :focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
 input[type]:focus-visible, select:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 1px; }
+/* Datum/Uhrzeit: Mit Tab zwischen Datum und Uhrzeit gilt :focus-visible in Chrome nicht mehr fürs Feld */
+input[type="datetime-local"]:focus { outline: 2px solid var(--accent-text); outline-offset: 1px; }
+/* Aufklappzeilen mindestens 24 px hoch (WCAG 2.5.8 – Zielgröße) */
+summary { min-height: 1.5rem; }
 .segmented button:focus-visible, .tabs button:focus-visible { outline-offset: -2px; }
 .leaflet-marker-icon:focus-visible { outline: 3px solid var(--accent-text); outline-offset: 2px; border-radius: 50%; }
 
@@ -331,7 +335,7 @@ input[type="datetime-local"] {
   background: var(--route); color: #fff; font-size: 0.75rem; font-weight: 700;
 }
 .link-btn {
-  align-self: flex-start; padding: 2px 0; background: none; border: none; color: var(--accent-text); font-weight: 600; font-size: 0.8125rem;
+  align-self: flex-start; min-height: 1.5rem; padding: 2px 0; background: none; border: none; color: var(--accent-text); font-weight: 600; font-size: 0.8125rem;
 }
 .link-btn:hover { text-decoration: underline; }
 button.row:disabled { cursor: default; opacity: 0.6; }
@@ -429,6 +433,8 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
 /* Unsichtbare Trefferfläche über der Route (map.js): zeigt die Stelle im Höhenprofil */
 .leaflet-interactive.route-hit { cursor: crosshair; }
 
+/* Trefferfläche der kleinen Marker (js/map.js): sichtbarer Punkt in der Mitte */
+.marker-hit { display: grid; place-items: center; }
 .marker-pin {
   width: 22px; height: 22px; border-radius: 50%;
   border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .45);

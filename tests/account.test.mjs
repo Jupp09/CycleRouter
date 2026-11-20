@@ -84,6 +84,13 @@ async function devices({ app, page: newPage, check, step, sleep }) {
   const phone = await newPage({ accounts: true });
   await phone.open(app);
   check('Vorher Standard-Fahrradtyp', await phone.ev(`document.querySelector('#bike-switch [aria-checked=true]').dataset.value`) === 'road');
+  // Falsches Passwort: Die Meldung muss auch angesagt werden (Screenreader), nicht nur im Dialog stehen
+  await phone.ev(`document.querySelector('#btn-settings').click();
+    document.querySelector('#account-user').value = '${user}'; document.querySelector('#account-pass').value = 'falsch-falsch';
+    document.querySelector('#btn-login').click(); true`);
+  check('Fehlgeschlagene Anmeldung wird angesagt', await phone.waitFor(`[...document.querySelectorAll('body > .sr-only')].some(e => e.textContent.includes('falsch'))`, 10000),
+    await phone.ev(`[...document.querySelectorAll('body > .sr-only')].map(e => e.textContent).join(' / ')`));
+  await phone.ev(`document.querySelector('#settings-dialog').close('cancel'); true`);
   await phone.ev(`document.querySelector('#btn-settings').click();
     document.querySelector('#account-user').value = '${user}'; document.querySelector('#account-pass').value = '${pass}';
     document.querySelector('#btn-login').click(); true`);

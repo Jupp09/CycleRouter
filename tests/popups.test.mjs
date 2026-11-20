@@ -57,4 +57,27 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Café-Popup hat 3 OSM-Links', p?.links.length === 3 && p.links[1][1].includes('/edit?'), p?.links.map(l => l[0]).join(' · '));
   check('Café-Popup: Öffnungszeiten oder Hinweis', /Öffnungszeiten/.test(p?.text || ''), p?.text.slice(0, 160));
   await page.shot('2-cafe');
+
+  step('Mit der Maus und per Tastatur');
+  const focusedIn = sel => ev(`!!document.activeElement?.closest(${JSON.stringify(sel)})`);
+  await ev(`(async () => { ${MAP}.closePopup(); return true; })()`); await sleep(300);
+  // Echter Mausklick auf die Stopp-Zeile: Popup geht auf, der Fokus bleibt auf der Zeile
+  const rect = await ev(`(() => { const b = document.querySelector('#stop-list button.row'); b.scrollIntoView({ block: 'center' });
+    const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`);
+  await page.click(rect.x, rect.y); await sleep(600);
+  check('Maus: Popup offen', await ev(`!!document.querySelector('.leaflet-popup .stop-popup')`));
+  check('Maus: Fokus bleibt außerhalb des Popups', !(await focusedIn('.leaflet-popup')), await ev(`document.activeElement?.className`));
+  await ev(`(async () => { ${MAP}.closePopup(); return true; })()`); await sleep(300);
+  // Tab von davor auf die Zeile: so gilt :focus-visible wie bei echter Tastaturbedienung
+  await ev(`(() => { const rows = [...document.querySelectorAll('#stop-list button.row')]; rows[0].focus(); return true; })()`);
+  await page.key('Tab', { shift: true }); await page.key('Tab');
+  check('Stopp-Zeile hat den Fokus', await focusedIn('#stop-list'));
+  await page.key('Enter'); await sleep(600);
+  check('Enter: Popup offen, Fokus darin', await focusedIn('.leaflet-popup'), await ev(`document.activeElement?.className`));
+  check('Schließen-Knopf auf Deutsch', await ev(`document.querySelector('.leaflet-popup-close-button')?.getAttribute('aria-label')`) === 'Schließen');
+  await page.key('Tab');
+  check('Tab erreicht die Links im Popup', await focusedIn('.leaflet-popup'), await ev(`document.activeElement?.textContent`));
+  await page.key('Escape'); await sleep(400);
+  check('Escape schließt das Popup', await ev(`!document.querySelector('.leaflet-popup')`));
+  check('Fokus zurück auf der Stopp-Zeile', await focusedIn('#stop-list'), await ev(`document.activeElement?.className`));
 }

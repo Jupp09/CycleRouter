@@ -10,6 +10,7 @@ import {
 import { storage, onStorageSet, debounce } from '../utils.js';
 import { on, emit } from './state.js';
 import { $ } from './dom.js';
+import { announce } from '../announce.js';
 import { openSharedFromUrl } from './routesView.js';
 
 // Auch bei abgelaufener Sitzung, die routesView beim Laden von „Meine Routen“ bemerkt
@@ -18,6 +19,9 @@ on('account', () => renderAccount());
 // ---------- Anmelden, Abmelden, Konto löschen (im Einstellungsdialog) ----------
 
 function renderAccount(message = '', isError = false) {
+  // Ausdrückliche Meldungen ansagen (Anmeldung gescheitert, Passwort geändert …) – sonst hört man mit
+  // Screenreader nach „Anmelden“ nichts. Nicht beim bloßen Neuzeichnen (Ereignis 'account', ohne Meldung).
+  if (message) announce(message, { urgent: isError });
   $('#account-box').hidden = !account.enabled;
   const loggedIn = !!account.user;
   $('#account-out').hidden = loggedIn;
