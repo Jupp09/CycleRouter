@@ -52,5 +52,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
     const [d] = dayTimes(state.route, departureDate(), state.bike), last = state.route.stops.at(-1);
     return { end: d.end.getTime(), lastStop: last ? last.eta.getTime() : null, clock: d.end.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) }; })()`);
   check('Ankunft im Hinweis = Ankunft am Ziel', note.text.includes(`Ankunft ca. ${times.clock}`), times.clock);
+  check('Kachel „Ankunft“ mit derselben Zeit', await page.ev(`!document.querySelector('#stat-arrival-tile').hidden
+    && document.querySelector('#stat-arrival').textContent`) === times.clock, times.clock);
   if (times.lastStop) check('Ankunft liegt nach dem letzten Stopp', times.end > times.lastStop);
 }

@@ -1,11 +1,13 @@
 /**
- * Ergebnis-Panel: Kennzahlen (Distanz, Höhenmeter, Fahrzeit), Tageslicht, Anteil auf Radfernwegen, Routenname,
+ * Ergebnis-Panel: Kennzahlen (Distanz, Höhenmeter, reine Fahrzeit, Ankunft), Tageslicht, Anteil auf Radfernwegen, Routenname,
  * Höhenprofil und die Aufschlüsselung nach Untergrund, Wegtyp bzw. Steigung (samt Einfärbung der Routenlinie)
  * mit der Liste der größten Anstiege.
  */
 import { summarize, estimatedShare, longDistanceShare } from '../surfaces.js';
 import { findClimbs, hasElevation } from '../climbs.js';
-import { storage, estimateTime, averageSpeed, haversine, indexAtDistance, formatKm, formatM, formatDuration, formatNumber } from '../utils.js';
+import {
+  storage, estimateTime, averageSpeed, haversine, indexAtDistance, formatKm, formatM, formatDuration, formatNumber, formatClock, formatWeekday,
+} from '../utils.js';
 import { fetchPoisNear } from '../poiTiles.js';
 import { dayTimes } from '../timeline.js';
 import { daylightNote, daylightToday } from '../sun.js';
@@ -123,13 +125,29 @@ function renderStats(r) {
 function renderDaylight(r) {
   const el = $('#daylight');
   const first = r.coords[0], last = r.coords.at(-1);
+  const day = !r.stageStarts?.length && (state.supply.enabled || state.multiDay) ? dayTimes(r, departureDate(), state.bike)[0] : null;
+  renderArrival(day);
   const note = r.stageStarts?.length ? null
-    : state.supply.enabled || state.multiDay ? daylightNote(dayTimes(r, departureDate(), state.bike)[0], first, last)
+    : day ? daylightNote(day, first, last)
     : daylightToday(first, estimateTime(r.distance, r.ascent, state.bike));
   el.hidden = !note;
   if (!note) return;
   el.textContent = note.text;
   el.classList.toggle('warn', note.warn);
+}
+
+/**
+ * Kachel „Ankunft“ (inkl. Pausen an den Stopps) – nur mit sichtbar festgelegter Abfahrt und an einem Stück; bei
+ * Mehrtagestouren steht die Ankunft je Tag in der Tagesliste. Liegt sie an einem späteren Tag, mit Wochentag,
+ * sonst läse sich „03:41“ wie heute Nacht.
+ */
+function renderArrival(day) {
+  const tile = $('#stat-arrival-tile');
+  tile.hidden = !day;
+  if (!day) return;
+  const later = day.end.toDateString() !== day.start.toDateString();
+  $('#stat-arrival').textContent = later ? `${formatWeekday(day.end)} ${formatClock(day.end)}` : formatClock(day.end);
+  tile.title = 'Ankunft am Ziel inklusive Pausen an den Verpflegungsstopps';
 }
 
 /** So weit vom Ziel wird ein Bahnhof für die Rückfahrt noch genannt (m). */

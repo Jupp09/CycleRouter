@@ -42,7 +42,11 @@ const ROUTE_COLOR = '#e6007e';
 
 // Trefferfläche größer als der sichtbare Punkt (.marker-hit zentriert ihn): mindestens 24 px (WCAG 2.5.8), Start,
 // Ziel und Zwischenstopps 32 px – sie werden mit dem Finger gezogen, 22 px waren auf dem Handy zu knapp.
-const icon = cls => L.divIcon({ className: 'marker-hit', html: `<div class="marker-pin ${cls}"></div>`, iconSize: [32, 32], iconAnchor: [16, 16] });
+// Das Ziel trägt eine Zielflagge (style.css): Start und Ziel unterscheiden sich so nicht nur in der Farbe.
+const FLAG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 22V3" fill="none"/><path d="M5 3h14l-3.5 5 3.5 5H5z"/></svg>';
+const icon = cls => L.divIcon({
+  className: 'marker-hit', html: `<div class="marker-pin ${cls}">${cls === 'end' ? FLAG : ''}</div>`, iconSize: [32, 32], iconAnchor: [16, 16],
+});
 const viaIcon = L.divIcon({ className: 'marker-hit', html: '<div class="marker-pin via"></div>', iconSize: [24, 24], iconAnchor: [12, 12] });
 /** Manuell hinzugefügter Zwischenstopp: Nummer oder Kategorie-Symbol. */
 const manualIcon = text => L.divIcon({

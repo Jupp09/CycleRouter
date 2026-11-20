@@ -39,6 +39,9 @@ export function renderStages() {
   const origin = originRoute();
   const candidate = !!origin && isMultiDayCandidate(origin, state.stays.maxKm);
   box.hidden = !r || (!candidate && !state.multiDay);
+  // Wird die Mehrtagestour angeboten, ist sie die Hauptaktion – „GPX exportieren“ tritt dann zurück
+  const gpx = $('#btn-gpx');
+  gpx.classList.add('primary');
   const plan = r?.stays;
   map.setStays(plan ? plan.nights.filter(n => n.chosen).map(n => ({
     id: n.chosen.poi.id, lat: n.chosen.poi.lat, lon: n.chosen.poi.lon, icon: STAY_TYPES[n.chosen.poi.type].icon, popup: stayPopup(n),
@@ -55,6 +58,7 @@ export function renderStages() {
       ? 'Mehrtagestour aufheben'
       : `Als Mehrtagestour planen (${days} Tage à ca. ${Math.round(origin.distance / days / 1000)} km)`;
   btn.className = state.multiDay && !state.staysLoading ? '' : 'primary';
+  gpx.classList.toggle('primary', btn.className !== 'primary');
   // Fehler direkt am Knopf anzeigen (die Statuszeile oben ist auf dem Handy oft nicht im Blick)
   const err = $('#stages-error');
   err.hidden = !state.staysError || state.staysLoading;
