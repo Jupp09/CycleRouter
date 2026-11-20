@@ -38,6 +38,9 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   const legendKm = await ev(`[...document.querySelectorAll('#breakdown-legend .km')].map(s => s.textContent)`);
   check('Keine Legendenzeile mit „0 km“', legendKm.length > 0 && !legendKm.includes('0 km'), legendKm.join(', '));
   check('Höhenprofil sichtbar', await ev(`!!${q('#elevation-chart')}.querySelector('svg')`));
+  const legend = await ev(`[...document.querySelectorAll('.map-legend li')].map(li => li.textContent.trim())`);
+  check('Legende auf der Karte erklärt Start, Ziel, Stopps und Wasser', ['Start', 'Ziel', 'Trinkwasser'].every(t => legend.includes(t))
+    && legend.some(t => t.startsWith('Öffnungszeiten unklar')), legend.join(', '));
 
   // Aufbau des Ergebnisses: drei Kacheln, Hinweise als Liste, Erklärtexte eingeklappt, Aktionen gebündelt
   const layout = await ev(`(() => {

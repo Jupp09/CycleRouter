@@ -17,6 +17,11 @@ on('route', renderStops);
 on('start', updateDepartureHint);
 
 const isWarn = s => WARN_STATES.has(s.state);
+/**
+ * Warnung auch im Namen des Markers (Tooltip, aria-label): Auf der Karte zeigen gestrichelter Rand und „?“ sie nur
+ * an, ein Screenreader erführe sonst nichts davon.
+ */
+const warnNote = s => (isWarn(s) ? ` – ${STATE_LABELS[s.state]}` : '');
 
 /** Feiertag als „Sa., 08.11.“ (ISO-Datum; Mittag, damit keine Zeitzone den Tag verschiebt). */
 const holidayDay = iso => formatDayDate(new Date(iso + 'T12:00'));
@@ -92,7 +97,7 @@ function renderWater(r) {
   const water = (r?.water || []).filter(w => !taken.has(`${w.poi.lat},${w.poi.lon}`));
   map.setWater(water.map(w => ({
     id: waterId(w), lat: w.poi.lat, lon: w.poi.lon, warn: isWarn(w), popup: waterPopup(w),
-    title: `Trinkwasser${w.poi.name ? ': ' + w.poi.name : ''}, km ${Math.round(w.along / 1000)}`,
+    title: `Trinkwasser${w.poi.name ? ': ' + w.poi.name : ''}, km ${Math.round(w.along / 1000)}${warnNote(w)}`,
   })));
   const box = $('#water');
   box.hidden = !r?.water;
@@ -132,7 +137,7 @@ function renderStops() {
   const stops = r?.stops || [];
   map.setStops(stops.map((s, i) => ({
     id: s.poi.id, lat: s.poi.lat, lon: s.poi.lon, icon: s.icon, warn: isWarn(s), popup: stopPopup(s),
-    title: `Verpflegungsstopp ${i + 1}: ${s.poi.name || s.typeLabel}, km ${Math.round(s.along / 1000)}`,
+    title: `Verpflegungsstopp ${i + 1}: ${s.poi.name || s.typeLabel}, km ${Math.round(s.along / 1000)}${warnNote(s)}`,
   })));
 
   renderWater(r);

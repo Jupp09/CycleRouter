@@ -70,6 +70,37 @@ const KIND_NAME = { start: 'Start', end: 'Ziel', via: 'Wegpunkt', manual: 'Zwisc
 const DRAG_HINT = { start: 'ziehen zum Verschieben', end: 'ziehen zum Verschieben', via: 'ziehen, um die Route zu ändern', manual: 'ziehen zum Verschieben' };
 
 /**
+ * Legende der Kartensymbole als Leaflet-Steuerelement: ein <details> („Legende“), aufgeklappt gemerkt (nur auf
+ * diesem Gerät). Die Symbole teilen sich die CSS-Regeln mit den Markern auf der Karte (style.css: `.stop-pin,
+ * .pin-stop` usw.), tragen aber eigene Klassen – sonst zählten Code und Tests, die z. B. `.stop-pin` suchen, die
+ * Legende mit. Statisches Markup ohne Daten aus OSM, daher innerHTML.
+ */
+function createLegend() {
+  const Legend = L.Control.extend({
+    onAdd() {
+      const box = L.DomUtil.create('details', 'leaflet-control map-legend');
+      box.open = !!storage.get('legendOpen', false);
+      box.innerHTML = `<summary>Legende</summary><ul>
+        <li><span class="legend-icon"><span class="pin-marker pin-start"></span></span>Start</li>
+        <li><span class="legend-icon"><span class="pin-marker pin-end">${FLAG}</span></span>Ziel</li>
+        <li><span class="legend-icon"><span class="pin-via">1</span></span>Zwischenstopp</li>
+        <li><span class="legend-icon"><span class="pin-stop">🛒</span></span>Verpflegungsstopp (Symbol: Art)</li>
+        <li><span class="legend-icon"><span class="pin-stop pin-warn">☕</span></span>Öffnungszeiten unklar oder evtl. zu</li>
+        <li><span class="legend-icon"><span class="pin-water">💧</span></span>Trinkwasser</li>
+        <li><span class="legend-icon"><span class="pin-stay">🏨</span></span>Unterkunft</li>
+      </ul>`;
+      for (const pin of box.querySelectorAll('.legend-icon')) pin.setAttribute('aria-hidden', 'true');
+      box.addEventListener('toggle', () => storage.set('legendOpen', box.open));
+      // Klicks und Scrollen in der Legende nicht an die Karte (sonst setzte ein Klick einen Wegpunkt)
+      L.DomEvent.disableClickPropagation(box);
+      L.DomEvent.disableScrollPropagation(box);
+      return box;
+    },
+  });
+  return new Legend({ position: 'topleft' });
+}
+
+/**
  * „Bewegung reduzieren“ im System: Kartensprünge (Route einpassen, zu einem Ort springen) ohne
  * Flug-Animation. Bei jedem Aufruf neu abgefragt, damit eine Änderung der Systemeinstellung sofort gilt.
  */
@@ -154,8 +185,15 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
   // Nicht interaktiv: Er sitzt genau unter dem Mauszeiger und würde der Routenlinie sonst die Maus wegnehmen
   // Weiß gefüllt: In Routenfarbe ginge er auf der Linie unter, auf der er sitzt
   const hoverMarker = L.circleMarker([0, 0], { radius: 8, color: '#111827', weight: 3, fillColor: '#fff', fillOpacity: 1, interactive: false });
+  const legend = createLegend();
 
   return {
+    /** Legende der Marker oben links – nur solange eine Route angezeigt wird (vorher gibt es nichts zu erklären). */
+    showLegend(on) {
+      if (on) legend.addTo(map);
+      else legend.remove();
+    },
+
     /**
      * markers: [{point, kind: 'start'|'end'|'via'|'manual', index, text?, title?}]
      * – `index` wird beim Verschieben zurückgegeben; 'manual' = vom Nutzer gesetzter Zwischenstopp.

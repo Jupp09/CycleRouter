@@ -19,6 +19,7 @@ import { setSheet } from './sheetView.js';
 
 on('route', r => {
   const summary = $('#route-summary');
+  map.showLegend(!!r);
   if (!r) {
     elevation.hide();
     ui.results.hidden = true;
