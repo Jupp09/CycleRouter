@@ -15,7 +15,7 @@ import { addStops, holidayContext, applyHolidays } from '../stops.js';
 import { warmRoute } from '../poiTiles.js';
 import { announce } from '../announce.js';
 import { isMultiDayCandidate, planStays, routeThroughStays } from '../stays.js';
-import { seededRandom } from '../utils.js';
+import { seededRandom, formatNumber } from '../utils.js';
 import { locateOnRoute, insertWaypoints } from '../routeGeometry.js';
 import { state, emit, provider, routeOpts, departureDate, activeVias, originRoute, activeTrack } from './state.js';
 import { setStatus } from './dom.js';
@@ -36,7 +36,7 @@ function stopwatch() {
   const t0 = performance.now();
   let last = t0;
   const parts = [];
-  const sec = ms => `${(ms / 1000).toLocaleString('de-DE', { maximumFractionDigits: ms < 100 ? 2 : 1 })} s`;
+  const sec = ms => `${formatNumber(ms / 1000, { maximumFractionDigits: ms < 100 ? 2 : 1 })} s`;
   return {
     /** Abschnitt seit der letzten Marke abschließen. */
     mark(label) { const now = performance.now(); parts.push(`${label} ${sec(now - last)}`); last = now; },

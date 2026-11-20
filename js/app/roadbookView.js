@@ -16,15 +16,15 @@ import { stageStats, dayTimes, pausedTimeline } from '../timeline.js';
 import { daylightNote } from '../sun.js';
 import { findClimbs } from '../climbs.js';
 import { locateOnRoute } from '../routeGeometry.js';
-import { indexAtDistance, formatKm, formatM, formatDuration, formatClock, formatDayDate, formatDate } from '../utils.js';
+import { indexAtDistance, formatKm, formatM, formatDuration, formatClock, formatDayDate, formatDate, formatNumber } from '../utils.js';
 import { account } from '../account.js';
 import { isTrackRoute } from './linkView.js';
 import { state, departureDate, BIKE_LABELS, on } from './state.js';
 import { $ } from './dom.js';
 import { gpxName } from './exportView.js';
 
-const km = m => (m / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const pct = g => (g * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 });
+const km = m => formatNumber(m / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const pct = g => formatNumber(g * 100, { maximumFractionDigits: 1 });
 
 function el(tag, text = '', cls = '') {
   const node = document.createElement(tag);

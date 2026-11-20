@@ -138,22 +138,39 @@ export function estimateTime(distance, ascent, bike) {
 
 // ---------- Formatierung (de-DE) ----------
 
-export const formatKm = m => (m / 1000).toLocaleString('de-DE', { maximumFractionDigits: m < 100000 ? 1 : 0 }) + ' km';
-export const formatM = m => Math.round(m).toLocaleString('de-DE') + ' m';
-export const formatInt = n => n.toLocaleString('de-DE');
+// Formatierer einmal anlegen statt bei jedem Aufruf: toLocaleString(…) mit Optionen baut jedes Mal einen neuen
+// Intl-Formatierer. Beim Planen der Stopps (Tausende Ankunftszeiten und Entfernungen) kostete das auf einem
+// Mittelklasse-Handy spürbar Zeit; ein gemerkter Formatierer ist 14× (Uhrzeit) bis 40× (Zahl) schneller, die
+// Ausgabe ist dieselbe. Angelegt erst beim ersten Gebrauch, damit er die Zeitzone der Seite übernimmt.
+const formatters = new Map();
+const cached = (key, make) => {
+  let f = formatters.get(key);
+  if (!f) formatters.set(key, f = make());
+  return f;
+};
+/** Zahl im de-DE-Format; `options` wie bei toLocaleString (gleiche Optionen teilen sich einen Formatierer). */
+export function formatNumber(n, options = {}) {
+  return cached(JSON.stringify(options), () => new Intl.NumberFormat('de-DE', options)).format(n);
+}
+/** @param {string} key @param {Intl.DateTimeFormatOptions} options @returns {(d: Date) => string} */
+const dateFormat = (key, options) => d => cached(key, () => new Intl.DateTimeFormat('de-DE', options)).format(d);
+
+export const formatKm = m => formatNumber(m / 1000, { maximumFractionDigits: m < 100000 ? 1 : 0 }) + ' km';
+export const formatM = m => formatNumber(Math.round(m)) + ' m';
+export const formatInt = n => formatNumber(n);
 export function formatDuration(s) {
   // Erst auf ganze Minuten runden, dann teilen – sonst wird aus 8 h 59,6 min „8 h 60 min“
   const total = Math.round(s / 60), h = Math.floor(total / 60), m = total % 60;
   return h ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`;
 }
 /** „14:20“ */
-export const formatClock = d => d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+export const formatClock = dateFormat('clock', { hour: '2-digit', minute: '2-digit' });
 /** „Sa.“ */
-export const formatWeekday = d => d.toLocaleDateString('de-DE', { weekday: 'short' });
+export const formatWeekday = dateFormat('weekday', { weekday: 'short' });
 /** „Sa., 08.11.“ */
-export const formatDayDate = d => d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
+export const formatDayDate = dateFormat('dayDate', { weekday: 'short', day: '2-digit', month: '2-digit' });
 /** „08.11.2026“ */
-export const formatDate = d => d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+export const formatDate = dateFormat('date', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 /** Wert für <input type="datetime-local"> (Ortszeit, Minutengenau). */
 export function toDateTimeLocal(d) {

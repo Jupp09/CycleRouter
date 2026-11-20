@@ -1,5 +1,6 @@
 import { CATEGORIES, segmentAt, segmentsFor } from './surfaces.js';
 import { gradeAt } from './climbs.js';
+import { formatNumber } from './utils.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const M = { top: 22, right: 10, bottom: 28, left: 42 };
@@ -29,7 +30,7 @@ function indexAt(cum, d) {
   return lo;
 }
 
-const km = m => (m / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 });
+const km = m => formatNumber(m / 1000, { maximumFractionDigits: 1 });
 
 /** Höhen ohne Lücken: fehlende Werte übernehmen den letzten bekannten (bzw. den ersten, am Anfang). */
 function filledElevations(coords) {
@@ -103,9 +104,15 @@ export function createElevation(container, { onHover }) {
     const w = W - m.left - m.right, h = H - m.top - m.bottom;
     if (w < 20 || h < 20) return;
 
-    const eles = coords.map(c => c[2]).filter(e => e != null);
-    const lowest = Math.min(...eles);
-    let min = lowest, max = Math.max(...eles);
+    // Schleife statt Math.min(...eles): Bei sehr langen Touren (über ~100 000 Punkte) wären das zu viele Argumente
+    let lowest = Infinity, highest = -Infinity, firstEle = null;
+    for (const c of coords) {
+      if (c[2] == null) continue;
+      firstEle ??= c[2];
+      if (c[2] < lowest) lowest = c[2];
+      if (c[2] > highest) highest = c[2];
+    }
+    let min = lowest, max = highest;
     // Achse an die Daten anpassen, mit mindestens 20 m Spanne ab dem auf 10 m abgerundeten Tiefstwert –
     // sonst wird eine flache Strecke (Bremen: 1–5 m) zur Linie auf einer Achse von −40 bis +40 m
     if (max - min < 20) { min = Math.floor(min / 10) * 10; max = Math.max(min + 20, max); }
@@ -133,7 +140,7 @@ export function createElevation(container, { onHover }) {
     // Auf höchstens einen Punkt pro Pixel reduzieren
     const stride = Math.max(1, Math.floor(coords.length / w));
     let path = '';
-    let lastEle = eles[0];
+    let lastEle = firstEle;
     for (let i = 0; i < coords.length; i += stride) {
       lastEle = coords[i][2] ?? lastEle;
       path += `${path ? 'L' : 'M'}${x(cum[i]).toFixed(1)},${y(lastEle).toFixed(1)}`;
@@ -193,7 +200,7 @@ export function createElevation(container, { onHover }) {
       tip.hidden = false;
       const category = segments.length ? ' · ' + CATEGORIES[kind][segmentAt(segments, i)[kind]].label : '';
       const g = gradeAt(route, i);
-      const grade = g == null ? '' : ` · ${(Math.round(g * 100) || 0).toLocaleString('de-DE')} %`.replace('-', '−');
+      const grade = g == null ? '' : ` · ${formatNumber(Math.round(g * 100) || 0)} %`.replace('-', '−');
       tip.textContent = `${km(cum[i])} km · ${ele != null ? Math.round(ele) + ' m' : '–'}${category}${grade}`;
       const rect = svg.getBoundingClientRect();
       const half = tip.offsetWidth / 2 + 2;
@@ -242,7 +249,23 @@ export function createElevation(container, { onHover }) {
   });
   container.addEventListener('blur', () => hideCursor?.());
 
-  new ResizeObserver(draw).observe(container);
+  // Nicht neu zeichnen, was schon so dasteht, und Größenänderungen je Bild sammeln: Die Pipeline zeigt die Route
+  // nach jedem Schritt, und jedes Anzeigen ändert auch die Größe (ResizeObserver) – das waren bis zu 8 Zeichnungen
+  // je Berechnung, auf einem Mittelklasse-Handy jeweils einige 10 ms, in denen die Seite nicht reagiert.
+  // show() und setKind() zeichnen sofort (wer danach das Profil liest, sieht den neuen Stand).
+  let frame = 0, drawn = null;
+  function requestDraw() {
+    if (!frame) frame = requestAnimationFrame(() => { frame = 0; drawIfChanged(); });
+  }
+  function drawIfChanged() {
+    // Was das Profil zeichnet, nicht das Routenobjekt: Die Pipeline zeigt nach jedem Schritt ein neues, oft mit
+    // derselben Linie (Feiertage, Regionen). Steigungen hängen nur an den Koordinaten.
+    const now = { coords: route?.coords, segments: route?.segments, kind, w: container.clientWidth, h: container.clientHeight, font: getComputedStyle(document.documentElement).fontSize };
+    if (drawn && Object.keys(now).every(k => now[k] === drawn[k])) return;
+    drawn = now;
+    draw();
+  }
+  new ResizeObserver(requestDraw).observe(container);
 
   return {
     show(r, k = kind) {
@@ -257,9 +280,10 @@ export function createElevation(container, { onHover }) {
         container.setAttribute('aria-valuenow', '0');
         container.setAttribute('aria-valuetext', 'Anfang der Route');
       }
-      draw();
+      hideCursor?.(); // `pos` ist zurückgesetzt – auch wenn das Profil gleich bleibt und nicht neu gezeichnet wird
+      drawIfChanged();
     },
-    setKind(k) { kind = k; draw(); },
+    setKind(k) { kind = k; drawIfChanged(); },
     /** Stelle `along` (m) anzeigen – wenn die Maus über der Routenlinie auf der Karte ist oder sie angetippt wurde. */
     showAt(along) { place?.(along); },
     /** Anzeige von showAt beenden; eine Tastaturposition im Profil bleibt dann stehen. */
@@ -267,6 +291,10 @@ export function createElevation(container, { onHover }) {
       if (pos != null && document.activeElement === container) place?.(pos);
       else hideCursor?.();
     },
-    hide() { route = null; pos = null; section.hidden = true; draw(); },
+    hide() {
+      route = null; pos = null; section.hidden = true;
+      cancelAnimationFrame(frame); frame = 0; drawn = null;
+      draw();
+    },
   };
 }

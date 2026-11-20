@@ -5,7 +5,7 @@
  */
 import { summarize, estimatedShare, longDistanceShare } from '../surfaces.js';
 import { findClimbs, hasElevation } from '../climbs.js';
-import { storage, estimateTime, averageSpeed, haversine, indexAtDistance, formatKm, formatM, formatDuration } from '../utils.js';
+import { storage, estimateTime, averageSpeed, haversine, indexAtDistance, formatKm, formatM, formatDuration, formatNumber } from '../utils.js';
 import { fetchPoisNear } from '../poiTiles.js';
 import { dayTimes } from '../timeline.js';
 import { daylightNote, daylightToday } from '../sun.js';
@@ -209,8 +209,8 @@ function renderBreakdown() {
 function renderClimbs(r, kind) {
   const climbs = kind === 'grade' ? findClimbs(r) : [];
   $('#climbs').hidden = !climbs.length;
-  const km = m => (m / 1000).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  const pct = g => (g * 100).toLocaleString('de-DE', { maximumFractionDigits: g < 0.1 ? 1 : 0 });
+  const km = m => formatNumber(m / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const pct = g => formatNumber(g * 100, { maximumFractionDigits: g < 0.1 ? 1 : 0 });
   $('#climb-list').replaceChildren(...climbs.map(c => {
     const li = document.createElement('li');
     const main = span('main');

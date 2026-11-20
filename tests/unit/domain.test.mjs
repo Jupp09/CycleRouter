@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseOpeningHours, openState } from '../../js/openingHours.js';
-import { computeStats, formatKm, estimateTime } from '../../js/utils.js';
+import { computeStats, formatKm, formatM, formatInt, formatNumber, formatClock, formatWeekday, formatDayDate, formatDate, estimateTime } from '../../js/utils.js';
 import { tileKey, isTileKey, cellOfTile, isLayer, LAYERS, layerOfType } from '../../js/poiSource.js';
 import { headwind } from '../../js/weather.js';
 import { findClimbs, gradeSegments } from '../../js/climbs.js';
@@ -61,6 +61,24 @@ test('Streckenwerte: Länge, Anstieg, Formatierung', () => {
   assert.equal(formatKm(123456), '123 km');
   // Anstieg verlängert die Fahrzeit
   assert.ok(estimateTime(10000, 500, 'road') > estimateTime(10000, 0, 'road'));
+});
+
+test('Gemerkte Formatierer geben dasselbe aus wie toLocaleString', () => {
+  for (const m of [0, 49, 950, 12345, 99999, 100000, 123456, 2345678]) {
+    assert.equal(formatKm(m), (m / 1000).toLocaleString('de-DE', { maximumFractionDigits: m < 100000 ? 1 : 0 }) + ' km');
+    assert.equal(formatM(m), Math.round(m).toLocaleString('de-DE') + ' m');
+    assert.equal(formatInt(m), m.toLocaleString('de-DE'));
+  }
+  assert.equal(formatNumber(0.25, { maximumFractionDigits: 2 }), '0,25');
+  assert.equal(formatNumber(1.5, { minimumFractionDigits: 1, maximumFractionDigits: 1 }), '1,5');
+  // Ein Jahr lang alle 7 h 13 min: Wochentage, Monatswechsel, Zeitumstellung
+  for (let t = new Date(2026, 0, 1).getTime(); t < new Date(2027, 0, 1).getTime(); t += 26_000_000) {
+    const d = new Date(t);
+    assert.equal(formatClock(d), d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }));
+    assert.equal(formatWeekday(d), d.toLocaleDateString('de-DE', { weekday: 'short' }));
+    assert.equal(formatDayDate(d), d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' }));
+    assert.equal(formatDate(d), d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }));
+  }
 });
 
 test('Kacheln und Zellen (auch südlich/westlich von 0°)', () => {

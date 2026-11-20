@@ -5,7 +5,7 @@
  */
 import { weatherAlong, weatherParts, windLabel, windAdvice, FORECAST_DAYS } from '../weather.js';
 import { dayTimes, pausedTimeline } from '../timeline.js';
-import { formatClock, formatDate, formatDayDate, formatWeekday } from '../utils.js';
+import { formatClock, formatDate, formatDayDate, formatWeekday, formatNumber } from '../utils.js';
 import { state, on, departureDate, defaultDeparture, provider } from './state.js';
 import { $ } from './dom.js';
 import { generate } from './pipeline.js';
@@ -82,7 +82,7 @@ async function renderWeather(r) {
     const rows = ofDay(d).map(s => {
       const li = document.createElement('li');
       li.textContent = `km ${km(s.from)}–${km(s.to)} · ${formatClock(s.time)} · ${Math.round(s.temp)} °C · Regen ${s.rainProb} %`
-        + (s.rain >= 0.1 ? ` (${s.rain.toLocaleString('de-DE')} mm)` : '') + ` · ${windLabel(s)}`;
+        + (s.rain >= 0.1 ? ` (${formatNumber(s.rain)} mm)` : '') + ` · ${windLabel(s)}`;
       return li;
     });
     if (!multi || !rows.length) return rows;
