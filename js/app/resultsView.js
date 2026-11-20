@@ -11,7 +11,7 @@ import {
 import { fetchPoisNear } from '../poiTiles.js';
 import { dayTimes } from '../timeline.js';
 import { daylightNote, daylightToday } from '../sun.js';
-import { state, on, defaultName, departureDate, activeBreakdown } from './state.js';
+import { state, on, defaultName, departureDate, departureFixed, activeBreakdown } from './state.js';
 import { $, $$, ui, rowButton, span } from './dom.js';
 import { map, elevation, drawRouteLine } from './mapView.js';
 import { syncUi } from './controls.js';
@@ -126,7 +126,7 @@ function renderStats(r) {
 function renderDaylight(r) {
   const el = $('#daylight');
   const first = r.coords[0], last = r.coords.at(-1);
-  const day = !r.stageStarts?.length && (state.supply.enabled || state.multiDay) ? dayTimes(r, departureDate(), state.bike)[0] : null;
+  const day = !r.stageStarts?.length && departureFixed() ? dayTimes(r, departureDate(), state.bike)[0] : null;
   const arrival = renderArrival(day);
   const note = r.stageStarts?.length ? null
     : day ? daylightNote(day, first, last)

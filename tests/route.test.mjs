@@ -70,7 +70,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   const plan = `({ hidden: document.querySelector('#plan').hidden, summary: document.querySelector('#plan-summary').hidden ? null : document.querySelector('#plan-summary-text').textContent,
     button: document.querySelector('#btn-plan-edit').textContent, expanded: document.querySelector('#btn-plan-edit').getAttribute('aria-expanded') })`;
   let pl = await ev(plan);
-  check('Nach dem Berechnen eingeklappt: eine Zeile mit Start, Ziel und Fahrrad', pl.hidden && /^A → B · .+ → .+ · Fahrrad$/.test(pl.summary || '') && pl.button === 'Ändern' && pl.expanded === 'false', JSON.stringify(pl));
+  check('Nach dem Berechnen eingeklappt: eine Zeile mit Start, Ziel und Fahrrad', pl.hidden && /^A → B · .+ → .+ · Trekking$/.test(pl.summary || '') && pl.button === 'Ändern' && pl.expanded === 'false', JSON.stringify(pl));
   await ev(`document.querySelector('#btn-plan-edit').click(); true`);
   pl = await ev(plan);
   check('„Ändern“ klappt auf', !pl.hidden && pl.button === 'Einklappen' && pl.expanded === 'true', JSON.stringify(pl));
@@ -143,7 +143,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   step('Rundkurs');
   await ev(`${q('#mode-tabs [data-mode=loop]')}.click(); true`); await sleep(300);
   await ev(`{ const n = ${q('#distance-num')}; n.value = 25; n.dispatchEvent(new Event('change')); } true`);
-  check('Distanz übernommen', (await text('#distance-out')) === '25 km', await text('#distance-out'));
+  check('Distanz übernommen', await ev(`(async () => (await import('/js/app/state.js')).state.distanceKm === 25)()`));
   await ev(`${q('#btn-generate')}.click(); true`);
   check('Rundkurs erzeugt', await waitFor(`!${q('#results')}.hidden && ${q('#route-name')}.value.startsWith('Rundkurs')`, 120000),
     `${await text('#stat-dist')} – ${await ev(`${q('#route-name')}.value`)}`);

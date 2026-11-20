@@ -62,8 +62,9 @@
         <button id="btn-redo" class="icon-btn" aria-label="Wiederholen" title="Wiederholen (Strg+Umschalt+Z)" disabled>
           <svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
         </button>
-        <button id="btn-import" class="icon-btn" aria-label="GPX-Datei öffnen" title="GPX-Datei öffnen – eine vorhandene Strecke öffnen und Stopps oder Unterkünfte entlang davon planen (oder die Datei auf die Karte ziehen)">
-          <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M12 16v-5M9.5 13.5 12 11l2.5 2.5"/></svg>
+        <!-- Mit Text: Ein Ordner-Symbol allein war mehrdeutig, und auf dem Handy gibt es keinen Tooltip -->
+        <button id="btn-import" class="icon-btn with-text" aria-label="GPX-Datei öffnen" title="GPX-Datei öffnen – eine vorhandene Strecke öffnen und Stopps oder Unterkünfte entlang davon planen (oder die Datei auf die Karte ziehen)">
+          <svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M5 15v4h14v-4"/></svg><span aria-hidden="true">GPX</span>
         </button>
         <button id="btn-settings" class="icon-btn" title="Einstellungen" aria-label="Einstellungen">
           <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
@@ -104,22 +105,27 @@
         </div>
 
         <div class="via-list" id="via-list" data-show="ab"></div>
-        <button id="btn-add-via" class="link-btn" data-show="ab" title="Zwischenstopp hinzufügen – alternativ bei gesetztem Start und Ziel auf die Karte klicken">+ Zwischenstopp</button>
+        <!-- Tauschen zwischen Start und Ziel, wo man es erwartet – neben „+ Zwischenstopp“ -->
+        <div class="between-points" data-show="ab">
+          <button id="btn-add-via" class="link-btn" title="Zwischenstopp hinzufügen – alternativ bei gesetztem Start und Ziel auf die Karte klicken">+ Zwischenstopp</button>
+          <button id="btn-swap" class="icon-btn" title="Start und Ziel tauschen" aria-label="Start und Ziel tauschen">
+            <svg viewBox="0 0 24 24"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>
+          </button>
+        </div>
         <input id="gpx-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden>
 
         <div class="field" data-show="ab">
           <label class="label" for="end-input"><i class="dot end"></i>Ziel</label>
           <div class="search">
             <input id="end-input" type="text" placeholder="Ort suchen oder auf Karte klicken" autocomplete="off">
-            <button id="btn-swap" class="icon-btn" title="Start und Ziel tauschen" aria-label="Start und Ziel tauschen">
-              <svg viewBox="0 0 24 24"><path d="M7 4v16M7 20l-3-3M7 20l3-3M17 20V4M17 4l-3 3M17 4l3 3"/></svg>
-            </button>
             <ul class="suggestions" hidden></ul>
           </div>
         </div>
+        <!-- A → B hat keinen Berechnen-Knopf: sagen, wann die Route kommt (ausgeblendet, sobald das Ziel steht; style.css) -->
+        <p class="hint ab-hint" id="ab-hint" data-show="ab">Die Route wird berechnet, sobald Start und Ziel gesetzt sind.</p>
 
         <div class="field" data-show="distance loop">
-          <span class="label">Distanz <output id="distance-out"></output></span>
+          <span class="label">Distanz</span>
           <div class="range-row">
             <input id="distance-range" type="range" min="10" max="300" step="5" aria-label="Distanz">
 
@@ -142,21 +148,24 @@
             <option value="315">Nordwesten</option>
           </select>
         </label>
-
-        <!-- Handy: bleibt am unteren Rand des Blatts stehen (style.css), auch wenn das Formular weiter reicht -->
-        <div class="actions plan-actions" data-show="distance loop">
-          <button id="btn-generate" class="primary">Route erstellen</button>
-          <button id="btn-reroll" title="Andere Variante erzeugen">Neu würfeln</button>
-        </div>
       </section>
 
-      <!-- Fahrrad und Routing-Optionen nach den Wegpunkten: erst wohin, dann wie (auch Tab-Reihenfolge) -->
+      <!-- Fahrrad und Routing-Optionen nach den Wegpunkten: erst wohin, dann wie (auch Tab-Reihenfolge). Eigene
+           Überschrift und Auswahl-Chips (style.css), damit es nicht wie ein zweiter Umschalter der Routenart aussieht -->
       <section class="group">
-        <div class="segmented" id="bike-switch" role="radiogroup" aria-label="Fahrradtyp">
+        <h2 class="label" id="h-bike">Fahrrad</h2>
+        <div class="segmented chips" id="bike-switch" role="radiogroup" aria-labelledby="h-bike">
           <button role="radio" data-value="road">Rennrad</button>
           <button role="radio" data-value="gravel">Gravel</button>
-          <button role="radio" data-value="trekking" title="Trekking-, Touren- und Alltagsrad">Fahrrad</button>
+          <button role="radio" data-value="trekking" title="Trekking-, Touren- und Alltagsrad">Trekking</button>
           <button role="radio" data-value="ebike" title="Pedelec mit Unterstützung bis 25 km/h – Anstiege werden kaum gemieden">E-Bike</button>
+        </div>
+        <!-- Optional: Mit Abfahrt zeigt das Ergebnis gleich Ankunft und Tageslicht (state.departureSet, departureFixed()).
+             Nach dem Fahrrad, damit am Handy in der Stufe „Halb“ Start, Ziel und Fahrrad ohne Scrollen sichtbar bleiben -->
+        <div class="field">
+          <label class="label" for="plan-departure">Abfahrt <span class="optional">· optional</span></label>
+          <input id="plan-departure" type="datetime-local" aria-describedby="plan-departure-hint">
+          <p class="hint" id="plan-departure-hint">Für Ankunftszeit, Tageslicht und Wetter unterwegs.</p>
         </div>
         <details class="more-options" id="more-options">
           <summary>Mehr Optionen<span id="more-options-active"></span></summary>
@@ -187,6 +196,13 @@
           <p class="hint">Verpflegungsstopps: nach dem Berechnen unter „Stopps unterwegs“.</p>
         </details>
       </section>
+
+      <!-- Distanz und Rundkurs: „Route erstellen“ schließt das Formular ab – nach Fahrrad und Optionen, die es
+           braucht. Handy: bleibt am unteren Rand des Blatts stehen (style.css), auch wenn das Formular weiter reicht -->
+      <div class="actions plan-actions" data-show="distance loop">
+        <button id="btn-generate" class="primary">Route erstellen</button>
+        <button id="btn-reroll" title="Andere Variante erzeugen">Neu würfeln</button>
+      </div>
     </div>
 
     <div id="status" class="status" hidden></div>
@@ -417,7 +433,7 @@
           <legend>Fahrradtypen</legend>
           <label class="check"><input type="checkbox" value="road"> Rennrad</label>
           <label class="check"><input type="checkbox" value="gravel"> Gravel</label>
-          <label class="check"><input type="checkbox" value="trekking"> Fahrrad</label>
+          <label class="check"><input type="checkbox" value="trekking"> Trekking</label>
           <label class="check"><input type="checkbox" value="ebike"> E-Bike</label>
         </fieldset>
         <fieldset class="choice-set" id="visible-modes">

@@ -252,3 +252,9 @@ $('#supply-interval').addEventListener('change', e => {
   if (state.supply.enabled) replanStops();
 });
 $('#departure').addEventListener('change', e => setDeparture(e.target.value, { replan: state.supply.enabled }));
+// Abfahrt im Formular: optional; leer = keine festgelegte Abfahrt. Eine Route wird neu dargestellt (die Abschnitte
+// kommen aus dem Cache), damit Ankunft, Tageslicht und Wetter die neue Zeit zeigen.
+$('#plan-departure').addEventListener('change', e => {
+  state.departureSet = !!e.target.value;
+  setDeparture(e.target.value, { replan: !!state.route });
+});

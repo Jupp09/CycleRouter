@@ -1,5 +1,5 @@
 // Tageslicht: Sonnenauf- und -untergang (js/sun.js) und der Hinweis im Ergebnis – ohne festgelegte Abfahrt nur
-// der helle Tag heute, mit Abfahrt (Verpflegungsstopps) die Warnung vor Fahrt im Dunkeln.
+// der helle Tag heute, mit Abfahrt (im Formular oder mit Verpflegungsstopps) die Warnung vor Fahrt im Dunkeln.
 import { BONN, HAS_ROUTE, SUPPLY_DONE, departNextWednesday } from './lib/app.mjs';
 
 export const title = 'Tageslicht';
@@ -27,6 +27,16 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   let note = await page.ev(NOTE);
   check('Heller Tag heute, keine Warnung', !note.hidden && /^Tageslicht heute am Start: \d\d:\d\d–\d\d:\d\d \(/.test(note.text) && !note.warn, note.text);
   await page.shot('1-ohne-abfahrt');
+
+  step('Abfahrt im Formular, ohne Verpflegungsstopps');
+  await page.ev(`(() => { const d = new Date(); d.setDate(d.getDate() + ((3 - d.getDay() + 7) % 7 || 7));
+    const pad = n => String(n).padStart(2, '0');
+    const el = document.querySelector('#plan-departure');
+    el.value = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T12:00';
+    el.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+  check('Kachel „Ankunft“ erscheint', await page.waitFor(`!document.querySelector('#stat-arrival-tile').hidden`, 60000));
+  note = await page.ev(NOTE);
+  check('Hinweis rechnet mit der Abfahrt statt mit heute', !note.hidden && !note.text.startsWith('Tageslicht heute'), note.text);
 
   step('Abfahrt um 05:00');
   page = await newPage();

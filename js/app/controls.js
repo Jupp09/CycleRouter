@@ -4,7 +4,7 @@
  * blendet modusabhängige Felder (`data-show`) ein und aus.
  */
 import { storage, newSeed } from '../utils.js';
-import { state, provider, activeBreakdown } from './state.js';
+import { state, provider, activeBreakdown, departureFixed } from './state.js';
 import { $, $$, ui } from './dom.js';
 import { clearRoute, calcAB, generate, recalc } from './pipeline.js';
 import { checkpoint } from './history.js';
@@ -26,6 +26,8 @@ export function syncUi() {
   $('#supply-options').hidden = !state.supply.enabled;
   $('#supply-interval').value = state.supply.intervalKm;
   $('#departure').value = state.supply.departure;
+  // Abfahrt im Formular: leer, solange keine festgelegt ist (dann rechnet das Ergebnis mit „jetzt“)
+  $('#plan-departure').value = departureFixed() ? state.supply.departure : '';
 
   // Verkehrsarm gibt es nur für Rennrad bei Diensten, die es unterstützen (BRouter)
   $('#traffic-field').hidden = state.bike !== 'road' || !provider().supportsTraffic;
@@ -36,7 +38,6 @@ export function syncUi() {
   $('#direction').value = state.direction;
   ui.range.value = state.distanceKm;
   ui.num.value = state.distanceKm;
-  ui.distanceOut.textContent = `${state.distanceKm} km`;
 
   const hint = $('#provider-hint');
   hint.hidden = !(state.provider === 'ors' && state.bike === 'gravel');
