@@ -330,14 +330,19 @@
           <span class="label">Routenname</span>
           <input id="route-name" type="text">
         </label>
+        <!-- Gleich breite Knöpfe statt einer unruhig umbrechenden Reihe: Speichern (angemeldet) über die ganze Breite,
+             darunter Link und Roadbook je zur Hälfte. Löschen abgesetzt und leise, damit es nicht wie eine gleichrangige
+             Aktion neben „Speichern“ steht (es ist ohnehin mit „Rückgängig“ zurückholbar). -->
         <div class="action-row">
-          <button id="btn-roadbook" title="Druckbare Übersicht: je Tag Zeiten, Stopps mit Öffnungszeiten und Unterkunft – im Druckdialog auch als PDF speicherbar">Roadbook</button>
-          <button id="btn-share-link" title="Link zur Route kopieren bzw. teilen – ohne Konto; er steht auch in der Adresszeile">Link teilen</button>
           <span class="action-group" id="save-actions" hidden>
             <button id="btn-save-route" title="In „Meine Routen“ speichern – auf allen deinen Geräten verfügbar">Route speichern</button>
           </span>
-          <button id="btn-clear" class="push-end" title="Route und Wegpunkte entfernen – mit „Rückgängig“ zurückholbar">Löschen</button>
+          <button id="btn-share-link" title="Link zur Route kopieren bzw. teilen – ohne Konto; er steht auch in der Adresszeile">Link teilen</button>
+          <button id="btn-roadbook" title="Druckbare Übersicht: je Tag Zeiten, Stopps mit Öffnungszeiten und Unterkunft – im Druckdialog auch als PDF speicherbar">Roadbook</button>
         </div>
+        <button id="btn-clear" class="link-btn danger-link" title="Route und Wegpunkte entfernen – mit „Rückgängig“ zurückholbar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Route löschen
+        </button>
         <p class="hint" id="share-hint" hidden></p>
         <p class="hint" id="save-hint" hidden></p>
       </section>
