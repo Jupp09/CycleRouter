@@ -634,7 +634,7 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
     /* Echte Höhe statt nach unten verschoben: Das untere Ende des Blatts ist immer der Bildschirmrand, der Inhalt
        scrollt im sichtbaren Teil, und „Route erstellen“ kann dort stehen bleiben (.plan-actions) */
-    height: var(--sheet-visible, 55vh);
+    height: var(--sheet-visible, 60vh);
     transition: height .25s ease;
     /* Unten ein Rand statt Innenabstand: Safari zieht Innenabstand beim Festkleben (.plan-actions) nicht ab, Chrome
        schon; ein Rand gehört in beiden nicht zum scrollenden Bereich. Er hält Home-Balken bzw. Safaris Leiste frei,

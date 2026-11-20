@@ -170,9 +170,12 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
     return { state: p.dataset.sheet, top: Math.round(p.getBoundingClientRect().top), map: Math.round(document.querySelector('#map').getBoundingClientRect().height),
       expanded: h.getAttribute('aria-expanded'), label: h.getAttribute('aria-label') }; })()`;
   let sheet = await ev(SHEET);
-  check('Karte füllt den Bildschirm, Blatt auf „Halb“', sheet.map >= 850 && sheet.state === 'half' && Math.abs(sheet.top - 852 * 0.45) <= 3, JSON.stringify(sheet));
-  const startBox = await ev(`(() => { const r = document.querySelector('#start-input').getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; })()`);
-  check('Start-Feld im halb offenen Blatt ohne Scrollen sichtbar', startBox.top >= sheet.top && startBox.bottom <= 852, JSON.stringify(startBox));
+  check('Karte füllt den Bildschirm, Blatt auf „Halb“', sheet.map >= 850 && sheet.state === 'half' && Math.abs(sheet.top - 852 * 0.4) <= 3, JSON.stringify(sheet));
+  // Sichtbar heißt: über dem unteren Rand des Blatts (ohne Home-Balken und Safaris Leiste, den Rand des Panels)
+  const fields = await ev(`(() => { const p = document.querySelector('#panel'), end = p.getBoundingClientRect().bottom - parseFloat(getComputedStyle(p).borderBottomWidth);
+    const box = sel => { const r = document.querySelector(sel).getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; };
+    return { visibleBottom: Math.round(end), start: box('#start-input'), end: box('#end-input') }; })()`);
+  check('Start- und Ziel-Feld im halb offenen Blatt ohne Scrollen sichtbar', fields.start.top >= sheet.top && fields.end.bottom <= fields.visibleBottom, JSON.stringify(fields));
   check('Keine waagerechte Scrollleiste', await ev(`document.documentElement.scrollWidth <= innerWidth`));
   await page.shot('3b-blatt-halb');
 
@@ -232,9 +235,9 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
   await ev(`document.querySelector('#sheet-handle').click(); document.querySelector('#sheet-handle').click(); true`); await sleep(500); // Voll → Kurz → Halb
 
   step('iPhone: Route per Fingertipp, eigene Dialoge');
-  // Oberhalb des halb offenen Blatts tippen (es verdeckt die unteren 55 %)
+  // Oberhalb des halb offenen Blatts tippen (es verdeckt die unteren 60 %) – und nicht auf die Quellenangabe direkt darüber
   await page.clickMapAt(0.35, 0.12, { touch: true }); await sleep(900);
-  await page.clickMapAt(0.6, 0.38, { touch: true });
+  await page.clickMapAt(0.6, 0.3, { touch: true });
   check('Route per Fingertipp gesetzt', await waitFor(HAS_ROUTE), await page.text('#stat-dist'));
   await sleep(800);
   const text = await ev(`document.querySelector('#route-summary-text').textContent`);

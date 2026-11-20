@@ -25,8 +25,9 @@ let current = 'half';
 
 /** Höhe von Safaris schwebender Leiste im Browser (CSS --browser-bar, in der installierten App 0). */
 const browserBar = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--browser-bar')) || 0;
-// „Kurz“ um die Browser-Leiste höher, sonst läge die Kennzahlen-Zeile darunter
-const visible = state => (state === 'full' ? window.innerHeight - TOP_GAP : state === 'half' ? Math.round(window.innerHeight * 0.55) : PEEK + browserBar());
+// „Kurz“ um die Browser-Leiste höher, sonst läge die Kennzahlen-Zeile darunter. „Halb“: 60 %, damit Start und Ziel
+// samt Hinweis ohne Scrollen zu sehen sind (iPhone 393 × 852 im Browser; 55 % schnitten das Ziel-Feld ab)
+const visible = state => (state === 'full' ? window.innerHeight - TOP_GAP : state === 'half' ? Math.round(window.innerHeight * 0.6) : PEEK + browserBar());
 
 /** Stufe setzen: 'peek' | 'half' | 'full' (am Rechner ohne Wirkung). */
 export function setSheet(state) {
