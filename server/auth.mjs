@@ -1,16 +1,47 @@
 // Anmeldung: Passwörter (scrypt), Sitzungen (zufälliges Token im HttpOnly-Cookie, in der DB nur als
 // SHA-256-Hash), Erkennung der Nutzer-IP hinter Proxys und Begrenzung von Fehlversuchen.
 import { scrypt, randomBytes, timingSafeEqual, createHash } from 'node:crypto';
+import { isIP } from 'node:net';
 import { promisify } from 'node:util';
 import { query } from './db.mjs';
 import { createLimiter } from './rateLimit.mjs';
+import { HttpError } from './http.mjs';
 
-const scryptAsync = promisify(scrypt);
+const scryptRaw = promisify(scrypt);
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 const COOKIE = 'cr_session';
 const SESSION_DAYS = 30;
 
 // ---------- Passwörter ----------
+
+/**
+ * Höchstens so viele Passwortprüfungen gleichzeitig, der Rest wartet. scrypt läuft in Nodes Thread-Pool
+ * (standardmäßig 4 Threads), über den auch alle Dateizugriffe laufen (App-Dateien, POI-Cache). Viele
+ * Anmeldeversuche auf einmal – auch mit unbekannten Namen, die ebenfalls eine Prüfung kosten – würden sonst
+ * die ganze Seite ausbremsen. Eine Prüfung dauert einige 10 ms, 2 gleichzeitig reichen für Dutzende Anmeldungen
+ * je Sekunde. Stehen zu viele an, antwortet der Server sofort mit 503, statt die Schlange wachsen zu lassen.
+ */
+const MAX_HASHING = 2;
+const MAX_HASH_WAITING = 20;
+let hashing = 0;
+const hashQueue = [];
+
+async function scryptAsync(...args) {
+  if (hashing < MAX_HASHING) hashing++;
+  else {
+    if (hashQueue.length >= MAX_HASH_WAITING) {
+      throw new HttpError(503, 'Der Server ist gerade ausgelastet – bitte gleich noch einmal versuchen.');
+    }
+    await new Promise(resolve => hashQueue.push(resolve));
+  }
+  try {
+    return await scryptRaw(...args);
+  } finally {
+    const next = hashQueue.shift();
+    if (next) next(); // Platz direkt weitergeben, `hashing` bleibt gleich
+    else hashing--;
+  }
+}
 
 export async function hashPassword(password) {
   const salt = randomBytes(16);
@@ -100,8 +131,37 @@ let debugLeft = process.env.DEBUG_IP === '1' ? 20 : 0;
  *   die Adresse an, von der er die Anfrage bekam; Einträge weiter links kann der Client selbst vorgeben.
  * TRUST_PROXY=off schaltet die Header ab; DEBUG_IP=1 schreibt die ersten 20 Entscheidungen ins Log,
  * um die Erkennung im Betrieb zu prüfen.
+ * Zurück kommt der Schlüssel für die Begrenzungen (limitKey): IPv4 unverändert, IPv6 nur das /64-Netz.
  */
 export function clientIp(req) {
+  return limitKey(peerIp(req));
+}
+
+/**
+ * Begrenzungsschlüssel einer Adresse. Ein IPv6-Anschluss bekommt meist ein ganzes /64-Netz (2⁶⁴ Adressen) –
+ * je Einzeladresse gezählt, könnte jemand mit jeder Anfrage eine neue nehmen und alle Begrenzungen umgehen
+ * (Anmeldeversuche, neue Konten, Overpass-/BRouter-Kontingent). Daher zählt bei IPv6 das /64-Netz.
+ * IPv4 in IPv6-Schreibweise (::ffff:1.2.3.4) wird zur IPv4-Adresse, damit derselbe Anschluss nicht zwei
+ * Zähler hat. Was keine gültige Adresse ist, bleibt unverändert.
+ */
+export function limitKey(ip) {
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip ?? '');
+  if (mapped) return mapped[1];
+  if (isIP(ip) !== 6) return ip;
+  const addr = ip.split('%')[0]; // Zonenangabe (fe80::1%eth0)
+  const parts = s => (s ? s.split(':') : []);
+  // Eine eingebettete IPv4-Adresse am Ende belegt zwei Gruppen
+  const width = list => list.reduce((n, g) => n + (g.includes('.') ? 2 : 1), 0);
+  let groups;
+  if (addr.includes('::')) {
+    const [head, tail] = addr.split('::');
+    const h = parts(head), t = parts(tail);
+    groups = [...h, ...Array(8 - width(h) - width(t)).fill('0'), ...t];
+  } else groups = parts(addr);
+  return `${groups.slice(0, 4).map(g => parseInt(g, 16).toString(16)).join(':')}::/64`;
+}
+
+function peerIp(req) {
   const peer = req.socket.remoteAddress;
   const forwarded = String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
   const realIp = String(req.headers['x-real-ip'] || '').trim();
@@ -180,11 +240,14 @@ export async function currentUser(req) {
 // loginUser: Fehlversuche je Benutzername über alle IPs – gegen verteiltes Raten. Großzügiger, weil ein
 //   Angreifer damit ein fremdes Konto zeitweise sperren kann.
 // register: neue Konten je IP.
+// registerAll: neue Konten auf dem ganzen Server je Tag (Schlüssel egal). Jedes Konto darf 50 MB Routen
+//   speichern; wer viele Anschlüsse hat, könnte sonst mit immer neuen Konten die Platte füllen.
 
 const LIMITERS = {
   login: createLimiter({ windowMs: 15 * 60 * 1000, max: 10 }),
   loginUser: createLimiter({ windowMs: 60 * 60 * 1000, max: 30 }),
   register: createLimiter({ windowMs: 60 * 60 * 1000, max: 5 }),
+  registerAll: createLimiter({ windowMs: 24 * 60 * 60 * 1000, max: 50 }),
 };
 const keyOf = (kind, key) => (kind === 'loginUser' ? String(key).toLowerCase() : key);
 

@@ -1,6 +1,6 @@
 // Gleitende Zeitfenster für Begrenzungen (Anmeldeversuche, neue Konten, Overpass-Kontingent je IP).
 // Jeder Eintrag zählt mit einem Gewicht (z. B. Anzahl Kacheln). Abgelaufene Einträge werden einzeln
-// entfernt – nie die ganze Tabelle: Sonst könnte jemand mit vielen Adressen (IPv6) alle Zähler leeren,
+// entfernt – nie die ganze Tabelle: Sonst könnte jemand mit vielen Adressen alle Zähler leeren,
 // auch die eines laufenden Passwort-Angriffs.
 
 const MAX_KEYS = 50_000; // Obergrenze gegen Speicherüberlauf; darüber fallen die ältesten Schlüssel weg

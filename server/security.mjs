@@ -66,6 +66,8 @@ export function setSecurityHeaders(req, res) {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin'); // Nominatim/Photon sehen nur die Domain
   res.setHeader('Permissions-Policy', 'geolocation=(self), camera=(), microphone=(), payment=(), usb=()');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-  // HSTS: Der Browser nutzt danach ein Jahr lang nur noch HTTPS (kein Abfangen über ein erstes http://)
+  // HSTS: Der Browser nutzt danach ein Jahr lang nur noch HTTPS (kein Abfangen über ein erstes http://).
+  // Ohne includeSubDomains: Bei cyclorouter.de läuft webmail. (Plesk) nur über http://, das wäre dann gesperrt.
+  // Plesk soll keinen eigenen HSTS-Header setzen – bei zwei Headern gilt nur der erste.
   if (isHttps(req)) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
 }

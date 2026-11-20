@@ -149,6 +149,9 @@ async function route(req, res, url) {
   if (pathname === '/api/account/register' && m === 'POST') {
     const ip = clientIp(req);
     if (limitReached('register', ip)) throw new HttpError(429, 'Zu viele neue Konten von diesem Anschluss – bitte später erneut.');
+    if (limitReached('registerAll', 'all')) {
+      throw new HttpError(429, 'Heute wurden schon sehr viele Konten angelegt – bitte morgen erneut versuchen.');
+    }
     const { username, password } = await readJson(req, 4096);
     const invalid = validateCredentials(username, password, { isNew: true });
     if (invalid) throw new HttpError(400, invalid);
@@ -156,6 +159,10 @@ async function route(req, res, url) {
     if (exists.length) throw new HttpError(409, 'Dieser Benutzername ist schon vergeben.');
     const result = await query('INSERT INTO users (username, pw_hash) VALUES (?, ?)', [username, await hashPassword(password)]);
     countAttempt('register', ip);
+    countAttempt('registerAll', 'all');
+    if (limitReached('registerAll', 'all')) {
+      console.warn('Konten: Tagesgrenze für neue Konten erreicht – weitere Registrierungen werden 24 h lang abgelehnt');
+    }
     await createSession(req, res, result.insertId);
     return json(res, 201, { user: { id: result.insertId, username } });
   }
