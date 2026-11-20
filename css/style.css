@@ -407,7 +407,7 @@ button.row:disabled { cursor: default; opacity: 0.6; }
 .choice-set { border: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
 .choice-set legend { padding: 0; margin-bottom: 4px; font-size: 0.8125rem; color: var(--muted); }
 .choice-set + .choice-set { margin-top: 8px; }
-.stay-pin {
+.stay-pin, .pin-stay {
   width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
   background: #fff; border: 2px solid var(--route); box-shadow: 0 1px 4px rgba(0, 0, 0, .45); font-size: 16px; line-height: 1;
 }
@@ -450,28 +450,45 @@ button.danger { background: var(--error-bg); color: var(--error-text); border-co
 
 /* Trefferfläche der kleinen Marker (js/map.js): sichtbarer Punkt in der Mitte */
 .marker-hit { display: grid; place-items: center; }
-.marker-pin {
+.marker-pin, .pin-marker {
   width: 22px; height: 22px; border-radius: 50%;
   border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .45);
 }
 /* Start: weiß mit dunklem Ring, Ziel: dunkel mit weißer Zielflagge (map.js) – Helligkeit und Form statt grün/rot,
    damit beide auch bei Rot-Grün-Schwäche und in Graustufen klar zu unterscheiden sind. Feste Farben, die Karte
    bleibt auch im dunklen Schema hell. */
-.marker-pin.start { background: #fff; border: 6px solid #1c1b22; box-shadow: 0 0 0 2px #fff, 0 1px 4px 2px rgba(0, 0, 0, .4); }
-.marker-pin.end { width: 26px; height: 26px; display: grid; place-items: center; background: #1c1b22; }
-.marker-pin.end svg { width: 13px; height: 13px; fill: #fff; stroke: #fff; stroke-width: 2; stroke-linejoin: round; }
+.marker-pin.start, .pin-start { background: #fff; border: 6px solid #1c1b22; box-shadow: 0 0 0 2px #fff, 0 1px 4px 2px rgba(0, 0, 0, .4); }
+.marker-pin.end, .pin-end { width: 26px; height: 26px; display: grid; place-items: center; background: #1c1b22; }
+.marker-pin.end svg, .pin-end svg { width: 13px; height: 13px; fill: #fff; stroke: #fff; stroke-width: 2; stroke-linejoin: round; }
 .marker-pin.via { width: 14px; height: 14px; border-width: 2px; background: var(--route); }
-.stop-pin {
+.stop-pin, .pin-stop {
   width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
   background: #fff; border: 2px solid #111827; box-shadow: 0 1px 4px rgba(0, 0, 0, .45); font-size: 15px; line-height: 1;
 }
-.stop-pin.warn { border-color: #d97706; }
-.water-pin {
+/* Öffnungszeiten unklar oder bei Ankunft evtl. zu: gestrichelter Rand und ein „?“ – nicht nur die Farbe (Orange
+   wäre bei Rot-Grün-Schwäche kaum vom dunklen Rand zu unterscheiden) */
+.stop-pin, .water-pin, .pin-stop, .pin-water { position: relative; }
+.stop-pin.warn, .pin-stop.pin-warn { border-color: #b45309; border-style: dashed; border-width: 2.5px; }
+.stop-pin.warn::after, .water-pin.warn::after, .pin-stop.pin-warn::after {
+  content: "?"; position: absolute; top: -6px; right: -7px; width: 14px; height: 14px; border-radius: 50%;
+  background: #b45309; color: #fff; border: 1.5px solid #fff; font: 700 10px/14px system-ui, sans-serif; text-align: center;
+}
+.water-pin, .pin-water {
   width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
   background: #fff; border: 2px solid #0072b2; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); font-size: 12px; line-height: 1;
 }
-.water-pin.warn { border-color: #d97706; border-style: dashed; }
-.via-pin {
+.water-pin.warn { border-color: #b45309; border-style: dashed; }
+
+/* Legende der Kartensymbole (map.js, oben links, nur mit Route) */
+.map-legend {
+  background: var(--panel); color: var(--text); border-radius: 8px; box-shadow: 0 1px 5px rgba(0, 0, 0, .3);
+  font-size: 0.8125rem; max-width: min(18rem, calc(100vw - 80px));
+}
+.map-legend summary { cursor: pointer; padding: 6px 10px; font-weight: 600; min-height: 1.5rem; }
+.map-legend ul { list-style: none; margin: 0; padding: 2px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+.map-legend li { display: flex; align-items: center; gap: 8px; }
+.legend-icon { flex: none; width: 32px; display: grid; place-items: center; }
+.via-pin, .pin-via {
   width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
   background: var(--route); color: #fff; border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .45);
   font: 700 12px/1 system-ui, sans-serif;
@@ -671,7 +688,8 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
   .route-list li.current { outline-color: Highlight; }
   .bar > span, .elevation-chart rect { forced-color-adjust: none; }
   /* Marker (Start, Ziel, Stopps usw.) – auf der (ohnehin farbigen) Karte unverändert lassen */
-  .marker-pin, .via-pin, .stop-pin, .water-pin, .stay-pin, .search-pin { forced-color-adjust: none; }
+  .marker-pin, .via-pin, .stop-pin, .water-pin, .stay-pin, .search-pin,
+  .pin-marker, .pin-via, .pin-stop, .pin-water, .pin-stay { forced-color-adjust: none; }
   .elevation-chart .line { stroke: CanvasText; }
   .elevation-chart .area { fill: Canvas; }
   .elevation-chart .axis { fill: CanvasText; }
