@@ -221,7 +221,18 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
     gap: parseFloat(getComputedStyle(document.querySelector('#panel')).borderBottomWidth) })`);
   check('Kein Platz für eine schwebende Leiste reserviert', below.bar === '0px' && below.gap < 64, JSON.stringify(below));
   await page.send('Emulation.setDeviceMetricsOverride', { ...metrics, height: 852 }); await sleep(400);
-  check('Wieder schwebend: 64 px frei', (await ev(`getComputedStyle(document.documentElement).getPropertyValue('--browser-bar').trim()`)) === '64px');
+  const barNow = () => ev(`getComputedStyle(document.documentElement).getPropertyValue('--browser-bar').trim()`);
+  check('Wieder schwebend: 64 px frei', (await barNow()) === '64px');
+
+  step('Android: keine schwebende Leiste, auch wenn der Viewport fast bis unten reicht');
+  // Der Wert wird bei jeder Größenänderung neu bestimmt (sheetView.js, measureBrowserBar): mit Android-Kennung neu messen
+  await page.send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36' });
+  await page.send('Emulation.setDeviceMetricsOverride', { ...metrics, height: 851 }); await sleep(400);
+  check('Android: kein Abstand für Safaris Leiste', (await barNow()) === '0px');
+  // Zurück zum iPhone für die folgenden Schritte
+  await page.send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
+  await page.send('Emulation.setDeviceMetricsOverride', { ...metrics, height: 852 }); await sleep(400);
+  check('iPhone wieder: 64 px frei', (await barNow()) === '64px');
 
   step('iPhone: Blatt ziehen');
   // Finger am Griff aufsetzen und in `steps` Schritten zu `toY` ziehen (langsam: Lage zählt; schnell: Richtung)
