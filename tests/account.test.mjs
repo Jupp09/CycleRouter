@@ -170,9 +170,12 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
     return { state: p.dataset.sheet, top: Math.round(p.getBoundingClientRect().top), map: Math.round(document.querySelector('#map').getBoundingClientRect().height),
       expanded: h.getAttribute('aria-expanded'), label: h.getAttribute('aria-label') }; })()`;
   let sheet = await ev(SHEET);
-  check('Karte füllt den Bildschirm, Blatt auf „Halb“', sheet.map >= 850 && sheet.state === 'half' && Math.abs(sheet.top - 852 * 0.45) <= 3, JSON.stringify(sheet));
-  const startBox = await ev(`(() => { const r = document.querySelector('#start-input').getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; })()`);
-  check('Start-Feld im halb offenen Blatt ohne Scrollen sichtbar', startBox.top >= sheet.top && startBox.bottom <= 852, JSON.stringify(startBox));
+  check('Karte füllt den Bildschirm, Blatt auf „Halb“', sheet.map >= 850 && sheet.state === 'half' && Math.abs(sheet.top - 852 * 0.4) <= 3, JSON.stringify(sheet));
+  // Sichtbar heißt: über dem unteren Rand des Blatts (ohne Home-Balken und Safaris Leiste, den Rand des Panels)
+  const fields = await ev(`(() => { const p = document.querySelector('#panel'), end = p.getBoundingClientRect().bottom - parseFloat(getComputedStyle(p).borderBottomWidth);
+    const box = sel => { const r = document.querySelector(sel).getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) }; };
+    return { visibleBottom: Math.round(end), start: box('#start-input'), end: box('#end-input') }; })()`);
+  check('Start- und Ziel-Feld im halb offenen Blatt ohne Scrollen sichtbar', fields.start.top >= sheet.top && fields.end.bottom <= fields.visibleBottom, JSON.stringify(fields));
   check('Keine waagerechte Scrollleiste', await ev(`document.documentElement.scrollWidth <= innerWidth`));
   await page.shot('3b-blatt-halb');
 
@@ -190,17 +193,20 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
     if ((await ev(SHEET)).state !== st) { await ev(`document.querySelector('#sheet-handle').click(); true`); await sleep(400); }
     const gen = await ev(`(() => { const b = document.querySelector('#btn-generate').getBoundingClientRect(), p = document.querySelector('#panel').getBoundingClientRect();
       const a = document.querySelector('.plan-actions').getBoundingClientRect();
-      const next = document.querySelector('.plan-actions').closest('section').nextElementSibling.getBoundingClientRect();
+      // Die Leiste ist das letzte Element des Formulars; folgt doch noch etwas Sichtbares, darf darunter keine Lücke sein
+      const after = [...document.querySelectorAll('#plan ~ *, .plan-actions ~ *')].find(el => el.getClientRects().length);
+      const next = after ? after.getBoundingClientRect() : null;
       const gap = parseFloat(getComputedStyle(document.querySelector('#panel')).borderBottomWidth);
       return { state: document.querySelector('#panel').dataset.sheet, top: Math.round(b.top), bottom: Math.round(b.bottom), sheetTop: Math.round(p.top),
-        actionsBottom: Math.round(a.bottom), sheetBottom: Math.round(p.bottom - gap), nextTop: Math.round(next.top),
+        actionsBottom: Math.round(a.bottom), sheetBottom: Math.round(p.bottom - gap), nextTop: next ? Math.round(next.top) : null,
         scrolls: document.querySelector('#panel').scrollHeight > document.querySelector('#panel').clientHeight + 1,
         bar: getComputedStyle(document.documentElement).getPropertyValue('--browser-bar').trim() }; })()`);
     check(`„${st === 'half' ? 'Halb' : 'Voll'}“: „Route erstellen“ im Blatt sichtbar, frei von Safaris Leiste`, gen.state === st && gen.top >= gen.sheetTop && gen.bottom <= 852 - 64 && gen.bar === '64px', JSON.stringify(gen));
     // Scrollt das Blatt, klebt die Leiste bündig über seinem unteren Rand (Home-Balken/Safari-Leiste; sheetBottom
     // ist schon ohne ihn) – unabhängig davon, wie ein Browser Innenabstand beim Festkleben zählt (Safari anders als
-    // Chrome); passt alles hinein, steht sie im Blatt, ohne Lücke zur Fahrradwahl
-    const flush = gen.scrolls ? Math.abs(gen.actionsBottom - gen.sheetBottom) <= 1 : gen.actionsBottom <= gen.sheetBottom && gen.nextTop - gen.actionsBottom <= 30;
+    // Chrome); passt alles hinein, steht sie im Blatt, ohne Lücke zu dem, was danach kommt
+    const flush = gen.scrolls ? Math.abs(gen.actionsBottom - gen.sheetBottom) <= 1
+      : gen.actionsBottom <= gen.sheetBottom && (gen.nextTop == null || gen.nextTop - gen.actionsBottom <= 30);
     check(`„${st === 'half' ? 'Halb' : 'Voll'}“: Knopfleiste ${gen.scrolls ? 'endet am unteren Rand des Blatts' : 'liegt im Blatt, keine Lücke darunter'}`, flush && gen.sheetBottom <= 852 - 64, JSON.stringify(gen));
   }
   await page.shot('3c-route-erstellen');
@@ -229,9 +235,9 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
   await ev(`document.querySelector('#sheet-handle').click(); document.querySelector('#sheet-handle').click(); true`); await sleep(500); // Voll → Kurz → Halb
 
   step('iPhone: Route per Fingertipp, eigene Dialoge');
-  // Oberhalb des halb offenen Blatts tippen (es verdeckt die unteren 55 %)
+  // Oberhalb des halb offenen Blatts tippen (es verdeckt die unteren 60 %) – und nicht auf die Quellenangabe direkt darüber
   await page.clickMapAt(0.35, 0.12, { touch: true }); await sleep(900);
-  await page.clickMapAt(0.6, 0.38, { touch: true });
+  await page.clickMapAt(0.6, 0.3, { touch: true });
   check('Route per Fingertipp gesetzt', await waitFor(HAS_ROUTE), await page.text('#stat-dist'));
   await sleep(800);
   const text = await ev(`document.querySelector('#route-summary-text').textContent`);

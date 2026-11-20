@@ -6,7 +6,7 @@
 import { weatherAlong, weatherParts, windLabel, windAdvice, FORECAST_DAYS } from '../weather.js';
 import { dayTimes, pausedTimeline } from '../timeline.js';
 import { formatClock, formatDate, formatDayDate, formatWeekday, formatNumber } from '../utils.js';
-import { state, on, departureDate, defaultDeparture, provider } from './state.js';
+import { state, on, departureDate, departureFixed, defaultDeparture, provider } from './state.js';
 import { $ } from './dom.js';
 import { generate } from './pipeline.js';
 
@@ -30,7 +30,7 @@ async function renderWeather(r) {
   const ctrl = controller = new AbortController();
 
   // Abfahrt nur mit Verpflegungsstopps oder Mehrtagestour sichtbar festgelegt – sonst gilt „jetzt“, und das steht auch da
-  const fixed = state.supply.enabled || state.multiDay;
+  const fixed = departureFixed();
   const departure = fixed ? departureDate() : new Date(defaultDeparture());
   const days = dayTimes(r, departure, state.bike);
   const midnight = new Date();

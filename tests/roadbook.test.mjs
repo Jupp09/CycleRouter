@@ -33,7 +33,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   await page.ev(`document.querySelector('#btn-roadbook').click(); true`); await sleep(300);
   let book = await page.ev(BOOK);
   check('Druckdialog einmal aufgerufen, am Bildschirm unsichtbar', book.printed === 1 && book.screen === 'none', JSON.stringify([book.printed, book.screen]));
-  check('Kopf: Name und Kennzahlen', book.title === 'Köln–Bonn am Rhein' && /^Fahrrad · [\d,]+ km · \d+ m Anstieg · Fahrzeit ca\. .+ · Mi\.?, \d\d\.\d\d\.$/.test(book.facts), book.facts);
+  check('Kopf: Name und Kennzahlen', book.title === 'Köln–Bonn am Rhein' && /^Trekking · [\d,]+ km · \d+ m Anstieg · Fahrzeit ca\. .+ · Mi\.?, \d\d\.\d\d\.$/.test(book.facts), book.facts);
   check('Ein Tag mit Datum', book.days.length === 1 && /^Tag 1 · Mi\.?, \d\d\.\d\d\.$/.test(book.days[0]), book.days.join());
   check('Abfahrt und Ankunft', /^Abfahrt 09:00 · Ankunft ca\. \d\d:\d\d \(mit Pausen an den Stopps\)$/.test(book.times[0]), book.times[0]);
   check('Tabellenkopf', book.heads.join('|') === 'km|Ankunft|Art|Name|Öffnungszeiten / Hinweis', book.heads.join('|'));

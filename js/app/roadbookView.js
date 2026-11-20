@@ -19,7 +19,7 @@ import { locateOnRoute } from '../routeGeometry.js';
 import { indexAtDistance, formatKm, formatM, formatDuration, formatClock, formatDayDate, formatDate, formatNumber } from '../utils.js';
 import { account } from '../account.js';
 import { isTrackRoute } from './linkView.js';
-import { state, departureDate, BIKE_LABELS, on } from './state.js';
+import { state, departureDate, departureFixed, BIKE_LABELS, on } from './state.js';
 import { $ } from './dom.js';
 import { gpxName } from './exportView.js';
 
@@ -122,7 +122,7 @@ export function buildRoadbook(box = $('#roadbook'), top = 1) {
   const r = state.route;
   if (!r) { box.replaceChildren(); return false; }
   // Zeiten nur, wenn die Abfahrt sichtbar festgelegt ist (Verpflegungsstopps oder Mehrtagestour)
-  const fixed = state.supply.enabled || state.multiDay;
+  const fixed = departureFixed();
   const departure = departureDate();
   const stats = stageStats(r, state.bike);
   const times = fixed ? dayTimes(r, departure, state.bike) : null;

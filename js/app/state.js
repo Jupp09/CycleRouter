@@ -17,7 +17,8 @@ import { storage, newSeed, toDateTimeLocal } from '../utils.js';
 import { BIKES, MODES } from '../shared.js';
 
 export const MODE_LABELS = { ab: 'Route', distance: 'Strecke', loop: 'Rundkurs' };
-export const BIKE_LABELS = { road: 'Rennrad', gravel: 'Gravel', trekking: 'Fahrrad', ebike: 'E-Bike' };
+// „Trekking“ statt „Fahrrad“: Neben Rennrad, Gravel und E-Bike sagte „Fahrrad“ nichts (alles sind Fahrräder)
+export const BIKE_LABELS = { road: 'Rennrad', gravel: 'Gravel', trekking: 'Trekking', ebike: 'E-Bike' };
 
 /** Gespeicherte Auswahl sichtbarer Werte (Einstellungen) – unbekannte verwerfen, leer = alle. */
 const visibleOf = (key, all) => {
@@ -52,6 +53,7 @@ export const state = {
     style: storage.get('supplyStyle', 'fast'),    // Pausenstil: 'fast' | 'relaxed' (STYLES in stops.js)
     departure: defaultDeparture(),                // Wert eines datetime-local-Felds; auch Start der Mehrtagestour
   },
+  departureSet: false,                            // Abfahrt im Formular angegeben (nur diese Sitzung) – departureFixed()
 
   // Mehrtagestouren: Einstellungen (Zahnrad), ob die aktuelle Route aufgeteilt ist, gewählte Unterkünfte je Nacht
   stays: {
@@ -115,6 +117,15 @@ export function routeOpts() {
 /** Nächste volle Viertelstunde, als Wert für <input type="datetime-local">. */
 export function defaultDeparture() {
   return toDateTimeLocal(new Date(Math.ceil(Date.now() / 900000) * 900000));
+}
+
+/**
+ * Gilt eine festgelegte Abfahrt? Dann rechnen Ankunft, Tageslicht, Wetter und Roadbook mit ihr, sonst mit „jetzt“
+ * bzw. neutral (daylightToday), weil eine Warnung gegen „jetzt“ beim Planen am Abend nur stört. Festgelegt ist sie
+ * mit Verpflegungsstopps, Mehrtagestour oder wenn sie im Formular angegeben wurde.
+ */
+export function departureFixed() {
+  return state.supply.enabled || state.multiDay || state.departureSet;
 }
 
 /** Abfahrt als Date (aus den Verpflegungs-Einstellungen) – auch Start der Mehrtagestour. */

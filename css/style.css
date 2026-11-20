@@ -5,6 +5,7 @@
   --text: #1c1b22;
   --muted: #6b6878;
   --border: #e2e0ea;
+  --field-border: #8b8798; /* Rand von Eingabefeldern: ≥ 3:1 zum Panel (WCAG 1.4.11), sonst nur am Platzhalter erkennbar */
   --accent: #6d28d9;
   --accent-hover: #5b21b6;
   --accent-soft: #ede9fe;
@@ -31,6 +32,7 @@
     --text: #ecebf2;
     --muted: #9e9aae;
     --border: #312e3c;
+    --field-border: #75708a;
     --accent: #7c3aed;
     --accent-hover: #6d28d9;
     --accent-soft: #2e2546;
@@ -50,6 +52,7 @@
   --text: #ecebf2;
   --muted: #9e9aae;
   --border: #312e3c;
+  --field-border: #75708a;
   --accent: #7c3aed;
   --accent-hover: #6d28d9;
   --accent-soft: #2e2546;
@@ -103,7 +106,7 @@ input[type="text"], input[type="password"], input[type="number"], select {
   width: 100%;
   padding: 8px 10px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--field-border);
   border-radius: 8px;
   outline: none;
 }
@@ -198,6 +201,32 @@ body:has(#results:not([hidden])) .tagline { display: none; }
 .segmented button[aria-checked="true"], .tabs button[aria-checked="true"] { background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
 
 .range-row { display: flex; align-items: center; gap: 8px; }
+
+/* ---------- Formular vor dem Berechnen ---------- */
+/* Feldnamen im Formular größer und dunkler als die kleinen grauen Labels im Ergebnis – sie führen durch die Eingabe */
+.plan .field .label, .plan h2.label { font-size: 0.875rem; color: var(--text); }
+.plan .label .optional { font-weight: 400; color: var(--muted); }
+/* „+ Zwischenstopp“ und „Tauschen“ zwischen Start und Ziel */
+.between-points { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.between-points .icon-btn { height: 32px; }
+/* Hinweis „wird berechnet, sobald …“ nur, solange Start oder Ziel fehlt */
+.plan:has(#start-input:not(:placeholder-shown)):has(#end-input:not(:placeholder-shown)) #ab-hint { display: none; }
+/* Fahrradtyp als Auswahl-Chips mit eigener Überschrift – nicht wie ein zweiter Umschalter der Routenart. Gewählt:
+   Häkchen, fett und Akzentrand, nicht nur die Farbe */
+.segmented.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; background: transparent; border: 0; }
+.segmented.chips button {
+  border: 1.5px solid var(--field-border); border-radius: 999px; padding: 6px 14px; background: var(--panel);
+  color: var(--text); font-weight: 500;
+}
+.segmented.chips button[aria-checked="true"] {
+  background: var(--accent-soft); border-color: var(--accent-text); color: var(--text); font-weight: 700; box-shadow: none;
+}
+.segmented.chips button[aria-checked="true"]::before { content: "✓ "; content: "✓ " / ""; }
+/* „GPX“ mit Text neben dem Symbol: Ein Ordner-Symbol allein war mehrdeutig, Tooltips gibt es auf dem Handy nicht */
+.brand .icon-btn.with-text {
+  width: auto; padding: 0 8px; display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.8125rem; font-weight: 700; color: var(--text);
+}
 .range-row input[type="range"] { flex: 1; accent-color: var(--accent); }
 .range-row input[type="number"] { width: 72px; }
 .unit { color: var(--muted); }
@@ -312,7 +341,7 @@ details.more[open] summary { margin-bottom: 4px; }
 .plan-summary-actions button:not(.link-btn) { padding: 4px 10px; }
 .supply-options .range-row input[type="number"] { width: 72px; }
 input[type="datetime-local"] {
-  padding: 6px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; outline: none; min-width: 0;
+  padding: 6px 8px; background: var(--surface); border: 1px solid var(--field-border); border-radius: 8px; outline: none; min-width: 0;
 }
 
 .stops { display: flex; flex-direction: column; gap: 6px; }
@@ -605,7 +634,7 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
     /* Echte Höhe statt nach unten verschoben: Das untere Ende des Blatts ist immer der Bildschirmrand, der Inhalt
        scrollt im sichtbaren Teil, und „Route erstellen“ kann dort stehen bleiben (.plan-actions) */
-    height: var(--sheet-visible, 55vh);
+    height: var(--sheet-visible, 60vh);
     transition: height .25s ease;
     /* Unten ein Rand statt Innenabstand: Safari zieht Innenabstand beim Festkleben (.plan-actions) nicht ab, Chrome
        schon; ein Rand gehört in beiden nicht zum scrollenden Bereich. Er hält Home-Balken bzw. Safaris Leiste frei,

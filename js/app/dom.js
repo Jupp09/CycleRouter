@@ -21,7 +21,6 @@ export const ui = {
   endInput: $('#end-input'),
   range: $('#distance-range'),
   num: $('#distance-num'),
-  distanceOut: $('#distance-out'),
   status: $('#status'),
   results: $('#results'),
   routeName: $('#route-name'),
