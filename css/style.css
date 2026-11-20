@@ -209,8 +209,8 @@ body:has(#results:not([hidden])) .tagline { display: none; }
 /* „+ Zwischenstopp“ und „Tauschen“ zwischen Start und Ziel */
 .between-points { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .between-points .icon-btn { height: 32px; }
-/* Hinweis „wird berechnet, sobald …“ nur, solange das Ziel fehlt */
-.plan:has(#end-input:not(:placeholder-shown)) #ab-hint { display: none; }
+/* Hinweis „wird berechnet, sobald …“ nur, solange Start oder Ziel fehlt */
+.plan:has(#start-input:not(:placeholder-shown)):has(#end-input:not(:placeholder-shown)) #ab-hint { display: none; }
 /* Fahrradtyp als Auswahl-Chips mit eigener Überschrift – nicht wie ein zweiter Umschalter der Routenart. Gewählt:
    Häkchen, fett und Akzentrand, nicht nur die Farbe */
 .segmented.chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; background: transparent; border: 0; }

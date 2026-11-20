@@ -7,7 +7,7 @@ import { regionAt, regionLabel } from '../regions.js';
 import { holidayAt } from '../holidays.js';
 import { storage, formatKm, formatM, formatClock, formatWeekday, formatDayDate } from '../utils.js';
 import { state, on, defaultDeparture } from './state.js';
-import { $, textLines, rowButton, span, popupButton, listAction, osmLinks, missingHoursLine } from './dom.js';
+import { $, textLines, rowButton, span, popupButton, listAction, osmLinks, missingHoursLine, flashStatus } from './dom.js';
 import { addVia } from './waypoints.js';
 import { map } from './mapView.js';
 import { syncUi } from './controls.js';
@@ -255,6 +255,15 @@ $('#departure').addEventListener('change', e => setDeparture(e.target.value, { r
 // Abfahrt im Formular: optional; leer = keine festgelegte Abfahrt. Eine Route wird neu dargestellt (die Abschnitte
 // kommen aus dem Cache), damit Ankunft, Tageslicht und Wetter die neue Zeit zeigen.
 $('#plan-departure').addEventListener('change', e => {
-  state.departureSet = !!e.target.value;
-  setDeparture(e.target.value, { replan: !!state.route });
+  const value = e.target.value;
+  state.departureSet = !!value;
+  // Verpflegungsstopps und Mehrtagestour brauchen eine Abfahrt: Leeren hieße sonst stillschweigend „jetzt“ und
+  // plante die Stopps für jetzt neu. Dann bleibt die bisherige Abfahrt stehen, und die Statuszeile sagt warum.
+  if (!value && (state.supply.enabled || state.multiDay)) {
+    syncUi();
+    const d = new Date(state.supply.departure);
+    flashStatus(`${state.multiDay ? 'Die Mehrtagestour braucht' : 'Verpflegungsstopps brauchen'} eine Abfahrt – sie bleibt ${formatWeekday(d)} ${formatClock(d)}.`);
+    return;
+  }
+  setDeparture(value, { replan: !!state.route });
 });

@@ -65,4 +65,11 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Kachel „Ankunft“ mit derselben Zeit', await page.ev(`!document.querySelector('#stat-arrival-tile').hidden
     && document.querySelector('#stat-arrival').textContent`) === times.clock, times.clock);
   if (times.lastStop) check('Ankunft liegt nach dem letzten Stopp', times.end > times.lastStop);
+
+  step('Abfahrt im Formular leeren, während Stopps an sind');
+  const before = await page.ev(`document.querySelector('#departure').value`);
+  await page.ev(`{ const el = document.querySelector('#plan-departure'); el.value = ''; el.dispatchEvent(new Event('change', { bubbles: true })); } true`);
+  const after = await page.ev(`({ form: document.querySelector('#plan-departure').value, supply: document.querySelector('#departure').value, status: document.querySelector('#status').textContent })`);
+  check('Abfahrt bleibt, Formular zeigt sie wieder, Statuszeile sagt warum',
+    after.supply === before && after.form === before && after.status.startsWith('Verpflegungsstopps brauchen eine Abfahrt'), JSON.stringify(after));
 }
