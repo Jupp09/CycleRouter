@@ -8,6 +8,7 @@ import { headwind } from '../../js/weather.js';
 import { findClimbs, gradeSegments } from '../../js/climbs.js';
 import { timeline } from '../../js/timeline.js';
 import { sunTimes, darkMs, daylightNote } from '../../js/sun.js';
+import { groupNear } from '../../js/cluster.js';
 import { SYNC_KEYS, MODES, BIKES } from '../../js/shared.js';
 
 // Montag, 16.11.2026, Ortszeit
@@ -147,6 +148,14 @@ test('Sonne: Fahrt über Nacht – Dunkelzeit summiert, nie länger als die Fahr
   // Am selben Tag bleibt der bisherige Hinweis
   const day = daylightNote({ start: new Date(2026, 10, 20, 9), end: new Date(2026, 10, 20, 14) }, bremen, bremen);
   assert.ok(!day.overnight && !day.warn && day.text.startsWith('Tageslicht '), day.text);
+});
+
+test('Marker zusammenfassen: nahe Punkte in eine Gruppe, offene Popups und Radius 0 einzeln', () => {
+  const pts = [{ id: 'a', x: 0, y: 0 }, { id: 'b', x: 20, y: 0 }, { id: 'c', x: 100, y: 0 }, { id: 'd', x: 10, y: 10 }];
+  const ids = groups => groups.map(g => g.map(p => p.id).join(''));
+  assert.deepEqual(ids(groupNear(pts, p => p, 34)), ['abd', 'c']);
+  assert.deepEqual(ids(groupNear(pts, p => p, 34, p => p.id === 'b')), ['ad', 'b', 'c']);
+  assert.deepEqual(ids(groupNear(pts, p => p, 0)), ['a', 'b', 'c', 'd']);
 });
 
 test('Gemeinsame Werte von Browser und Server', () => {

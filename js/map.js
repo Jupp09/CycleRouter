@@ -1,5 +1,6 @@
 import { storage } from './utils.js';
 import { CATEGORIES } from './surfaces.js';
+import { groupNear } from './cluster.js';
 
 const L = window.L;
 
@@ -61,10 +62,22 @@ const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<':
  */
 function named(marker, name) {
   if (!name) return marker;
-  marker.once('add', () => marker.getElement()?.setAttribute('aria-label', name));
+  // Bei jedem Hinzufügen: Leaflet baut das Element neu, wenn ein Marker die Karte verlässt und wiederkommt
+  // (z. B. beim Zusammenfassen naher Marker, refreshPois)
+  marker.on('add', () => marker.getElement()?.setAttribute('aria-label', name));
   return marker;
 }
 const DASH = { dashed: '8 12', dotted: '0 11' };
+/** Ab dieser Zoomstufe zeigt die Karte jeden Ort einzeln (refreshPois). */
+const CLUSTER_UNTIL = 13;
+/** Marker, die sich näher kommen (px, Mitte zu Mitte), werden zusammengefasst – sie überdeckten sich sonst. */
+const CLUSTER_PX = 34;
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+/** „2 Verpflegungsstopps, 1 Trinkwasserstelle“ – für Namen und Tooltip eines zusammengefassten Markers. */
+function clusterParts({ stop, water, search }) {
+  return [stop && plural(stop, 'Verpflegungsstopp', 'Verpflegungsstopps'), water && plural(water, 'Trinkwasserstelle', 'Trinkwasserstellen'),
+    search && plural(search, 'Suchtreffer', 'Suchtreffer')].filter(Boolean).join(', ');
+}
 const KIND_NAME = { start: 'Start', end: 'Ziel', via: 'Wegpunkt', manual: 'Zwischenstopp' };
 /** Zusatz im Tooltip (nicht im aria-label: per Tastatur lässt sich ein Marker nicht ziehen). */
 const DRAG_HINT = { start: 'ziehen zum Verschieben', end: 'ziehen zum Verschieben', via: 'ziehen, um die Route zu ändern', manual: 'ziehen zum Verschieben' };
@@ -88,6 +101,7 @@ function createLegend() {
         <li><span class="legend-icon"><span class="pin-stop pin-warn">☕</span></span>Öffnungszeiten unklar oder evtl. zu</li>
         <li><span class="legend-icon"><span class="pin-water">💧</span></span>Trinkwasser</li>
         <li><span class="legend-icon"><span class="pin-stay">🏨</span></span>Unterkunft</li>
+        <li><span class="legend-icon"><span class="pin-cluster">3</span></span>Mehrere Orte – antippen zum Vergrößern</li>
       </ul>`;
       for (const pin of box.querySelectorAll('.legend-icon')) pin.setAttribute('aria-hidden', 'true');
       box.addEventListener('toggle', () => storage.set('legendOpen', box.open));
@@ -174,14 +188,60 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
 
   const markerLayer = L.layerGroup().addTo(map);
   const routeLayer = L.layerGroup().addTo(map);
-  const waterLayer = L.layerGroup().addTo(map);
   const waterMarkers = new Map();
-  const stopLayer = L.layerGroup().addTo(map);
   const stopMarkers = new Map();
   const stayLayer = L.layerGroup().addTo(map);
   const stayMarkers = new Map();
-  const searchLayer = L.layerGroup().addTo(map);
   const searchMarkers = new Map();
+
+  // Verpflegung, Trinkwasser und Suchtreffer liegen gemeinsam in poiLayer: Auf kleinen Zoomstufen fasst
+  // refreshPois nahe Marker zu einem zusammen (sie überdeckten sich sonst, v. a. in Städten). Start, Ziel und
+  // Zwischenstopps bleiben immer einzeln – sie werden gezogen; Unterkünfte sind wenige und liegen weit auseinander.
+  const poiLayer = L.layerGroup().addTo(map);
+  const poiSources = { stop: stopMarkers, water: waterMarkers, search: searchMarkers };
+
+  function refreshPois() {
+    const zoom = map.getZoom();
+    const items = Object.entries(poiSources).flatMap(([kind, markers]) => [...markers.values()].map(m => ({ kind, m })));
+    // Ab CLUSTER_UNTIL alles einzeln; ein Marker mit offenem Popup immer, sonst schlösse das Zusammenfassen sein Popup
+    const groups = groupNear(items, it => map.project(it.m.getLatLng(), zoom), zoom < CLUSTER_UNTIL ? CLUSTER_PX : 0,
+      it => it.m.isPopupOpen());
+    // Einzelne Marker nur hinzufügen bzw. entfernen, wenn sich etwas ändert – ein Marker, der schon da ist,
+    // behält so seinen Fokus und sein Popup
+    const single = new Set(groups.filter(g => g.length === 1).map(g => g[0].m));
+    for (const layer of poiLayer.getLayers()) if (!single.has(layer)) poiLayer.removeLayer(layer);
+    for (const m of single) if (!poiLayer.hasLayer(m)) poiLayer.addLayer(m);
+    for (const g of groups) if (g.length > 1) clusterMarker(g).addTo(poiLayer);
+  }
+
+  /** Zusammengefasster Marker: Anzahl, je Art gezählt (data-*); Klick bzw. Enter zoomt auf die Orte. */
+  function clusterMarker(group) {
+    const counts = { stop: 0, water: 0, search: 0 };
+    for (const it of group) counts[it.kind]++;
+    const bounds = L.latLngBounds(group.map(it => it.m.getLatLng()));
+    const name = `${group.length} Orte zusammengefasst: ${clusterParts(counts)} – zum Vergrößern antippen`;
+    const marker = named(L.marker(bounds.getCenter(), {
+      icon: L.divIcon({
+        className: 'marker-hit', iconSize: [36, 36], iconAnchor: [18, 18],
+        html: `<div class="cluster-pin" data-stop="${counts.stop}" data-water="${counts.water}" data-search="${counts.search}">${group.length}</div>`,
+      }),
+      zIndexOffset: 600,
+      title: name,
+    }), name);
+    marker.on('click', () => {
+      // Per Tastatur: Nach dem Zoomen gibt es diesen Marker nicht mehr – der Fokus geht an die Karte statt verloren
+      if (marker.getElement() === document.activeElement) map.once('zoomend', () => el.focus({ preventScroll: true }));
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: CLUSTER_UNTIL + 1, ...motion() });
+    });
+    return marker;
+  }
+
+  /** Marker sichtbar machen, auch wenn er gerade in einem zusammengefassten steckt (Popup aus einer Liste öffnen). */
+  function reveal(m) {
+    if (!poiLayer.hasLayer(m)) poiLayer.addLayer(m);
+  }
+
+  map.on('zoomend', refreshPois);
   // Nicht interaktiv: Er sitzt genau unter dem Mauszeiger und würde der Routenlinie sonst die Maus wegnehmen
   // Weiß gefüllt: In Routenfarbe ginge er auf der Linie unter, auf der er sitzt
   const hoverMarker = L.circleMarker([0, 0], { radius: 8, color: '#111827', weight: 3, fillColor: '#fff', fillOpacity: 1, interactive: false });
@@ -257,7 +317,7 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
 
     /** stops: [{id, lat, lon, icon, warn, title?, popup: HTMLElement}] */
     setStops(stops = []) {
-      stopLayer.clearLayers();
+      for (const m of stopMarkers.values()) poiLayer.removeLayer(m);
       stopMarkers.clear();
       for (const s of stops) {
         const marker = named(L.marker([s.lat, s.lon], {
@@ -267,14 +327,15 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
           }),
           zIndexOffset: 500,
           title: s.title || '',
-        }), s.title).bindPopup(s.popup).addTo(stopLayer);
+        }), s.title).bindPopup(s.popup);
         stopMarkers.set(s.id, marker);
       }
+      refreshPois();
     },
 
     /** Trinkwasser an der Route (nur angezeigt, kleiner als die Stopps): [{id, lat, lon, warn, title, popup: HTMLElement}] */
     setWater(points = []) {
-      waterLayer.clearLayers();
+      for (const m of waterMarkers.values()) poiLayer.removeLayer(m);
       waterMarkers.clear();
       for (const w of points) {
         const marker = named(L.marker([w.lat, w.lon], {
@@ -284,15 +345,17 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
           }),
           zIndexOffset: 300,
           title: w.title || '',
-        }), w.title).bindPopup(w.popup).addTo(waterLayer);
+        }), w.title).bindPopup(w.popup);
         waterMarkers.set(w.id, marker);
       }
+      refreshPois();
     },
 
     openWater(id) {
       const m = waterMarkers.get(id);
       if (!m) return;
       map.setView(m.getLatLng(), Math.max(map.getZoom(), 15), motion());
+      reveal(m);
       m.openPopup();
     },
 
@@ -322,7 +385,7 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
 
     /** Suchtreffer entlang der Route: [{id, lat, lon, icon, title?, popup: HTMLElement}] */
     setSearchResults(results = []) {
-      searchLayer.clearLayers();
+      for (const m of searchMarkers.values()) poiLayer.removeLayer(m);
       searchMarkers.clear();
       for (const s of results) {
         const marker = named(L.marker([s.lat, s.lon], {
@@ -332,15 +395,17 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
           }),
           zIndexOffset: 400,
           title: s.title || '',
-        }), s.title).bindPopup(s.popup).addTo(searchLayer);
+        }), s.title).bindPopup(s.popup);
         searchMarkers.set(s.id, marker);
       }
+      refreshPois();
     },
 
     openSearchResult(id) {
       const m = searchMarkers.get(id);
       if (!m) return;
       map.setView(m.getLatLng(), Math.max(map.getZoom(), 15), motion());
+      reveal(m);
       m.openPopup();
     },
 
@@ -350,6 +415,7 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
       const m = stopMarkers.get(id);
       if (!m) return;
       map.setView(m.getLatLng(), Math.max(map.getZoom(), 14), motion());
+      reveal(m);
       m.openPopup();
     },
 

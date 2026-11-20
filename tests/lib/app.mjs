@@ -12,6 +12,13 @@ export const SUPPLY_DONE = `!document.querySelector('#stops').hidden && !documen
 export const HAS_ROUTE = `!document.querySelector('#results').hidden && !!document.querySelector('#stat-dist').textContent`;
 
 /** Rund um Köln/Bonn – Ausschnitt, in dem die meisten Tests ihre Routen klicken. */
+/**
+ * Marker einer Art auf der Karte ('stop' | 'water' | 'search'): einzeln oder in einem zusammengefassten Marker
+ * (map.js, refreshPois; der zählt seine Orte je Art in data-stop/-water/-search).
+ */
+export const markerCount = kind => `(document.querySelectorAll('.${kind}-pin').length
+  + [...document.querySelectorAll('.cluster-pin')].reduce((n, c) => n + Number(c.dataset.${kind} || 0), 0))`;
+
 export const BONN = { center: [50.83, 7.02], zoom: 11 };
 
 /** Abfahrt nächsten Mittwoch um `time` – ein Werktag, damit Läden offen sind. */
