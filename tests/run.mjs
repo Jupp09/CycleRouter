@@ -19,7 +19,11 @@ const DIR = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = join(DIR, '..');
 const OUT = join(DIR, 'out');
 const PORT = Number(process.env.TEST_PORT) || 8765;
-const APP = `http://localhost:${PORT}/`;
+// TEST_URL=https://cyclorouter.de/ prüft eine laufende Instanz statt eines eigenen Testservers. Konten kommen
+// auch dann aus der Attrappe (die echte Datenbank bleibt unberührt); Tests, die den Testserver voraussetzen
+// (z. B. brouter ohne BROUTER_URL), können dort abweichen.
+const REMOTE = process.env.TEST_URL ? new URL(process.env.TEST_URL).href : null;
+const APP = REMOTE ?? `http://localhost:${PORT}/`;
 
 const args = process.argv.slice(2);
 const flags = new Set(args.filter(a => a.startsWith('--')));
@@ -33,36 +37,45 @@ if (!files.length) {
 
 // ---------- Testserver ----------
 
-if (await fetch(APP).then(() => true, () => false)) {
-  console.error(`Port ${PORT} ist schon belegt – läuft noch ein Server? (anderer Port: TEST_PORT=…)`);
-  process.exit(2);
-}
 mkdirSync(OUT, { recursive: true });
-const serverLog = createWriteStream(join(OUT, 'server.log'));
-const server = spawn(process.execPath, ['server.mjs'], {
-  cwd: ROOT,
-  // Gesetzte Variablen gehen vor .env (server/env.mjs): keine Verbindung zur echten Datenbank,
-  // kein Download des Datenauszugs. Eigener BRouter nur mit TEST_BROUTER_URL (sonst gehen die Anfragen an
-  // brouter.de, wie die meisten Tests es erwarten; brouter.test.mjs prüft beide Fälle).
-  // Konten kommen aus lib/fakeAccount.mjs.
-  env: { ...process.env, PORT: String(PORT), DB_HOST: '', POI_EXTRACT_URL: 'off', BROUTER_URL: process.env.TEST_BROUTER_URL ?? '' },
-  stdio: ['ignore', 'pipe', 'pipe'],
-});
-server.stdout.pipe(serverLog);
-server.stderr.pipe(serverLog);
-let up = false;
-for (let i = 0; i < 60 && !up && server.exitCode === null; i++) {
-  up = await fetch(APP).then(r => r.ok, () => false);
-  if (!up) await sleep(250);
-}
-if (!up) {
-  console.error('Testserver startet nicht – siehe tests/out/server.log');
-  server.kill();
-  process.exit(2);
+let server = null;
+if (REMOTE) {
+  if (!(await fetch(APP).then(r => r.ok, () => false))) {
+    console.error(`${APP} antwortet nicht`);
+    process.exit(2);
+  }
+  console.log(`Prüfe ${APP} (kein eigener Testserver)`);
+} else {
+  if (await fetch(APP).then(() => true, () => false)) {
+    console.error(`Port ${PORT} ist schon belegt – läuft noch ein Server? (anderer Port: TEST_PORT=…)`);
+    process.exit(2);
+  }
+  const serverLog = createWriteStream(join(OUT, 'server.log'));
+  server = spawn(process.execPath, ['server.mjs'], {
+    cwd: ROOT,
+    // Gesetzte Variablen gehen vor .env (server/env.mjs): keine Verbindung zur echten Datenbank,
+    // kein Download des Datenauszugs. Eigener BRouter nur mit TEST_BROUTER_URL (sonst gehen die Anfragen an
+    // brouter.de, wie die meisten Tests es erwarten; brouter.test.mjs prüft beide Fälle).
+    // Konten kommen aus lib/fakeAccount.mjs.
+    env: { ...process.env, PORT: String(PORT), DB_HOST: '', POI_EXTRACT_URL: 'off', BROUTER_URL: process.env.TEST_BROUTER_URL ?? '' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  server.stdout.pipe(serverLog);
+  server.stderr.pipe(serverLog);
+  let up = false;
+  for (let i = 0; i < 60 && !up && server.exitCode === null; i++) {
+    up = await fetch(APP).then(r => r.ok, () => false);
+    if (!up) await sleep(250);
+  }
+  if (!up) {
+    console.error('Testserver startet nicht – siehe tests/out/server.log');
+    server.kill();
+    process.exit(2);
+  }
 }
 
 const browser = await launchBrowser({ headless: !flags.has('--headed') });
-const cleanup = async () => { await browser.close(); server.kill(); };
+const cleanup = async () => { await browser.close(); server?.kill(); };
 process.on('SIGINT', async () => { await cleanup(); process.exit(130); });
 
 // ---------- Tests ----------

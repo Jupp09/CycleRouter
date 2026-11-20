@@ -11,7 +11,10 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   const { ev, waitFor } = page;
   const urls = [];
   page.on((method, p) => {
-    if (method === 'Network.requestWillBeSent' && p.request.url.includes('brouter.de/brouter?')) urls.push(p.request.url);
+    // brouter.de oder der eigene BRouter des Servers (/api/brouter, nur mit BROUTER_URL, z. B. auf cyclorouter.de)
+    if (method !== 'Network.requestWillBeSent') return;
+    const u = p.request.url;
+    if (u.includes('brouter.de/brouter?') || u.includes('/api/brouter?')) urls.push(u);
   });
   await page.send('Network.enable');
   await page.open(app, { storage: { bike: 'trekking' } });

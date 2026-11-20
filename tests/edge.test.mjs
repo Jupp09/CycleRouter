@@ -84,7 +84,12 @@ export default async function ({ app, page: newPage, check, step }) {
     return { aborted, timedOut };
   })()`);
   check('Abbruch wartet nicht auf den hängenden Upload', upload.aborted.name === 'AbortError' && upload.aborted.s < 2, JSON.stringify(upload.aborted));
-  check('Hängender Upload endet nach dem Zeitlimit als „ausgelastet“', upload.timedOut.busy && upload.timedOut.s >= 19 && upload.timedOut.s < 25, JSON.stringify(upload.timedOut));
+  // Mit eigenem BRouter (BROUTER_URL, z. B. auf cyclorouter.de) hängen zwei Uploads nacheinander: erst beim eigenen
+  // Server, dann beim Ausweich brouter.de – je 20 s
+  const own = await page.ev(`fetch('/api/brouter').then(r => r.ok ? r.json() : {}).then(j => j.enabled === true, () => false)`);
+  const limit = own ? 40 : 20;
+  check(`Hängender Upload endet nach dem Zeitlimit als „ausgelastet“ (${limit} s)`,
+    upload.timedOut.busy && upload.timedOut.s >= limit - 1 && upload.timedOut.s < limit + 5, JSON.stringify(upload.timedOut));
 
   // Konto-Schnittstelle antwortet nicht (sehr schwaches Netz): nach 8 s gilt der gemerkte Offline-Stand
   const acc = await page.ev(`(async () => {
