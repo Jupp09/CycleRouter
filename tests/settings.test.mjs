@@ -21,7 +21,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   const idle = `!document.querySelector('#results').hidden && ${IDLE}`;
 
   step('Umschalter');
-  check('Vier Fahrradtypen sichtbar', await ev(visible('#bike-switch')) === 'Rennrad|Gravel|Fahrrad|E-Bike', await ev(visible('#bike-switch')));
+  check('Vier Fahrradtypen sichtbar', await ev(visible('#bike-switch')) === 'Rennrad|Gravel|Trekking|E-Bike', await ev(visible('#bike-switch')));
   await ev(`(async () => { const w = await import('/js/app/waypoints.js');
     w.setPoint('start', {lat: 50.9375, lon: 6.9603, label: 'Köln'}); w.setPoint('end', {lat: 50.5771, lon: 7.2304, label: 'Remagen'}); return true; })()`);
   check('Route Fahrrad', await waitFor(idle, 90000));
@@ -54,7 +54,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
     document.querySelector('#visible-modes input[value=distance]').click(); true`);
   await page.shot('1-dialog');
   await ev(`document.querySelector('#settings-dialog').close('save'); true`); await sleep(500);
-  check('Umschalter zeigt nur Fahrrad|E-Bike', await ev(visible('#bike-switch')) === 'Fahrrad|E-Bike', await ev(visible('#bike-switch')));
+  check('Umschalter zeigt nur Trekking|E-Bike', await ev(visible('#bike-switch')) === 'Trekking|E-Bike', await ev(visible('#bike-switch')));
   check('Routenarten: A → B|Rundkurs', await ev(visible('#mode-tabs')) === 'A → B|Rundkurs', await ev(visible('#mode-tabs')));
   check('Gespeichert', await ev(`localStorage.getItem('cyclerouter.visibleBikes')`) === '["trekking","ebike"]');
   await ev(`document.querySelector('#plan').hidden && document.querySelector('#btn-plan-edit').click(); true`);
@@ -76,7 +76,7 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
 
   step('Geöffnete Route mit ausgeblendetem Typ');
   await ev(`(async () => { ${STATE}.bike = 'road'; (await import('/js/app/controls.js')).syncUi(); return true; })()`);
-  check('Aktiver ausgeblendeter Typ wird angezeigt', await ev(visible('#bike-switch')) === 'Rennrad|Fahrrad' && !(await ev(`document.querySelector('#bike-switch').hidden`)),
+  check('Aktiver ausgeblendeter Typ wird angezeigt', await ev(visible('#bike-switch')) === 'Rennrad|Trekking' && !(await ev(`document.querySelector('#bike-switch').hidden`)),
     await ev(visible('#bike-switch')));
 
   step('Nach Neuladen');
