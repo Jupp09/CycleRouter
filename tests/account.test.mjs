@@ -1,6 +1,7 @@
 // Konten (Konto-API aus lib/fakeAccount.mjs): Einstellungs-Abgleich zwischen Geräten, Routen speichern,
 // öffnen, umbenennen, löschen, Teilen-Link; dazu das iPhone (Tippflächen, 16-px-Felder, eigene Dialoge).
 import { register, saveRoute, BONN, HAS_ROUTE } from './lib/app.mjs';
+import { IPHONE, ANDROID } from './lib/browser.mjs';
 
 export const title = 'Konto, Meine Routen, Teilen, iPhone';
 
@@ -226,11 +227,11 @@ async function iphone({ app, page: newPage, check, step, sleep }) {
 
   step('Android: keine schwebende Leiste, auch wenn der Viewport fast bis unten reicht');
   // Der Wert wird bei jeder Größenänderung neu bestimmt (sheetView.js, measureBrowserBar): mit Android-Kennung neu messen
-  await page.send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36' });
+  await page.send('Emulation.setUserAgentOverride', ANDROID);
   await page.send('Emulation.setDeviceMetricsOverride', { ...metrics, height: 851 }); await sleep(400);
   check('Android: kein Abstand für Safaris Leiste', (await barNow()) === '0px');
   // Zurück zum iPhone für die folgenden Schritte
-  await page.send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
+  await page.send('Emulation.setUserAgentOverride', IPHONE);
   await page.send('Emulation.setDeviceMetricsOverride', { ...metrics, height: 852 }); await sleep(400);
   check('iPhone wieder: 64 px frei', (await barNow()) === '64px');
 

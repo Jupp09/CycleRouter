@@ -92,6 +92,14 @@ export async function launchBrowser({ headless = true } = {}) {
   };
 }
 
+/**
+ * Gerätekennungen für `Emulation.setUserAgentOverride`. `platform` gehört dazu: sonst bliebe `navigator.platform`
+ * der Wert des Rechners, auf dem die Tests laufen, und auf einem Mac („MacIntel“ mit Touch) hielte sheetView.js
+ * jede Kennung für ein iPad.
+ */
+export const IPHONE = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', platform: 'iPhone' };
+export const ANDROID = { userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36', platform: 'Linux armv8l' };
+
 const KEYS = { Tab: 9, Enter: 13, Escape: 27, ' ': 32, End: 35, Home: 36, ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40 };
 
 /**
@@ -120,7 +128,7 @@ async function newPage(send, listeners, { width = 1400, height = 900, mobile = f
   await s('Runtime.enable');
   await s('Page.enable');
   if (mobile) {
-    await s('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
+    await s('Emulation.setUserAgentOverride', IPHONE);
     // Bildschirm so groß wie der Viewport: Safaris Leiste schwebt über der Seite (sheetView.js, measureBrowserBar)
     await s('Emulation.setDeviceMetricsOverride', { width: 393, height: 852, deviceScaleFactor: 3, mobile: true, screenWidth: 393, screenHeight: 852 });
     await s('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
