@@ -506,6 +506,27 @@
     </form>
   </dialog>
 
+  <!-- Mehrtagestour: Länge eines Tages mit Schieberegler; Vorschau läuft beim Ziehen mit (stagesView.js) -->
+  <dialog id="stage-dialog" aria-labelledby="stage-dialog-title">
+    <form method="dialog">
+      <h2 id="stage-dialog-title"></h2>
+      <label class="stage-km-label" for="stage-km">Länge <output id="stage-km-value" for="stage-km"></output></label>
+      <input type="range" id="stage-km" min="10" max="300" step="1">
+      <dl class="stage-preview">
+        <dt>Fahrzeit</dt><dd id="stage-time"></dd>
+        <dt>Höhenmeter</dt><dd id="stage-ascent"></dd>
+        <dt>Ankunft</dt><dd id="stage-arrival"></dd>
+      </dl>
+      <p class="hint" id="stage-daylight" hidden></p>
+      <p class="hint">Reine Fahrzeit ohne Pausen. Die Tage davor bleiben, wie sie sind; die Tage danach teilen sich den Rest.</p>
+      <div class="actions">
+        <button value="ok" class="primary">Übernehmen</button>
+        <button value="cancel" formnovalidate>Abbrechen</button>
+      </div>
+      <button value="release" id="stage-release" class="link-btn" formnovalidate hidden>Länge freigeben</button>
+    </form>
+  </dialog>
+
   <!-- Rückfrage/Eingabe im App-Stil (statt prompt()/confirm(), die im iOS-Vollbildmodus fremd wirken) -->
   <dialog id="ask-dialog">
     <form method="dialog">

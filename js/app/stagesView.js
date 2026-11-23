@@ -2,17 +2,21 @@
  * Mehrtagestouren – nur auf Knopfdruck: Ist die Route deutlich länger als die Tagesetappe, bietet
  * „Als Mehrtagestour planen“ die Aufteilung an. Dann werden je Nacht Unterkünfte vorgeschlagen (Auswahl
  * per Liste) und die Route durch die gewählten geführt. Dazu die Einstellungen im Zahnrad-Dialog
- * (km pro Tag, Budget, Unterkunftsarten, Übernachtung am Ziel). Jeder Tag lässt sich um je 10 km kürzer oder
- * länger machen (die übrigen teilen sich den Rest, stageTargets in stays.js), einzeln als GPX ausgeben und
- * zeigt, ob er bei Tageslicht zu schaffen ist.
+ * (km pro Tag, Budget, Unterkunftsarten, Übernachtung am Ziel). Die Länge eines Tages lässt sich in einem
+ * eigenen Fenster mit Schieberegler einstellen (Fahrzeit, Höhenmeter, Ankunft und Tageslicht laufen mit; die
+ * Tage danach teilen sich den Rest, stageTargets in stays.js). Jeder Tag lässt sich einzeln als GPX ausgeben
+ * und zeigt, ob er bei Tageslicht zu schaffen ist.
  */
 import {
   STAY_TYPES, STAY_GROUPS, isMultiDayCandidate, priceLabel, priceLink, websiteOf,
-  AVAILABILITY_LABEL, lastConfirmed, stageTargets,
+  AVAILABILITY_LABEL, lastConfirmed, stageTargets, MIN_LAST_DAY,
 } from '../stays.js';
 import { stageStats, dayTimes } from '../timeline.js';
 import { daylightNote } from '../sun.js';
-import { storage, indexAtDistance, formatKm, formatM, formatDuration, formatDayDate, osmNoteUrl } from '../utils.js';
+import {
+  storage, indexAtDistance, cumulativeAscent, estimateTime, formatKm, formatM, formatDuration, formatDayDate,
+  formatClock, formatWeekday, osmNoteUrl,
+} from '../utils.js';
 import { state, on, departureDate, originRoute } from './state.js';
 import { $, $$, textLines, externalLink, linkButton, flashStatus, osmLinks } from './dom.js';
 import { map } from './mapView.js';
@@ -89,14 +93,23 @@ export function renderStages() {
     const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
     day.innerHTML = '<span></span><small></small>';
     day.firstChild.textContent = `Tag ${s.day} · ${formatDayDate(date)}`;
-    day.lastChild.textContent = `${formatKm(s.distance)} · ${formatM(s.ascent)} ↑ · ca. ${formatDuration(s.time)}`;
+    // „fest“: Länge vom Nutzer festgelegt (im Fenster „Länge ändern“ wieder freizugeben)
+    day.lastChild.textContent = `${formatKm(s.distance)} · ${formatM(s.ascent)} ↑ · ca. ${formatDuration(s.time)}`
+      + (plan.fixed[i] ? ' · fest' : '');
     const gpx = linkButton('Als GPX', () => exportGpx([dayFile(s)]));
     gpx.setAttribute('aria-label', `Tag ${s.day} als GPX exportieren`);
     const actions = document.createElement('div');
     actions.className = 'day-links';
     actions.append(gpx);
+    // Der letzte Tag ist immer der Rest der Strecke – seine Länge ergibt sich aus den anderen
+    if (i < plan.days - 1) {
+      const edit = linkButton('Länge ändern', () => openStageDialog(plan, i));
+      edit.classList.add('length-edit');
+      edit.setAttribute('aria-label', `Länge von Tag ${s.day} ändern`);
+      edit.disabled = !!state.staysLoading;
+      actions.append(edit);
+    }
     li.append(day);
-    if (i < plan.days - 1) li.append(lengthControls(plan, i));
     // Tageslicht: Sonnenaufgang am Start des Tages, Sonnenuntergang an seinem Ziel
     const light = daylightNote(times[i], r.coords[indexAtDistance(r, s.from)], r.coords[indexAtDistance(r, s.to)]);
     if (light) {
@@ -113,43 +126,79 @@ export function renderStages() {
   }));
 }
 
-/** Schrittweite der Knöpfe „kürzer“/„länger“ und kürzester Tag, den „kürzer“ noch erzeugt (km). */
-const LENGTH_STEP = 10;
+// ---------- Fenster „Länge ändern“ ----------
+
+/** Bereich des Schiebereglers (km): kürzester Tag; längster Tag – höchstens die Reststrecke minus den letzten Tag. */
 const MIN_DAY_KM = 10;
+const MAX_DAY_KM = 300;
+
+/** Offenes Fenster: Tag, Längen der Tage bis dahin (km), Start des Tages (m) und Abfahrt – null, wenn zu. */
+let dialogDay = null;
 
 /**
- * Knöpfe „− 10 km“/„+ 10 km“ für Tag `i` (nicht der letzte – der ist immer der Rest). Ausgangswert ist die
- * Länge auf der Route ohne Übernachtungen (zwischen den Unterkünften entlang der Route), denn darauf bezieht
- * sich die Anpassung in planStays; angezeigt wird darüber die echte Tageslänge samt Weg zur Unterkunft.
+ * Fenster für die Länge von Tag `i` (nicht der letzte – der ist immer der Rest). Alle Werte beziehen sich auf die
+ * Route ohne Übernachtungen (zwischen den Unterkünften entlang der Route), denn darauf bezieht sich die Anpassung
+ * in planStays; die echte Etappe weicht um den Weg zur Unterkunft ab, deshalb steht überall „ca.“.
  */
-function lengthControls(plan, i) {
+function openStageDialog(plan, i) {
+  const origin = originRoute();
   const along = k => (k < 0 ? 0 : plan.nights[k].chosen?.along ?? plan.nights[k].target);
   const bases = Array.from({ length: i + 1 }, (_, k) => Math.round((along(k) - along(k - 1)) / 1000));
-  const km = bases[i];
-  const box = document.createElement('div');
-  box.className = 'day-length';
-  const step = (delta, text, what) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = text;
-    b.setAttribute('aria-label', `Tag ${i + 1} um ${LENGTH_STEP} km ${what}`);
-    b.disabled = !!state.staysLoading || km + delta < MIN_DAY_KM;
-    b.addEventListener('click', () => setDayLength(i, km + delta, bases));
-    return b;
-  };
-  box.append(step(-LENGTH_STEP, `− ${LENGTH_STEP} km`, 'kürzer'), step(LENGTH_STEP, `+ ${LENGTH_STEP} km`, 'länger'));
-  if (plan.fixed[i]) {
-    const note = document.createElement('span');
-    note.className = 'meta';
-    note.textContent = 'fest';
-    const release = linkButton('freigeben', () => setDayLength(i, null, bases),
-      'Länge nicht mehr festhalten – der Tag teilt sich die Strecke wieder mit den anderen freien Tagen');
-    release.setAttribute('aria-label', `Länge von Tag ${i + 1} freigeben`);
-    release.disabled = !!state.staysLoading;
-    box.append(note, release);
-  }
-  return box;
+  const from = along(i - 1);
+  // Abfahrt an Tag i wie in timeline(): Kalendertag weiterzählen, gleiche Uhrzeit (nicht + 24 h)
+  const start = departureDate();
+  const depart = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i, start.getHours(), start.getMinutes(), start.getSeconds());
+  dialogDay = { i, bases, from, origin, depart, fixed: !!plan.fixed[i], asc: cumulativeAscent(origin.coords) };
+
+  $('#stage-dialog-title').textContent = `Tag ${i + 1} · ${formatDayDate(depart)}`;
+  const range = $('#stage-km');
+  range.min = String(MIN_DAY_KM);
+  range.max = String(Math.max(MIN_DAY_KM, Math.min(MAX_DAY_KM, Math.floor((origin.distance - from - MIN_LAST_DAY) / 1000))));
+  range.value = String(bases[i]);
+  $('#stage-release').hidden = !plan.fixed[i];
+  updateStagePreview();
+  const dlg = $('#stage-dialog');
+  dlg.returnValue = '';
+  dlg.showModal();
+  range.focus();
 }
+
+/** Länge, Fahrzeit, Höhenmeter, Ankunft und Tageslicht für den eingestellten Wert – läuft beim Ziehen mit. */
+function updateStagePreview() {
+  const d = dialogDay;
+  if (!d) return;
+  const range = $('#stage-km');
+  const km = Number(range.value);
+  const to = Math.min(d.origin.distance, d.from + km * 1000);
+  const i0 = indexAtDistance(d.origin, d.from), i1 = indexAtDistance(d.origin, to);
+  const ascent = Math.max(0, Math.round((d.asc[i1] || 0) - (d.asc[i0] || 0)));
+  const time = estimateTime(to - d.from, ascent, state.bike);
+  const end = new Date(d.depart.getTime() + time * 1000);
+  const sameDay = end.toDateString() === d.depart.toDateString();
+  $('#stage-km-value').textContent = `${km} km`;
+  $('#stage-time').textContent = `ca. ${formatDuration(time)}`;
+  $('#stage-ascent').textContent = `${formatM(ascent)} ↑`;
+  $('#stage-arrival').textContent = `ca. ${sameDay ? '' : `${formatWeekday(end)} `}${formatClock(end)}`;
+  range.setAttribute('aria-valuetext', `${km} km, Fahrzeit ca. ${formatDuration(time)}`);
+  // Tageslicht wie in der Tagesliste: Sonnenaufgang am Start des Tages, Sonnenuntergang am eingestellten Ziel
+  const light = daylightNote({ start: d.depart, end }, d.origin.coords[i0], d.origin.coords[i1]);
+  const note = $('#stage-daylight');
+  note.hidden = !light;
+  note.textContent = light?.text ?? '';
+  note.classList.toggle('warn', !!light?.warn);
+}
+
+$('#stage-km').addEventListener('input', updateStagePreview);
+$('#stage-dialog').addEventListener('close', () => {
+  const d = dialogDay;
+  dialogDay = null;
+  if (!d) return;
+  const action = $('#stage-dialog').returnValue;
+  const km = Number($('#stage-km').value);
+  // Unverändert übernommen: nichts tun (ein freier Tag soll dadurch nicht „fest“ werden)
+  if (action === 'ok' && km !== d.bases[d.i]) setDayLength(d.i, km, d.bases);
+  else if (action === 'release') setDayLength(d.i, null, d.bases);
+});
 
 /**
  * Länge von Tag `i` festlegen (km) oder freigeben (null) und neu planen. Beim Festlegen werden die Tage davor
@@ -166,7 +215,7 @@ function setDayLength(i, km, bases) {
   state.stageKm = next;
   state.stayChoices.length = Math.min(state.stayChoices.length, i);
   // Sofort sperren (kein Doppelklick auf alte Werte); während der Suche zeigt renderStages den Ladezustand
-  for (const b of $$('.day-length button')) b.disabled = true;
+  for (const b of $$('#stage-list .length-edit')) b.disabled = true;
   replanStops();
 }
 

@@ -54,16 +54,16 @@ async function stagesAndStays({ app, page: newPage, check, step, sleep }) {
     HTMLAnchorElement.prototype.click = function () { if (this.download) window.__dl.push({ name: this.download, blob: window.__blobs.get(this.href) }); };
     true`);
   const days = await ev(`document.querySelectorAll('#stage-list > li').length`);
-  check('„Als GPX“ in jeder Tageszeile', await ev(`document.querySelectorAll('#stage-list .day-links button').length`) === days);
+  check('„Als GPX“ in jeder Tageszeile', await ev(`document.querySelectorAll('#stage-list .day-links button:not(.length-edit)').length`) === days);
   const suns = await ev(`[...document.querySelectorAll('#stage-list .sun')].map(e => e.textContent)`);
   check('Tageslicht-Hinweis in jeder Tageszeile', suns.length === days && suns.every(x => /Sonnen(auf|unter)gang/.test(x)), suns[0]);
   // Bis die Mehrtagestour geladen ist, steht noch das Wetter der Route davor (eine Zeile) da
   await waitFor(`document.querySelector('#weather-summary').children.length === ${days}`, 20000);
   const weather = await ev(`[...document.querySelector('#weather-summary').children].map(e => e.textContent)`);
   check('Wetter je Tag', weather.length === days && weather.every((x, i) => x.startsWith('Tag ' + (i + 1) + ' · ') && x.includes(' °C · ')), JSON.stringify(weather));
-  const label = await ev(`document.querySelectorAll('#stage-list .day-links button')[1].getAttribute('aria-label')`);
+  const label = await ev(`document.querySelectorAll('#stage-list .day-links button:not(.length-edit)')[1].getAttribute('aria-label')`);
   check('Name für Screenreader', label === 'Tag 2 als GPX exportieren', label);
-  await ev(`document.querySelectorAll('#stage-list .day-links button')[1].click(); true`);
+  await ev(`document.querySelectorAll('#stage-list .day-links button:not(.length-edit)')[1].click(); true`);
   check('Tag 2 einzeln exportiert', await waitFor(`window.__dl.length === 1`, 5000) && /_Tag_2\.gpx$/.test(await ev(`window.__dl[0].name`)),
     await ev(`window.__dl[0]?.name`));
   await ev(`window.__dl = []; document.querySelector('#btn-stages-gpx').click(); true`);
@@ -95,25 +95,64 @@ async function stagesAndStays({ app, page: newPage, check, step, sleep }) {
   check('Unterkunft am Ende von Tag 1 und am Anfang von Tag 2', /^Nacht 1/.test(gpx.nights[0]) && /^Nacht 1/.test(gpx.nights[1]), JSON.stringify(gpx.nights));
   check('Tag 1 ohne Unterkunft von Nacht 2', !gpx.nights[0].includes('Nacht 2'), gpx.nights[0]);
 
-  step('Tag 2 kürzer');
-  // Länge eines Tages auf der Route ohne Übernachtungen (darauf beziehen sich die Knöpfe), dazu die Anpassung
+  step('Länge von Tag 2 im Fenster ändern');
+  // Länge eines Tages auf der Route ohne Übernachtungen (darauf bezieht sich der Regler), dazu die Anpassung
   const split = `(async () => {
     const { state } = await import('/js/app/state.js');
     const p = state.route.stays, along = k => (k < 0 ? 0 : p.nights[k].chosen?.along ?? p.nights[k].target);
     return { days: p.days, day1: Math.round(along(0) / 1000), day2: Math.round((along(1) - along(0)) / 1000), fixed: p.fixed,
-      stageKm: state.stageKm, choice1: state.stayChoices[0], reset: !!document.querySelector('#stage-list .day-length .link-btn') };
+      stageKm: state.stageKm, choice1: state.stayChoices[0] };
   })()`;
+  const edit = day => `#stage-list .length-edit[aria-label="Länge von Tag ${day} ändern"]`;
+  /** Zustand des Fensters: offen, Titel, Regler und Vorschau */
+  const dialog = `(() => { const d = document.querySelector('#stage-dialog'), r = document.querySelector('#stage-km'), t = s => document.querySelector(s).textContent;
+    return { open: d.open, title: t('#stage-dialog-title'), value: +r.value, min: +r.min, max: +r.max, valuetext: r.getAttribute('aria-valuetext'),
+      km: t('#stage-km-value'), time: t('#stage-time'), ascent: t('#stage-ascent'), arrival: t('#stage-arrival'),
+      light: document.querySelector('#stage-daylight').hidden ? '' : t('#stage-daylight'), release: !document.querySelector('#stage-release').hidden,
+      focus: document.activeElement === r }; })()`;
+  const slide = km => ev(`(() => { const r = document.querySelector('#stage-km'); r.value = ${km}; r.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+  const press = value => ev(`document.querySelector('#stage-dialog button[value=${value}]').click(); true`);
+  /** Minuten aus „ca. 3 h 45 min“ bzw. „ca. 45 min“ */
+  const minutes = text => { const h = /(\d+) h/.exec(text), m = /(\d+) min/.exec(text); return (h ? +h[1] * 60 : 0) + (m ? +m[1] : 0); };
   const before = await ev(split);
-  const controls = await ev(`[...document.querySelectorAll('#stage-list .day-length button')].map(b => b.getAttribute('aria-label'))`);
-  check('Knöpfe an allen Tagen außer dem letzten', controls.length === (before.days - 1) * 2, controls.join(' | '));
-  check('Knöpfe haben Namen', controls[2] === 'Tag 2 um 10 km kürzer' && controls[3] === 'Tag 2 um 10 km länger', controls.slice(2, 4).join(' | '));
-  check('Am Anfang nichts angepasst', !before.fixed.some(Boolean) && !before.reset, JSON.stringify(before));
-  await ev(`document.querySelectorAll('#stage-list .day-length button')[2].click(); true`);
-  // Fertig neu geplant: Tag 2 (und damit Tag 1 davor) steht als „fest“ mit „freigeben“ da
+  const edits = await ev(`[...document.querySelectorAll('#stage-list .length-edit')].map(b => b.getAttribute('aria-label'))`);
+  check('„Länge ändern“ an allen Tagen außer dem letzten', edits.length === before.days - 1 && edits[1] === 'Länge von Tag 2 ändern', edits.join(' | '));
+  check('Am Anfang nichts fest', !before.fixed.some(Boolean) && !(await ev(`document.querySelector('#stage-list').textContent.includes('· fest')`)),
+    JSON.stringify(before));
+
+  await ev(`document.querySelector('${edit(2)}').click(); true`);
+  const opened = await ev(dialog);
+  check('Fenster offen, Fokus auf dem Regler', opened.open && opened.focus, JSON.stringify(opened));
+  check('Titel nennt Tag 2', opened.title.startsWith('Tag 2 · '), opened.title);
+  check('Regler steht auf der jetzigen Länge', opened.value === before.day2 && opened.km === `${before.day2} km`, `${opened.value} / ${before.day2}`);
+  check('Bereich: ab 10 km, nicht bis zum Ziel', opened.min === 10 && opened.max > before.day2 && opened.max < 130, `${opened.min}–${opened.max}`);
+  check('Vorschau: Fahrzeit, Höhenmeter, Ankunft', /^ca\. .*min$|^ca\. \d+ h$/.test(opened.time) && /↑$/.test(opened.ascent) && /^ca\. .*\d\d:\d\d$/.test(opened.arrival),
+    `${opened.time} · ${opened.ascent} · ${opened.arrival}`);
+  check('Tageslicht im Fenster', /Sonnen|Dunkel|Tageslicht/.test(opened.light), opened.light);
+  check('Regler für Screenreader mit Fahrzeit', opened.valuetext === `${before.day2} km, Fahrzeit ${opened.time}`, opened.valuetext);
+  check('„Länge freigeben“ nur bei festem Tag', !opened.release);
+  // Barrierefreiheit des offenen Fensters (a11y.test.mjs prüft keine Dialoge)
+  await ev((await (await fetch('https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js')).text()) + '; true');
+  const axe = await ev(`axe.run(document.querySelector('#stage-dialog'), { resultTypes: ['violations'] })
+    .then(r => r.violations.map(v => v.id + ': ' + v.nodes.length))`);
+  check('Fenster ohne axe-Verstöße', !axe.length, axe.join(', '));
+  await slide(before.day2 - 10);
+  const slid = await ev(dialog);
+  check('Ziehen: Länge und Fahrzeit laufen mit', slid.km === `${before.day2 - 10} km` && minutes(slid.time) < minutes(opened.time),
+    `${opened.km} ${opened.time} → ${slid.km} ${slid.time}`);
+  await page.shot('1a-fenster');
+  await press('cancel');
+  await sleep(300);
+  check('Abbrechen ändert nichts', !(await ev(dialog)).open && !(await ev(split)).stageKm.length);
+
+  await ev(`document.querySelector('${edit(2)}').click(); true`);
+  await slide(before.day2 - 10);
+  await press('ok');
+  // Fertig neu geplant: Tag 1 und 2 stehen als „fest“ in der Liste
   const idle = `!document.querySelector('#stages-body').hidden && !document.querySelector('#status').classList.contains('loading')`;
-  const release = day => `#stage-list .day-length .link-btn[aria-label="Länge von Tag ${day} freigeben"]`;
-  const replanned = `${idle} && !!document.querySelector('${release(2)}') && !!document.querySelector('${release(1)}')`;
-  check('Neu geplant, Tag 2 fest', await waitFor(replanned, 120000));
+  const fixedRows = `[...document.querySelectorAll('#stage-list > li .day small')].map(s => s.textContent.endsWith('· fest'))`;
+  const replanned = `${idle} && ${fixedRows}.slice(0, 2).every(Boolean)`;
+  check('Übernommen und neu geplant, Tag 1 und 2 fest', await waitFor(replanned, 120000));
   const after = await ev(split);
   check('Gewünschte Länge gemerkt', after.stageKm[1] === before.day2 - 10 && after.fixed[1], JSON.stringify(after.stageKm));
   check('Tag 2 kürzer als vorher', after.day2 <= before.day2 - 5, `${before.day2} → ${after.day2} km`);
@@ -145,14 +184,16 @@ async function stagesAndStays({ app, page: newPage, check, step, sleep }) {
   await page.shot('2-wieder');
 
   step('Länge freigeben');
-  await ev(`document.querySelector('${release(2)}').click(); true`);
+  await ev(`document.querySelector('${edit(2)}').click(); true`);
+  check('Fester Tag: „Länge freigeben“ im Fenster', (await ev(dialog)).release);
+  await press('release');
   check('Tag 2 freigegeben, Tag 1 bleibt fest',
-    await waitFor(`${idle} && !document.querySelector('${release(2)}') && !!document.querySelector('${release(1)}')`, 120000));
+    await waitFor(`${idle} && document.querySelector('${edit(2)}') && (r => r[0] && !r[1])(${fixedRows})`, 120000));
   const one = await ev(split);
   check('Nur noch Tag 1 gemerkt', JSON.stringify(one.stageKm) === JSON.stringify([before.day1]), JSON.stringify(one.stageKm));
-  await ev(`document.querySelector('${release(1)}').click(); true`);
-  check('Alles freigegeben', await waitFor(`${idle} && document.querySelectorAll('#stage-list .day-length button').length > 0
-    && !document.querySelector('#stage-list .day-length .link-btn')`, 120000));
+  await ev(`document.querySelector('${edit(1)}').click(); true`);
+  await press('release');
+  check('Alles freigegeben', await waitFor(`${idle} && document.querySelector('${edit(1)}') && !${fixedRows}.some(Boolean)`, 120000));
   const reset = await ev(split);
   check('Gleichmäßige Aufteilung wie am Anfang', !reset.stageKm.length && reset.days === before.days, JSON.stringify(reset));
 

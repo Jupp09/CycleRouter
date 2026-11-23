@@ -130,7 +130,7 @@ const hasContact = poi => !!(poi.tags.website || poi.tags['contact:website'] || 
 export const isMultiDayCandidate = (r, maxKm) => r.distance > maxKm * 1000 * 1.1;
 
 /** Kürzester Rest für den letzten Tag: Lässt eine Anpassung weniger übrig, wird sie verworfen. */
-const MIN_LAST_DAY = 5000;
+export const MIN_LAST_DAY = 5000;
 
 /**
  * Etappenlängen mit vom Nutzer angepassten Tagen. `overrides[k]`: gewünschte Länge von Tag k+1 in km
