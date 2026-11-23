@@ -1,6 +1,6 @@
 /**
  * Einstellungsdialog (Zahnrad): Darstellung, sichtbare Fahrradtypen und Routenarten, ORS-Schlüssel, Heimatadresse,
- * Durchschnittsgeschwindigkeit, Pausenstil, Mehrtagestour
+ * Durchschnittsgeschwindigkeit, Rundkurs nach Distanz oder Fahrzeit, Pausenstil, Mehrtagestour
  * und Konto. Die Abschnitte füllen und speichern ihre Felder selbst (homeView, stagesView, accountView);
  * hier wird nur beim Öffnen gefüllt und beim Speichern entschieden, was neu berechnet werden muss.
  */
@@ -79,6 +79,23 @@ $('#supply-style-switch').addEventListener('click', e => {
   renderStyle();
 });
 
+// ---------- Rundkurs nach Distanz oder Fahrzeit ----------
+// Bei „Fahrzeit“ zeigt das Formular im Modus Rundkurs einen Fahrzeit-Regler statt der Distanz (controls.js),
+// und generateLoop richtet die Schleife an der reinen Fahrzeit aus (generators.js).
+
+let pendingLoopBy = state.loopBy;
+
+function renderLoopBy() {
+  for (const b of $$('#loop-by-switch button')) b.setAttribute('aria-checked', String(b.dataset.value === pendingLoopBy));
+}
+
+$('#loop-by-switch').addEventListener('click', e => {
+  const value = e.target.closest('button')?.dataset.value;
+  if (!value) return;
+  pendingLoopBy = value;
+  renderLoopBy();
+});
+
 // ---------- Auswahl anpassen ----------
 // Welche Fahrradtypen und Routenarten die Umschalter zeigen (synchronisiert über visibleBikes/visibleModes).
 
@@ -128,6 +145,8 @@ $('#btn-settings').addEventListener('click', () => {
   renderSpeed();
   pendingStyle = state.supply.style in STYLES ? state.supply.style : 'fast';
   renderStyle();
+  pendingLoopBy = state.loopBy;
+  renderLoopBy();
   renderVisible();
   renderStaySettings();
   openHomeSettings();
@@ -151,6 +170,12 @@ dialog.addEventListener('close', () => {
   if (styleChanged) {
     state.supply.style = pendingStyle;
     storage.set('supplyStyle', pendingStyle);
+  }
+  // Gilt für den nächsten Rundkurs („Route erstellen“/„Neu würfeln“); die angezeigte Route bleibt
+  if (pendingLoopBy !== state.loopBy) {
+    state.loopBy = pendingLoopBy;
+    storage.set('loopBy', pendingLoopBy);
+    syncUi();
   }
   const staysChanged = saveStaySettings();
   if (state.provider !== 'ors') { // bei ORS berechnet recalc() unten ohnehin neu (der Schlüssel könnte neu sein)

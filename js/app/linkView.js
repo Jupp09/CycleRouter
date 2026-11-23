@@ -16,7 +16,7 @@
  */
 import { MODES, BIKES } from '../shared.js';
 import { account } from '../account.js';
-import { state, on, defaultName } from './state.js';
+import { state, on, defaultName, clampDuration } from './state.js';
 import { $, ui, isMobile, setStatus, flashStatus } from './dom.js';
 import { applyRouteSettings, syncUi } from './controls.js';
 import { setRoutePoints } from './waypoints.js';
@@ -49,6 +49,8 @@ export function encodeLink() {
     q.set('z', point(state.end));
   } else {
     q.set('d', state.distanceKm);
+    // Rundkurs nach Fahrzeit: Wunschzeit in Minuten (sonst erzeugte der Empfänger einen Rundkurs nach km)
+    if (state.mode === 'loop' && state.loopBy === 'time') q.set('dt', String(state.durationMin));
     q.set('r', state.direction);
     q.set('x', String(state.seed));
   }
@@ -94,6 +96,11 @@ export function openLinkFromUrl() {
     applyRouteSettings({ mode, bike, traffic: TRAFFIC.includes(q.get('t')) ? q.get('t') : 'normal', eurovelo: EUROVELO.includes(q.get('e')) ? q.get('e') : 'off' });
     if (mode !== 'ab') {
       state.distanceKm = clamp(q.get('d'), 5, 400, state.distanceKm);
+      // Nur für diese Route, nicht als eigene Einstellung gespeichert (wie die Verpflegung unten)
+      if (mode === 'loop') {
+        state.loopBy = q.has('dt') ? 'time' : 'distance';
+        if (q.has('dt')) state.durationMin = clampDuration(q.get('dt'));
+      }
       state.direction = DIRECTIONS.includes(q.get('r')) ? q.get('r') : 'random';
       state.seed = clamp(q.get('x'), 0, 2 ** 31, state.seed);
     }

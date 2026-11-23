@@ -23,7 +23,7 @@ function snapshot() {
   const s = state;
   return {
     mode: s.mode, bike: s.bike, traffic: s.traffic, eurovelo: s.eurovelo, provider: s.provider,
-    distanceKm: s.distanceKm, direction: s.direction, seed: s.seed,
+    distanceKm: s.distanceKm, durationMin: s.durationMin, direction: s.direction, seed: s.seed,
     start: s.start, end: s.end, vias: [...s.vias],
     // Ein Zwischenstopp ohne Route wird beim Verschieben selbst verändert – seine Werte deshalb mitmerken
     viaData: s.vias.map(v => ({ ...v })),
@@ -38,7 +38,7 @@ function restore(snap) {
   applyRouteSettings(snap);
   snap.vias.forEach((v, i) => Object.assign(v, snap.viaData[i]));
   Object.assign(state, {
-    distanceKm: snap.distanceKm, direction: snap.direction, seed: snap.seed,
+    distanceKm: snap.distanceKm, durationMin: snap.durationMin, direction: snap.direction, seed: snap.seed,
     track: snap.track, saved: snap.saved && { ...snap.saved }, loadedName: snap.loadedName,
     multiDay: snap.multiDay, stayChoices: [...snap.stayChoices], stageKm: [...snap.stageKm], staysLoading: false, staysError: null,
   });

@@ -17,7 +17,7 @@ import { announce } from '../announce.js';
 import { isMultiDayCandidate, planStays, routeThroughStays } from '../stays.js';
 import { seededRandom, formatNumber } from '../utils.js';
 import { locateOnRoute, insertWaypoints } from '../routeGeometry.js';
-import { state, emit, provider, routeOpts, departureDate, activeVias, originRoute, activeTrack } from './state.js';
+import { state, emit, provider, routeOpts, departureDate, activeVias, originRoute, activeTrack, loopByTime } from './state.js';
 import { setStatus } from './dom.js';
 import { map, relayout, drawRouteLine, updateMarkers } from './mapView.js';
 import { setPoint } from './waypoints.js';
@@ -241,6 +241,8 @@ export function generate() {
   const generator = state.mode === 'loop' ? generateLoop : generateOneWay;
   run(signal => generator({
     provider: provider(), start: state.start, distance: state.distanceKm * 1000, bearing, seed: state.seed,
+    // Rundkurs nach Fahrzeit (Einstellung): Ziel ist die reine Fahrzeit statt der Länge
+    duration: loopByTime() ? state.durationMin * 60 : null, bike: state.bike,
     opts: routeOpts(), signal,
     onProgress: i => setStatus(`Suche passende ${state.mode === 'loop' ? 'Schleife' : 'Strecke'} … (Versuch ${i})`, 'loading'),
   }).then(r => {

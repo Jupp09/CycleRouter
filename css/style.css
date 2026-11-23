@@ -229,6 +229,8 @@ body:has(#results:not([hidden])) .tagline { display: none; }
 }
 .range-row input[type="range"] { flex: 1; accent-color: var(--accent); }
 .range-row input[type="number"] { width: 72px; }
+/* Wert neben einem Regler ohne Zahlenfeld (Fahrzeit beim Rundkurs): feste Breite, damit der Regler nicht springt */
+.range-row .range-value { min-width: 6.5em; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 .unit { color: var(--muted); }
 
 .actions { display: flex; gap: 8px; }

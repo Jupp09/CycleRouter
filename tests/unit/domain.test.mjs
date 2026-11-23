@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseOpeningHours, openState } from '../../js/openingHours.js';
-import { computeStats, formatKm, formatM, formatInt, formatNumber, formatClock, formatWeekday, formatDayDate, formatDate, estimateTime } from '../../js/utils.js';
+import { computeStats, formatKm, formatM, formatInt, formatNumber, formatClock, formatWeekday, formatDayDate, formatDate, estimateTime, averageSpeed } from '../../js/utils.js';
 import { tileKey, isTileKey, cellOfTile, isLayer, LAYERS, layerOfType } from '../../js/poiSource.js';
 import { headwind } from '../../js/weather.js';
 import { findClimbs, gradeSegments } from '../../js/climbs.js';
@@ -10,6 +10,7 @@ import { timeline } from '../../js/timeline.js';
 import { sunTimes, darkMs, daylightNote } from '../../js/sun.js';
 import { groupNear } from '../../js/cluster.js';
 import { stageTargets } from '../../js/stays.js';
+import { generateLoop } from '../../js/generators.js';
 import { SYNC_KEYS, MODES, BIKES } from '../../js/shared.js';
 
 // Montag, 16.11.2026, Ortszeit
@@ -187,4 +188,24 @@ test('Mehrtagestour: angepasste Tageslängen, der Rest verteilt sich gleichmäß
   assert.deepEqual(km(stageTargets(250_000, 100, [150, 98])), { days: 2, len: [150, 100], fixed: [true, false], o: [150] });
   // Unsinnige Werte zählen als frei
   assert.deepEqual(stageTargets(250_000, 100, [NaN, -5, 0]).overrides, []);
+});
+
+test('Rundkurs nach Fahrzeit: Länge passt sich der Wunschzeit an, Anstiege verkürzen sie', async () => {
+  // Attrappe mit roundTrip: Strecke nach Norden, Länge = gewünschte Länge × 1,1, auf jeden km 10 m Anstieg
+  const fake = {
+    roundTrip: async (start, length) => {
+      const n = 40, coords = [];
+      for (let i = 0; i <= n; i++) coords.push([start.lat + (length * 1.1 / 111_195) * i / n, start.lon, (i % 2) * length * 1.1 / n / 100]);
+      return { coords, segments: [] };
+    },
+  };
+  const base = { provider: fake, start: { lat: 50, lon: 7 }, bearing: 0, seed: 1, opts: {}, signal: new AbortController().signal };
+  const byTime = await generateLoop({ ...base, distance: 0, duration: 2 * 3600, bike: 'trekking' });
+  const time = estimateTime(byTime.distance, byTime.ascent, 'trekking');
+  assert.ok(Math.abs(time - 7200) / 7200 <= 0.06, `${Math.round(time / 60)} min statt 120`);
+  // ohne Anstiege wäre es mehr Strecke: die Fahrzeit enthält die Anstiege
+  assert.ok(byTime.distance < 2 * averageSpeed('trekking') * 1000, `${Math.round(byTime.distance)} m`);
+  // nach Länge wie bisher
+  const byLength = await generateLoop({ ...base, distance: 40_000 });
+  assert.ok(Math.abs(byLength.distance - 40_000) / 40_000 <= 0.06, `${Math.round(byLength.distance)} m`);
 });

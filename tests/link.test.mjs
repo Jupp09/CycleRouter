@@ -68,6 +68,18 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   const loop2 = await again.ev(ROUTE);
   check('Derselbe Rundkurs (±20 m)', loop2.mode === 'loop' && sameLength(loop, loop2), `${loop.distance} / ${loop2.distance}${loop2.fallback ? ' (Valhalla)' : ''}`);
 
+  step('Rundkurs nach Fahrzeit im Link');
+  // dt = Wunschfahrzeit in Minuten (Einstellung „Rundkurs nach: Fahrzeit“); gilt nur für diesen Link
+  const timed = await newPage({ height: 950 });
+  await timed.open(loopLink + '&dt=60', { view: BONN, storage: { bike: 'road', loopBy: 'distance' } });
+  check('Rundkurs aus dem Link erzeugt', await timed.waitFor(`${HAS_ROUTE} && ${IDLE}`, 150000));
+  const t = await timed.ev(`(async () => { const s = ${STATE}, { estimateTime } = await import('/js/utils.js');
+    return { loopBy: s.loopBy, durationMin: s.durationMin, stored: localStorage.getItem('cyclerouter.loopBy'),
+      field: !document.querySelector('#duration-field').hidden, min: Math.round(estimateTime(s.route.distance, s.route.ascent, s.bike) / 60) }; })()`);
+  check('Fahrzeit aus dem Link übernommen, nicht als Einstellung gespeichert', t.loopBy === 'time' && t.durationMin === 60 && t.stored === '"distance"' && t.field,
+    JSON.stringify(t));
+  check('Rundkurs ungefähr 1 h (±20 %)', Math.abs(t.min - 60) <= 12, `${t.min} min`);
+
   step('Kaputter Link');
   page = await newPage({ height: 950 });
   await page.open(app, { view: BONN, storage: { bike: 'trekking' } });

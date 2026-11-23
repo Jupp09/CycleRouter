@@ -3,8 +3,8 @@
  * Routing-Dienst, Richtung und Wunschdistanz. `syncUi()` überträgt den Zustand auf alle Schalter und
  * blendet modusabhängige Felder (`data-show`) ein und aus.
  */
-import { storage, newSeed } from '../utils.js';
-import { state, provider, activeBreakdown, departureFixed } from './state.js';
+import { storage, newSeed, formatDuration } from '../utils.js';
+import { state, provider, activeBreakdown, departureFixed, loopByTime, clampDuration } from './state.js';
 import { $, $$, ui } from './dom.js';
 import { clearRoute, calcAB, generate, recalc } from './pipeline.js';
 import { checkpoint } from './history.js';
@@ -20,6 +20,13 @@ export function syncUi() {
   showOnly('#mode-tabs', 'mode', state.visibleModes, state.mode);
   check('#breakdown-switch button', 'aria-checked', 'value', activeBreakdown());
   for (const n of $$('[data-show]')) n.hidden = !n.dataset.show.split(' ').includes(state.mode);
+  // Rundkurs nach Fahrzeit: Fahrzeit-Regler statt Distanz
+  if (loopByTime()) $('#distance-field').hidden = true;
+  else $('#duration-field').hidden = true;
+  const duration = $('#duration-range');
+  duration.value = state.durationMin;
+  $('#duration-out').textContent = formatDuration(state.durationMin * 60);
+  duration.setAttribute('aria-valuetext', formatDuration(state.durationMin * 60));
 
   $('#color-route').checked = state.colorRoute;
   $('#supply-enabled').checked = state.supply.enabled;
@@ -124,6 +131,13 @@ function setDistance(km) {
 }
 ui.range.addEventListener('input', () => setDistance(ui.range.value));
 ui.num.addEventListener('change', () => setDistance(ui.num.value));
+
+/** Wunschfahrzeit für Rundkurse (Minuten, 30 min bis 10 h in Viertelstunden). */
+$('#duration-range').addEventListener('input', e => {
+  state.durationMin = clampDuration(e.target.value);
+  storage.set('durationMin', state.durationMin);
+  syncUi();
+});
 
 $('#btn-generate').addEventListener('click', generate);
 // Schnappschuss vor der neuen Saat: „Rückgängig“ soll auch die alte Saat zurückbringen (sonst erzeugte

@@ -4,7 +4,7 @@ Routenplaner für **Rennrad**, **Gravelbike**, **Trekking** (Trekking-, Touren- 
 
 - **A → B** – Route zwischen Start und Ziel
 - **Distanz** – Start + Wunschdistanz, das Ziel wird automatisch gewählt
-- **Rundkurs** – Schleife mit Wunschdistanz zurück zum Start
+- **Rundkurs** – Schleife mit Wunschdistanz zurück zum Start; mit der Einstellung „Rundkurs nach: Fahrzeit“ stattdessen mit Wunschfahrzeit (z. B. 2 h reine Fahrzeit – die Länge ergibt sich aus Tempo und Anstiegen)
 - **GPX-Export** inkl. Höhendaten
 - **Route als Link, ohne Konto:** Die Adresse enthält die Route (hinter „#“, wird nie an den Server geschickt). „Link teilen“ kopiert sie bzw. öffnet am Handy das Teilen-Menü; wer den Link öffnet, bekommt dieselbe Route – auch denselben Rundkurs. Neuladen und Lesezeichen behalten die Route. Angemeldet erzeugt „Link teilen“ wie bisher den zurückziehbaren Konto-Link, der auch importierte GPX-Strecken kann
 - **Offline-Start:** Die installierte App startet auch ohne Netz. Angemeldet zeigt „Meine Routen“ den zuletzt geladenen Stand; öffnen lassen sich die auf dem Gerät schon geöffneten Routen und die 20 zuletzt geänderten – mit Höhenprofil, Steigungen und Roadbook. Neue Routen, Ortssuche, Stopps, Wetter und der Kartenhintergrund brauchen Netz. Beim Abmelden wird das Gemerkte gelöscht
@@ -120,7 +120,7 @@ Ungefangene Fehler im Browser meldet die App an den eigenen Server (`POST /api/c
 
 **Eigener BRouter-Server:** Mit `BROUTER_URL` in der `.env` (z. B. `https://brouter.example.org`) rechnet die App zuerst dort. BRouter selbst spricht nur `http://`; für eine verschlüsselte Verbindung kommt davor ein Reverse-Proxy mit Zertifikat (z. B. Caddy mit Let's Encrypt), und BRouter lauscht nur auf `localhost`. Der Browser fragt nicht direkt an, sondern über den CycloRouter-Server (`/api/brouter`, [server/brouterProxy.mjs](server/brouterProxy.mjs)) – so geht auch ein BRouter, der nur `http://` spricht, und der Rechner muss nur für den CycloRouter-Server erreichbar sein. `BROUTER_PARALLEL` gibt an, wie viele Anfragen gleichzeitig zu ihm gehen (Standard 1) – höchstens so viele, wie BRouter Threads hat, sonst bricht er überzählige nach 2 Sekunden ab. Ist der eigene Server weg, ausgelastet oder fehlen ihm Kartendaten oder ein Profil, rechnet die App mit brouter.de, danach wie oben mit Valhalla. Unter der Route steht, welcher Server gerechnet hat (bei beiden mit Anteilen nach Strecke). Beim eigenen Server sucht BRouter in einem statt zwei Durchgängen (`pass1coefficient=1.2`, `pass2coefficient=-1`): etwa doppelt so schnell, die Routen bleiben praktisch gleich (Kosten +0 bis 0,2 %). Auf dem eigenen Server müssen die Profile aus [profiles/](profiles/) liegen und eine `lookups.dat`, die zu ihnen passt.
 
-Rundkurse und Distanz-Routen mit BRouter werden in [js/generators.js](js/generators.js) erzeugt: Wegpunkte auf einem Kreis bzw. ein Ziel in passender Luftlinie. Danach wird iterativ skaliert, bis die Länge höchstens 6 % von der Wunschdistanz abweicht.
+Rundkurse und Distanz-Routen mit BRouter werden in [js/generators.js](js/generators.js) erzeugt: Wegpunkte auf einem Kreis bzw. ein Ziel in passender Luftlinie. Danach wird iterativ skaliert, bis die Länge höchstens 6 % von der Wunschdistanz abweicht – beim Rundkurs nach Fahrzeit die geschätzte reine Fahrzeit (Tempo plus Anstiege) von der Wunschzeit. Nach 5 Versuchen gilt der beste; vereinzelt liegt er dann weiter daneben.
 
 ## Aufbau
 

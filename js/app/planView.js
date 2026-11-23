@@ -8,8 +8,9 @@
  * dann gerade am Ändern, und jede Neuberechnung würde ihm sonst das Formular wegnehmen. Kartenklicks, Marker
  * und Rückgängig wirken auch eingeklappt.
  */
-import { state, on, BIKE_LABELS } from './state.js';
+import { state, on, BIKE_LABELS, loopByTime } from './state.js';
 import { $ } from './dom.js';
+import { formatDuration } from '../utils.js';
 import { setSheet, sheetState } from './sheetView.js';
 
 const plan = $('#plan'), summary = $('#plan-summary'), text = $('#plan-summary-text');
@@ -25,7 +26,8 @@ function summaryText() {
     return [`A → B · ${place(state.start)} → ${place(state.end)}`, vias ? `${vias} ${vias === 1 ? 'Zwischenstopp' : 'Zwischenstopps'}` : '', bike]
       .filter(Boolean).join(' · ');
   }
-  return `${state.mode === 'loop' ? 'Rundkurs' : 'Strecke'} ${state.distanceKm} km ab ${place(state.start)} · ${bike}`;
+  const size = loopByTime() ? formatDuration(state.durationMin * 60) : `${state.distanceKm} km`;
+  return `${state.mode === 'loop' ? 'Rundkurs' : 'Strecke'} ${size} ab ${place(state.start)} · ${bike}`;
 }
 
 function render() {

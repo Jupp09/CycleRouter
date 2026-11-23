@@ -124,13 +124,21 @@
         <!-- A → B hat keinen Berechnen-Knopf: sagen, wann die Route kommt (ausgeblendet, sobald das Ziel steht; style.css) -->
         <p class="hint ab-hint" id="ab-hint" data-show="ab">Die Route wird berechnet, sobald Start und Ziel gesetzt sind.</p>
 
-        <div class="field" data-show="distance loop">
+        <div class="field" data-show="distance loop" id="distance-field">
           <span class="label">Distanz</span>
           <div class="range-row">
             <input id="distance-range" type="range" min="10" max="300" step="5" aria-label="Distanz">
 
             <input id="distance-num" type="number" min="5" max="400" step="1" aria-label="Distanz in km">
             <span class="unit">km</span>
+          </div>
+        </div>
+        <!-- Rundkurs nach Fahrzeit (Einstellung „Rundkurs nach“): statt der Distanz; syncUi blendet um -->
+        <div class="field" data-show="loop" id="duration-field" hidden>
+          <span class="label" id="duration-label">Fahrzeit</span>
+          <div class="range-row">
+            <input id="duration-range" type="range" min="30" max="600" step="15" aria-labelledby="duration-label">
+            <output id="duration-out" for="duration-range" class="range-value"></output>
           </div>
         </div>
 
@@ -471,6 +479,14 @@
         </div>
         <p class="hint">Tempo in der Ebene – Anstiege werden zusätzlich berücksichtigt. Grundlage für Fahrzeit und Ankunftszeiten.
           <button type="button" class="link-btn inline" id="speed-reset">Auf Standard zurücksetzen</button></p>
+      </div>
+      <div class="field">
+        <span class="label" id="loop-by-label">Rundkurs nach</span>
+        <div class="segmented" id="loop-by-switch" role="radiogroup" aria-labelledby="loop-by-label" aria-describedby="loop-by-hint">
+          <button type="button" role="radio" data-value="distance">Distanz</button>
+          <button type="button" role="radio" data-value="time">Fahrzeit</button>
+        </div>
+        <p class="hint" id="loop-by-hint">Mit „Fahrzeit“ stellst du beim Rundkurs statt der km ein, wie lange du fahren willst (z. B. 2 h). Die Länge ergibt sich aus dem Tempo oben und den Anstiegen; gemeint ist die reine Fahrzeit ohne Pausen.</p>
       </div>
       <div class="field">
         <span class="label" id="supply-style-label">Pausenstil bei Verpflegungsstopps</span>

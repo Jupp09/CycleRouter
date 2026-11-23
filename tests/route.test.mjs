@@ -164,6 +164,32 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
     `${await text('#stat-dist')}`);
   await page.shot('2-rundkurs');
 
+  step('Rundkurs nach Fahrzeit');
+  const loopBy = async value => {
+    await ev(`${q('#btn-settings')}.click(); ${q(`#loop-by-switch [data-value=${value}]`)}.click();
+      ${q('#settings-dialog button[value=save]')}.click(); true`);
+    await sleep(300);
+  };
+  const fields = `({ distance: !${q('#distance-field')}.hidden, duration: !${q('#duration-field')}.hidden })`;
+  await loopBy('time');
+  check('Einstellung „Fahrzeit“: Fahrzeit-Regler statt Distanz', JSON.stringify(await ev(fields)) === '{"distance":false,"duration":true}',
+    JSON.stringify(await ev(fields)));
+  check('Umschalter in den Einstellungen gemerkt', await ev(`localStorage.getItem('cyclerouter.loopBy')`) === '"time"');
+  await ev(`{ const r = ${q('#duration-range')}; r.value = 75; r.dispatchEvent(new Event('input')); } true`);
+  check('Fahrzeit 1 h 15 min eingestellt', await text('#duration-out') === '1 h 15 min'
+    && await ev(`${q('#duration-range')}.getAttribute('aria-valuetext')`) === '1 h 15 min', await text('#duration-out'));
+  const loopShape = await ev(shape);
+  await ev(`${q('#btn-generate')}.click(); true`);
+  check('Rundkurs nach Fahrzeit erzeugt', await waitFor(`(async () => (await ${shape}) !== ${JSON.stringify(loopShape)} && ${IDLE})()`, 120000));
+  const time = await text('#stat-time');
+  const mins = (/(\d+) h/.exec(time)?.[1] ?? 0) * 60 + Number(/(\d+) min/.exec(time)?.[1] ?? 0);
+  // Wie beim Rundkurs nach km: höchstens 5 Versuche, dann der beste – meist ±6 %, vereinzelt bis ~20 % daneben
+  check('Reine Fahrzeit ungefähr 1 h 15 min', Math.abs(mins - 75) <= 75 * 0.2, `${time} · ${await text('#stat-dist')}`);
+  check('Kurzfassung nennt die Fahrzeit', (await text('#plan-summary-text')).startsWith('Rundkurs 1 h 15 min ab '), await text('#plan-summary-text'));
+  check('Link enthält die Fahrzeit', await ev(`location.hash.includes('dt=75')`), await ev(`location.hash.slice(0, 80)`));
+  await loopBy('distance');
+  check('Zurück auf „Distanz“: Distanz-Regler wieder da', JSON.stringify(await ev(fields)) === '{"distance":true,"duration":false}');
+
   step('Heimat als Start beim Laden');
   await ev(`localStorage.setItem('cyclerouter.home', JSON.stringify({lat: 50.94, lon: 6.96, label: 'Testheimat Köln'}));
     localStorage.setItem('cyclerouter.mode', '"ab"');

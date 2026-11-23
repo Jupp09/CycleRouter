@@ -20,6 +20,17 @@ export const MODE_LABELS = { ab: 'Route', distance: 'Strecke', loop: 'Rundkurs' 
 // „Trekking“ statt „Fahrrad“: Neben Rennrad, Gravel und E-Bike sagte „Fahrrad“ nichts (alles sind Fahrräder)
 export const BIKE_LABELS = { road: 'Rennrad', gravel: 'Gravel', trekking: 'Trekking', ebike: 'E-Bike' };
 
+/** Wunschfahrzeit für Rundkurse in Minuten: 30 min bis 10 h in Viertelstunden (Regler, Link, Konto-Abgleich). */
+export function clampDuration(min) {
+  const v = Math.round(Number(min) / 15) * 15;
+  return Number.isFinite(v) ? Math.min(600, Math.max(30, v)) : 120;
+}
+
+/** Wird der Rundkurs nach Fahrzeit statt nach Länge erzeugt? (Einstellung „Rundkurs nach“, nur im Modus Rundkurs) */
+export function loopByTime() {
+  return state.mode === 'loop' && state.loopBy === 'time';
+}
+
 /** Gespeicherte Auswahl sichtbarer Werte (Einstellungen) – unbekannte verwerfen, leer = alle. */
 const visibleOf = (key, all) => {
   const v = storage.get(key, null);
@@ -35,6 +46,9 @@ export const state = {
   provider: storage.get('provider', 'brouter'),   // Schlüssel in providers
   mode: storage.get('mode', 'ab'),                // 'ab' | 'distance' | 'loop'
   distanceKm: storage.get('distanceKm', 60),      // Wunschdistanz für Distanz/Rundkurs
+  // Rundkurs nach Länge oder nach reiner Fahrzeit (Einstellung); Wunschfahrzeit in Minuten (30 min bis 10 h)
+  loopBy: storage.get('loopBy', 'distance') === 'time' ? 'time' : 'distance',
+  durationMin: clampDuration(storage.get('durationMin', 120)),
   direction: 'random',                            // Himmelsrichtung in Grad oder 'random'
   seed: newSeed(),                                // „Neu würfeln“ erzeugt eine neue Saat
 
