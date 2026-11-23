@@ -79,7 +79,7 @@ export function clearRoute() {
   abortCalculation();
   Object.assign(state, {
     route: null, saved: null, loadedName: null, track: null,
-    multiDay: false, stayChoices: [], staysLoading: false, staysError: null,
+    multiDay: false, stayChoices: [], stageKm: [], staysLoading: false, staysError: null,
   });
   map.setRoute(null);
   setStatus(null);
@@ -200,9 +200,10 @@ async function withStays(origin, signal) {
   const plan = await planStays(origin, {
     maxKm: state.stays.maxKm, budget: state.stays.budget, groups: state.stays.groups,
     endStay: state.stays.endStay && state.mode !== 'loop', // Rundkurs endet zu Hause
-    departure: departureDate(), choices: state.stayChoices, hidden: state.hiddenStays, signal,
+    departure: departureDate(), choices: state.stayChoices, hidden: state.hiddenStays, overrides: state.stageKm, signal,
   });
   state.stayChoices = plan.nights.map(n => n.chosen?.poi.id ?? null);
+  state.stageKm = plan.overrides; // nicht mehr passende Anpassungen fallen weg (z. B. auf einer kürzeren Route)
   return routeThroughStays(origin, plan, { provider: provider(), opts: routeOpts(), signal });
 }
 

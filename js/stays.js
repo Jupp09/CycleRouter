@@ -129,9 +129,45 @@ const hasContact = poi => !!(poi.tags.website || poi.tags['contact:website'] || 
 /** Lohnt sich eine Mehrtagestour (Route deutlich länger als die Tagesetappe)? */
 export const isMultiDayCandidate = (r, maxKm) => r.distance > maxKm * 1000 * 1.1;
 
+/** Kürzester Rest für den letzten Tag: Lässt eine Anpassung weniger übrig, wird sie verworfen. */
+const MIN_LAST_DAY = 5000;
+
+/**
+ * Etappenlängen mit vom Nutzer angepassten Tagen. `overrides[k]`: gewünschte Länge von Tag k+1 in km
+ * (dünn besetzt, null = frei). Die freien Tage teilen sich die Reststrecke gleichmäßig; würden sie länger als
+ * `maxKm`, kommt ein Tag dazu, ist der Rest kürzer, fällt einer weg. Der letzte Tag ist immer der Rest – eine
+ * Anpassung auf ihm oder dahinter fällt weg, ebenso eine, die weniger als 5 km Rest übrig ließe (von hinten).
+ * → {days, lengths: [m je Tag], targets: [m entlang je Nacht], fixed: [je Tag angepasst?], overrides: [km, bereinigt]}
+ * @param {number} distance Länge der Route in m
+ * @param {number} maxKm km pro Tag (Einstellung)
+ * @param {(number | null)[]} [overrides]
+ */
+export function stageTargets(distance, maxKm, overrides = []) {
+  const maxM = maxKm * 1000;
+  let o = overrides.map(v => (Number.isFinite(v) && v > 0 ? v * 1000 : null));
+  let days;
+  for (;;) {
+    const fixedCount = o.filter(v => v != null).length;
+    if (!fixedCount) { days = Math.max(2, Math.ceil(distance / maxM)); o = []; break; }
+    const free = distance - o.reduce((s, v) => s + (v ?? 0), 0);
+    if (free < MIN_LAST_DAY) { o[o.findLastIndex(v => v != null)] = null; continue; }
+    days = fixedCount + Math.max(1, Math.ceil(free / maxM));
+    if (o.some((v, i) => v != null && i >= days - 1)) { o = o.map((v, i) => (i >= days - 1 ? null : v)); continue; }
+    break;
+  }
+  const fixed = Array.from({ length: days }, (_, i) => o[i] != null);
+  const freeLength = (distance - o.reduce((s, v) => s + (v ?? 0), 0)) / fixed.filter(f => !f).length;
+  const lengths = fixed.map((f, i) => (f ? /** @type {number} */ (o[i]) : freeLength));
+  const targets = [];
+  for (let i = 0, sum = 0; i < days - 1; i++) targets.push(sum += lengths[i]);
+  const kept = o.slice(0, days - 1).map(v => (v == null ? null : v / 1000));
+  while (kept.length && kept.at(-1) == null) kept.pop();
+  return { days, lengths, targets, fixed, overrides: kept };
+}
+
 /**
  * Punktzahl einer Unterkunft für eine Nacht (kleiner = besser). Reihenfolge der Kriterien:
- * Budget, dann gleichmäßige Etappen ohne Überschreiten des Tageslimits, dann wenig Umweg.
+ * Budget, dann Etappen nahe der gewünschten Länge ohne Überschreiten des Tageslimits, dann wenig Umweg.
  * Abwertungen: Zeltplatz ohne Angaben im Winter, veraltete Einträge, fehlende Kontaktdaten.
  */
 function scoreOption({ w, along, offset, fit, open, stale, contact, ctx }) {
@@ -139,12 +175,11 @@ function scoreOption({ w, along, offset, fit, open, stale, contact, ctx }) {
   if (w.end) {
     score = offset / 500; // am Ziel zählt nur die Nähe
   } else {
-    // Ideal: die verbleibende Strecke gleichmäßig auf die restlichen Tage verteilen
-    const ideal = ctx.prevAlong + (ctx.distance - ctx.prevAlong) / (ctx.remainingDays + 1);
+    // Ideal (ctx.ideal): angepasster Tag in seiner Länge, sonst die Reststrecke gleichmäßig auf die freien Tage
     const stage = along - ctx.prevAlong;
     const rest = (ctx.distance - along) / Math.max(1, ctx.remainingDays);
-    const tooLong = stage > ctx.maxStage || (ctx.isLastInner && rest > ctx.maxStage);
-    score = Math.abs(along - ideal) / 1000 + offset / 500 + (tooLong ? 50 : 0); // 1 km Umweg ≈ 2 km Abweichung
+    const tooLong = stage > ctx.stageMax || (ctx.isLastInner && rest > ctx.maxStage);
+    score = Math.abs(along - ctx.ideal) / 1000 + offset / 500 + (tooLong ? 50 : 0); // 1 km Umweg ≈ 2 km Abweichung
   }
   score += { ok: 0, maybe: 100, over: 200 }[fit];
   score += open === 'season' ? 150 : 0;  // hinter „evtl. im Budget“, aber vor „über Budget“
@@ -155,22 +190,25 @@ function scoreOption({ w, along, offset, fit, open, stale, contact, ctx }) {
 
 /**
  * Etappen und Übernachtungen planen.
- * → {days, stageLength, nights: [{index, target, date, end, options: [{poi, along, offset, price, fit, open, stale}], chosen}]}
+ * → {days, stageLength, lengths, fixed, overrides, nights: [{index, target, date, end, options: [{poi, along, offset, price, fit, open, stale}], chosen}]}
  * `choices`: früher gewählte Unterkünfte (OSM-Kennungen je Nacht), werden bevorzugt übernommen.
  * `hidden`: vom Nutzer ausgeblendete Unterkünfte (OSM-Kennungen), werden nie vorgeschlagen.
+ * `overrides`: vom Nutzer angepasste Tageslängen in km (siehe `stageTargets`); `overrides` im Ergebnis ist die
+ * bereinigte Fassung (nicht mehr passende Anpassungen fallen weg).
  */
-export async function planStays(r, { maxKm, budget, groups, departure, endStay, choices = [], hidden = [], signal }) {
+export async function planStays(r, { maxKm, budget, groups, departure, endStay, choices = [], hidden = [], overrides = [], signal }) {
   const hiddenIds = new Set(hidden);
-  const days = Math.max(2, Math.ceil(r.distance / (maxKm * 1000)));
+  const stages = stageTargets(r.distance, maxKm, overrides);
+  const { days, lengths, fixed } = stages;
   const stageLength = r.distance / days;
   const types = new Set(Object.entries(STAY_GROUPS).filter(([g]) => groups.includes(g)).flatMap(([, v]) => v.types));
 
-  // Suchbereich je Nacht: etwas vor bis etwas hinter dem Etappenziel (am Ziel: kurz davor bis zum Ziel)
-  const windows = Array.from({ length: days - 1 }, (_, k) => {
-    const target = stageLength * (k + 1);
-    return { target, end: false, lo: target - 0.3 * stageLength, hi: Math.min(r.distance, target + 0.2 * stageLength), maxOffset: MAX_OFFSET };
-  });
-  if (endStay) windows.push({ target: r.distance, end: true, lo: r.distance - 0.15 * stageLength, hi: r.distance, maxOffset: MAX_OFFSET_END });
+  // Suchbereich je Nacht: etwas vor bis etwas hinter dem Etappenziel (am Ziel: kurz davor bis zum Ziel),
+  // gemessen an der Länge dieses Tages – ein bewusst kurzer Tag soll nicht weit über sein Ziel hinaus suchen
+  const windows = stages.targets.map((target, k) => ({
+    target, end: false, lo: target - 0.3 * lengths[k], hi: Math.min(r.distance, target + 0.2 * lengths[k]), maxOffset: MAX_OFFSET,
+  }));
+  if (endStay) windows.push({ target: r.distance, end: true, lo: r.distance - 0.15 * lengths[days - 1], hi: r.distance, maxOffset: MAX_OFFSET_END });
 
   const samples = sampleRoute(r, 250);
   const inWindow = (s, w) => s.along >= w.lo && s.along <= w.hi;
@@ -184,7 +222,17 @@ export async function planStays(r, { maxKm, budget, groups, departure, endStay, 
   const lastInner = windows.filter(w => !w.end).length - 1;
   const nights = windows.map((w, index) => {
     const pts = samples.filter(s => inWindow(s, w));
-    Object.assign(ctx, { remainingDays: days - index - 1, isLastInner: index === lastInner });
+    // Ideal für diese Nacht: angepasster Tag in seiner Länge; sonst teilen sich die freien Tage die Strecke,
+    // die nach den späteren angepassten Tagen übrig bleibt
+    let ideal = ctx.prevAlong + lengths[index];
+    if (!w.end && !fixed[index]) {
+      const laterFixed = lengths.reduce((s, l, j) => s + (j > index && fixed[j] ? l : 0), 0);
+      const freeLeft = fixed.filter((f, j) => j >= index && !f).length;
+      ideal = ctx.prevAlong + (r.distance - ctx.prevAlong - laterFixed) / Math.max(1, freeLeft);
+    }
+    // Ein bewusst längerer Tag gilt nicht als „zu lang“
+    const stageMax = fixed[index] ? Math.max(ctx.maxStage, lengths[index] * 1.05) : ctx.maxStage;
+    Object.assign(ctx, { remainingDays: days - index - 1, isLastInner: index === lastInner, ideal, stageMax });
     const evening = new Date(departure.getFullYear(), departure.getMonth(), departure.getDate() + index, 18);
     const options = [];
     for (const poi of pois) {
@@ -212,7 +260,7 @@ export async function planStays(r, { maxKm, budget, groups, departure, endStay, 
       chosen,
     };
   });
-  return { days, stageLength, nights };
+  return { days, stageLength, lengths, fixed, overrides: stages.overrides, nights };
 }
 
 /**

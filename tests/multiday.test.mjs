@@ -95,6 +95,42 @@ async function stagesAndStays({ app, page: newPage, check, step, sleep }) {
   check('Unterkunft am Ende von Tag 1 und am Anfang von Tag 2', /^Nacht 1/.test(gpx.nights[0]) && /^Nacht 1/.test(gpx.nights[1]), JSON.stringify(gpx.nights));
   check('Tag 1 ohne Unterkunft von Nacht 2', !gpx.nights[0].includes('Nacht 2'), gpx.nights[0]);
 
+  step('Tag 2 kürzer');
+  // Länge eines Tages auf der Route ohne Übernachtungen (darauf beziehen sich die Knöpfe), dazu die Anpassung
+  const split = `(async () => {
+    const { state } = await import('/js/app/state.js');
+    const p = state.route.stays, along = k => (k < 0 ? 0 : p.nights[k].chosen?.along ?? p.nights[k].target);
+    return { days: p.days, day1: Math.round(along(0) / 1000), day2: Math.round((along(1) - along(0)) / 1000), fixed: p.fixed,
+      stageKm: state.stageKm, choice1: state.stayChoices[0], reset: !!document.querySelector('#stage-list .day-length .link-btn') };
+  })()`;
+  const before = await ev(split);
+  const controls = await ev(`[...document.querySelectorAll('#stage-list .day-length button')].map(b => b.getAttribute('aria-label'))`);
+  check('Knöpfe an allen Tagen außer dem letzten', controls.length === (before.days - 1) * 2, controls.join(' | '));
+  check('Knöpfe haben Namen', controls[2] === 'Tag 2 um 10 km kürzer' && controls[3] === 'Tag 2 um 10 km länger', controls.slice(2, 4).join(' | '));
+  check('Am Anfang nichts angepasst', !before.fixed.some(Boolean) && !before.reset, JSON.stringify(before));
+  await ev(`document.querySelectorAll('#stage-list .day-length button')[2].click(); true`);
+  // Fertig neu geplant: Tag 2 (und damit Tag 1 davor) steht als „fest“ mit „freigeben“ da
+  const idle = `!document.querySelector('#stages-body').hidden && !document.querySelector('#status').classList.contains('loading')`;
+  const release = day => `#stage-list .day-length .link-btn[aria-label="Länge von Tag ${day} freigeben"]`;
+  const replanned = `${idle} && !!document.querySelector('${release(2)}') && !!document.querySelector('${release(1)}')`;
+  check('Neu geplant, Tag 2 fest', await waitFor(replanned, 120000));
+  const after = await ev(split);
+  check('Gewünschte Länge gemerkt', after.stageKm[1] === before.day2 - 10 && after.fixed[1], JSON.stringify(after.stageKm));
+  check('Tag 2 kürzer als vorher', after.day2 <= before.day2 - 5, `${before.day2} → ${after.day2} km`);
+  check('Tag 1 bleibt, wie er war, und gilt als fest', after.stageKm[0] === before.day1 && after.fixed[0] && after.day1 === before.day1,
+    `${before.day1} → ${after.day1} km, ${JSON.stringify(after.stageKm)}`);
+  check('Unterkunft von Nacht 1 bleibt', after.choice1 === before.choice1, `${before.choice1} → ${after.choice1}`);
+  check('Tage gleich viele oder einer mehr', after.days === before.days || after.days === before.days + 1, `${before.days} → ${after.days}`);
+  const undo = await ev(`document.querySelector('#btn-undo').getAttribute('aria-label')`);
+  check('„Rückgängig“ nennt die Änderung', undo === `Rückgängig: Tag 2 auf ${before.day2 - 10} km geändert`, undo);
+  await ev(`document.querySelector('#btn-undo').click(); true`); await sleep(300);
+  const undone = await ev(split);
+  check('Rückgängig: vorige Aufteilung sofort zurück', !undone.fixed.some(Boolean) && !undone.stageKm.length && undone.day2 === before.day2,
+    JSON.stringify(undone));
+  await ev(`document.querySelector('#btn-redo').click(); true`); await sleep(300);
+  check('Wiederholen: Anpassung wieder da', (await ev(split)).stageKm[1] === before.day2 - 10);
+  await page.shot('1b-tag-kuerzer');
+
   step('Speichern und wieder öffnen');
   check('Konto angelegt', await register(page, 'md_test'));
   await ev(`document.querySelector('#settings-dialog').close(); true`);
@@ -104,7 +140,21 @@ async function stagesAndStays({ app, page: newPage, check, step, sleep }) {
   await ev(`document.querySelector('#my-routes').open = true; document.querySelector('#my-routes-list li button.row').click(); true`);
   check('Gespeicherte Mehrtagestour wieder geöffnet', await waitFor(`!document.querySelector('#stages-body').hidden && document.querySelector('#stage-list select')`, 180000));
   if (sel.n > 1) check('Gewählte Unterkunft wiederhergestellt', await ev(`document.querySelector('#stage-list select').value`) === sel.alt);
+  await waitFor(replanned, 60000);
+  check('Angepasste Länge von Tag 2 wiederhergestellt', (await ev(split)).stageKm[1] === before.day2 - 10, JSON.stringify((await ev(split)).stageKm));
   await page.shot('2-wieder');
+
+  step('Länge freigeben');
+  await ev(`document.querySelector('${release(2)}').click(); true`);
+  check('Tag 2 freigegeben, Tag 1 bleibt fest',
+    await waitFor(`${idle} && !document.querySelector('${release(2)}') && !!document.querySelector('${release(1)}')`, 120000));
+  const one = await ev(split);
+  check('Nur noch Tag 1 gemerkt', JSON.stringify(one.stageKm) === JSON.stringify([before.day1]), JSON.stringify(one.stageKm));
+  await ev(`document.querySelector('${release(1)}').click(); true`);
+  check('Alles freigegeben', await waitFor(`${idle} && document.querySelectorAll('#stage-list .day-length button').length > 0
+    && !document.querySelector('#stage-list .day-length .link-btn')`, 120000));
+  const reset = await ev(split);
+  check('Gleichmäßige Aufteilung wie am Anfang', !reset.stageKm.length && reset.days === before.days, JSON.stringify(reset));
 
   step('Aufheben');
   await waitFor(`!document.querySelector('#status').classList.contains('loading')`, 60000);

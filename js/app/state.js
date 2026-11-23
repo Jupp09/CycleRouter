@@ -65,6 +65,7 @@ export const state = {
   hiddenStays: storage.get('hiddenStays', []),    // vom Nutzer ausgeblendete Unterkünfte (OSM-Kennungen)
   multiDay: false,                                // nur auf Knopfdruck
   stayChoices: [],                                // OSM-Kennung der gewählten Unterkunft je Nacht
+  stageKm: [],                                    // vom Nutzer angepasste Länge je Tag in km (null = frei), stays.js
   staysLoading: false,
   staysError: null,
 

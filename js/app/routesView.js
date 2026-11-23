@@ -35,7 +35,8 @@ const round5 = v => Math.round(v * 1e5) / 1e5; // ~1 m genau
 
 /**
  * Aktuelle Route für die Datenbank – ohne Verpflegungsstopps und Übernachtungen (die werden beim Öffnen
- * neu geplant; die gewählten Unterkünfte werden über `stayChoices` wieder übernommen).
+ * neu geplant; die gewählten Unterkünfte und angepassten Tageslängen werden über `stayChoices`/`stageKm`
+ * wieder übernommen).
  */
 function serializeRoute(name) {
   const r = originRoute();
@@ -53,7 +54,7 @@ function serializeRoute(name) {
       waypoints: r.waypoints.filter(p => !p.stop && !p.stay && !p.anchor).map(wp),
       // Importierter Weg (auch mit Abstechern): beim Öffnen wieder als solcher behandeln, Stützpunkte entstehen neu
       ...((r.track || r.waypoints.some(p => p.trackAt)) && { track: true }),
-      ...(state.multiDay && { multiDay: true, stayChoices: state.stayChoices }),
+      ...(state.multiDay && { multiDay: true, stayChoices: state.stayChoices, ...(state.stageKm.length && { stageKm: state.stageKm }) }),
     },
   };
 }
@@ -80,6 +81,8 @@ function restoreRoute(saved, { own }) {
 
   state.multiDay = !!d.multiDay;
   state.stayChoices = d.stayChoices || [];
+  // Angepasste Tageslängen (km je Tag): nur Zahlen übernehmen, die Daten kommen vom Server
+  state.stageKm = Array.isArray(d.stageKm) ? d.stageKm.map(v => (Number.isFinite(v) && v > 0 ? v : null)) : [];
   const r = d.track ? trackRoute(d.coords, wps, d.segments) : withStats({ coords: d.coords, segments: d.segments }, wps);
   state.track = d.track ? r : null;
   showRoute(r);

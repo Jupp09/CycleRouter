@@ -9,6 +9,7 @@ import { findClimbs, gradeSegments } from '../../js/climbs.js';
 import { timeline } from '../../js/timeline.js';
 import { sunTimes, darkMs, daylightNote } from '../../js/sun.js';
 import { groupNear } from '../../js/cluster.js';
+import { stageTargets } from '../../js/stays.js';
 import { SYNC_KEYS, MODES, BIKES } from '../../js/shared.js';
 
 // Montag, 16.11.2026, Ortszeit
@@ -163,4 +164,27 @@ test('Gemeinsame Werte von Browser und Server', () => {
   assert.deepEqual(BIKES, ['road', 'gravel', 'trekking', 'ebike']);
   // Der ORS-Key bleibt im Browser (CLAUDE.md): Er darf nie abgeglichen werden
   assert.ok(!SYNC_KEYS.some(k => /ors|key/i.test(k)), SYNC_KEYS.join(', '));
+});
+
+test('Mehrtagestour: angepasste Tageslängen, der Rest verteilt sich gleichmäßig', () => {
+  const km = r => ({ days: r.days, len: r.lengths.map(l => Math.round(l / 100) / 10), fixed: r.fixed, o: r.overrides });
+  // ohne Anpassung wie bisher: gleich lange Tage, mindestens zwei
+  assert.deepEqual(km(stageTargets(250_000, 100)), { days: 3, len: [83.3, 83.3, 83.3], fixed: [false, false, false], o: [] });
+  assert.equal(stageTargets(80_000, 100).days, 2);
+  // Tag 1 kürzer: die übrigen teilen sich den Rest
+  assert.deepEqual(km(stageTargets(250_000, 100, [60])), { days: 3, len: [60, 95, 95], fixed: [true, false, false], o: [60] });
+  // Rest länger als km pro Tag → ein Tag mehr
+  assert.deepEqual(km(stageTargets(250_000, 100, [30])).len, [30, 73.3, 73.3, 73.3]);
+  // ein angepasster Tag in der Mitte
+  assert.deepEqual(km(stageTargets(250_000, 100, [null, 60])).len, [95, 60, 95]);
+  // Tag länger, Rest passt in einen Tag → ein Tag weniger
+  assert.deepEqual(km(stageTargets(250_000, 100, [150])), { days: 2, len: [150, 100], fixed: [true, false], o: [150] });
+  // Ziele je Nacht: aufsummierte Längen
+  assert.deepEqual(stageTargets(250_000, 100, [60]).targets, [60_000, 155_000]);
+  // Anpassung auf dem letzten Tag (der Rest) fällt weg
+  assert.deepEqual(km(stageTargets(250_000, 100, [null, null, 50])).o, []);
+  // ließe sie weniger als 5 km übrig, fällt die letzte Anpassung weg
+  assert.deepEqual(km(stageTargets(250_000, 100, [150, 98])), { days: 2, len: [150, 100], fixed: [true, false], o: [150] });
+  // Unsinnige Werte zählen als frei
+  assert.deepEqual(stageTargets(250_000, 100, [NaN, -5, 0]).overrides, []);
 });

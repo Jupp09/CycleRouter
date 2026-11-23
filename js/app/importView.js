@@ -54,7 +54,7 @@ async function openFile(file) {
   applyRouteSettings({ mode: 'ab' });
   const start = { lat: coords[0][0], lon: coords[0][1] };
   const end = { lat: coords.at(-1)[0], lon: coords.at(-1)[1] };
-  Object.assign(state, { saved: null, loadedName: name, multiDay: false, stayChoices: [], staysError: null });
+  Object.assign(state, { saved: null, loadedName: name, multiDay: false, stayChoices: [], stageKm: [], staysError: null });
   setRoutePoints(start, end, []);
   const r = trackRoute(coords, [start, end]);
   state.track = r;

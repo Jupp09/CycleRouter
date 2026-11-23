@@ -418,6 +418,11 @@ button.row:disabled { cursor: default; opacity: 0.6; }
 .stage-list .day { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
 .stage-list .day small { font-weight: 400; color: var(--muted); }
 .stage-list .day-links { font-size: 0.75rem; margin-top: -4px; }
+/* Tag kürzer/länger: kleine Knöpfe (mind. 24 px hoch, WCAG 2.5.8), dahinter „fest · freigeben“ */
+.stage-list .day-length { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: -2px; }
+.stage-list .day-length button:not(.link-btn) { min-height: 1.75rem; padding: 2px 10px; font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.stage-list .day-length .meta { color: var(--muted); font-size: 0.75rem; }
+.stage-list .day-length .link-btn { font-size: 0.75rem; }
 .stage-list .sun { font-size: 0.75rem; color: var(--muted); margin-top: -4px; }
 .stage-list .sun.warn { color: var(--warn-text); }
 .weather { display: flex; flex-direction: column; gap: 4px; }

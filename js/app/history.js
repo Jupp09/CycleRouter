@@ -28,7 +28,7 @@ function snapshot() {
     // Ein Zwischenstopp ohne Route wird beim Verschieben selbst verändert – seine Werte deshalb mitmerken
     viaData: s.vias.map(v => ({ ...v })),
     route: s.route, track: s.track, saved: s.saved && { ...s.saved }, loadedName: s.loadedName,
-    multiDay: s.multiDay, stayChoices: [...s.stayChoices],
+    multiDay: s.multiDay, stayChoices: [...s.stayChoices], stageKm: [...s.stageKm],
   };
 }
 
@@ -40,7 +40,7 @@ function restore(snap) {
   Object.assign(state, {
     distanceKm: snap.distanceKm, direction: snap.direction, seed: snap.seed,
     track: snap.track, saved: snap.saved && { ...snap.saved }, loadedName: snap.loadedName,
-    multiDay: snap.multiDay, stayChoices: [...snap.stayChoices], staysLoading: false, staysError: null,
+    multiDay: snap.multiDay, stayChoices: [...snap.stayChoices], stageKm: [...snap.stageKm], staysLoading: false, staysError: null,
   });
   syncUi();
   setRoutePoints(snap.start, snap.end, snap.vias);

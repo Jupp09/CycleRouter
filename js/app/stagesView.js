@@ -2,12 +2,13 @@
  * Mehrtagestouren – nur auf Knopfdruck: Ist die Route deutlich länger als die Tagesetappe, bietet
  * „Als Mehrtagestour planen“ die Aufteilung an. Dann werden je Nacht Unterkünfte vorgeschlagen (Auswahl
  * per Liste) und die Route durch die gewählten geführt. Dazu die Einstellungen im Zahnrad-Dialog
- * (km pro Tag, Budget, Unterkunftsarten, Übernachtung am Ziel). Jeder Tag lässt sich einzeln als GPX ausgeben
- * und zeigt, ob er bei Tageslicht zu schaffen ist.
+ * (km pro Tag, Budget, Unterkunftsarten, Übernachtung am Ziel). Jeder Tag lässt sich um je 10 km kürzer oder
+ * länger machen (die übrigen teilen sich den Rest, stageTargets in stays.js), einzeln als GPX ausgeben und
+ * zeigt, ob er bei Tageslicht zu schaffen ist.
  */
 import {
   STAY_TYPES, STAY_GROUPS, isMultiDayCandidate, priceLabel, priceLink, websiteOf,
-  AVAILABILITY_LABEL, lastConfirmed,
+  AVAILABILITY_LABEL, lastConfirmed, stageTargets,
 } from '../stays.js';
 import { stageStats, dayTimes } from '../timeline.js';
 import { daylightNote } from '../sun.js';
@@ -19,6 +20,7 @@ import { replanStops } from './pipeline.js';
 import { setDeparture } from './supplyView.js';
 import { exportGpx, gpxName } from './exportView.js';
 import { setSheet } from './sheetView.js';
+import { checkpoint } from './history.js';
 
 on('route', renderStages);
 on('stages', renderStages);
@@ -51,7 +53,7 @@ export function renderStages() {
   })) : []);
   if (box.hidden) return;
 
-  const days = Math.max(2, Math.ceil(origin.distance / (state.stays.maxKm * 1000)));
+  const { days } = stageTargets(origin.distance, state.stays.maxKm, state.stageKm);
   const btn = $('#btn-multiday');
   btn.disabled = !!state.staysLoading;
   btn.textContent = state.staysLoading
@@ -94,6 +96,7 @@ export function renderStages() {
     actions.className = 'day-links';
     actions.append(gpx);
     li.append(day);
+    if (i < plan.days - 1) li.append(lengthControls(plan, i));
     // Tageslicht: Sonnenaufgang am Start des Tages, Sonnenuntergang an seinem Ziel
     const light = daylightNote(times[i], r.coords[indexAtDistance(r, s.from)], r.coords[indexAtDistance(r, s.to)]);
     if (light) {
@@ -108,6 +111,63 @@ export function renderStages() {
     if (night) li.append(renderNight(night));
     return li;
   }));
+}
+
+/** Schrittweite der Knöpfe „kürzer“/„länger“ und kürzester Tag, den „kürzer“ noch erzeugt (km). */
+const LENGTH_STEP = 10;
+const MIN_DAY_KM = 10;
+
+/**
+ * Knöpfe „− 10 km“/„+ 10 km“ für Tag `i` (nicht der letzte – der ist immer der Rest). Ausgangswert ist die
+ * Länge auf der Route ohne Übernachtungen (zwischen den Unterkünften entlang der Route), denn darauf bezieht
+ * sich die Anpassung in planStays; angezeigt wird darüber die echte Tageslänge samt Weg zur Unterkunft.
+ */
+function lengthControls(plan, i) {
+  const along = k => (k < 0 ? 0 : plan.nights[k].chosen?.along ?? plan.nights[k].target);
+  const bases = Array.from({ length: i + 1 }, (_, k) => Math.round((along(k) - along(k - 1)) / 1000));
+  const km = bases[i];
+  const box = document.createElement('div');
+  box.className = 'day-length';
+  const step = (delta, text, what) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = text;
+    b.setAttribute('aria-label', `Tag ${i + 1} um ${LENGTH_STEP} km ${what}`);
+    b.disabled = !!state.staysLoading || km + delta < MIN_DAY_KM;
+    b.addEventListener('click', () => setDayLength(i, km + delta, bases));
+    return b;
+  };
+  box.append(step(-LENGTH_STEP, `− ${LENGTH_STEP} km`, 'kürzer'), step(LENGTH_STEP, `+ ${LENGTH_STEP} km`, 'länger'));
+  if (plan.fixed[i]) {
+    const note = document.createElement('span');
+    note.className = 'meta';
+    note.textContent = 'fest';
+    const release = linkButton('freigeben', () => setDayLength(i, null, bases),
+      'Länge nicht mehr festhalten – der Tag teilt sich die Strecke wieder mit den anderen freien Tagen');
+    release.setAttribute('aria-label', `Länge von Tag ${i + 1} freigeben`);
+    release.disabled = !!state.staysLoading;
+    box.append(note, release);
+  }
+  return box;
+}
+
+/**
+ * Länge von Tag `i` festlegen (km) oder freigeben (null) und neu planen. Beim Festlegen werden die Tage davor
+ * auf ihrer jetzigen Länge (`bases`, km) festgehalten: Sonst teilten sich auch die früheren Tage die Strecke
+ * neu, und schon gewählte Unterkünfte davor fielen weg. Die Unterkünfte ab dieser Nacht werden neu gewählt –
+ * sonst hielten die alten die übrigen Tage auf ihrer bisherigen Länge fest.
+ */
+function setDayLength(i, km, bases) {
+  checkpoint(km == null ? `Länge von Tag ${i + 1} freigegeben` : `Tag ${i + 1} auf ${km} km geändert`);
+  const next = [...state.stageKm];
+  if (km != null) for (let k = 0; k < i; k++) next[k] ??= bases[k];
+  next[i] = km;
+  while (next.length && next.at(-1) == null) next.pop();
+  state.stageKm = next;
+  state.stayChoices.length = Math.min(state.stayChoices.length, i);
+  // Sofort sperren (kein Doppelklick auf alte Werte); während der Suche zeigt renderStages den Ladezustand
+  for (const b of $$('.day-length button')) b.disabled = true;
+  replanStops();
 }
 
 /** Eine Nacht: Auswahlliste der Unterkünfte, Preis/Budget/Saison und Links. */
@@ -226,7 +286,7 @@ $('#btn-sheet-multiday').addEventListener('click', () => {
 $('#btn-multiday').addEventListener('click', () => {
   state.multiDay = !state.multiDay;
   state.staysError = null;
-  if (!state.multiDay) state.stayChoices = [];
+  if (!state.multiDay) Object.assign(state, { stayChoices: [], stageKm: [] });
   renderStages(); // sofortige Rückmeldung am Knopf
   replanStops();
 });
