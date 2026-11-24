@@ -11,6 +11,7 @@ import { upstreamQuery } from '../../server/brouterProxy.mjs';
 import { cleanRoute, cleanSettings } from '../../server/accountApi.mjs';
 import { contentSecurityPolicy } from '../../server/security.mjs';
 import { moduleGraph } from '../../server/static.mjs';
+import { lines } from '../../server/lines.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const req = (peer, headers = {}) => ({ socket: { remoteAddress: peer }, headers });
@@ -136,4 +137,18 @@ test('Modulliste für index.html: alle Module ab main.js, Fehlerbericht zuerst g
   assert.equal(modules[0], 'js/main.js');
   assert.ok(modules.includes('js/errorReport.js') && modules.includes('js/app/pipeline.js'));
   assert.ok(modules.every(m => m.startsWith('js/') && m.endsWith('.js')));
+});
+
+test('lines: trennt nur an "\\n", auch über Blockgrenzen und in Mehrbyte-Zeichen', async () => {
+  // U+2028 steht unmaskiert in JSON.stringify-Ausgaben (OSM-Namen) und darf keine Zeile beenden
+  const rows = [{ name: 'Piekarnia Krystyna' }, { name: 'Zwycięstwa ' }, { n: 3 }];
+  const bytes = Buffer.from(rows.map(r => JSON.stringify(r)).join('\n') + '\r\n');
+  const chunks = [];
+  for (let i = 0; i < bytes.length; i += 5) chunks.push(bytes.subarray(i, i + 5)); // schneidet auch „ę“ und U+2028
+  const out = [];
+  for await (const line of lines(chunks)) out.push(line);
+  assert.deepEqual(out.map(l => JSON.parse(l)), rows);
+  const tail = [];
+  for await (const line of lines([Buffer.from('a\nb')])) tail.push(line);
+  assert.deepEqual(tail, ['a', 'b']);
 });

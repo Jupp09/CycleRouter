@@ -20,7 +20,7 @@
 import { spawn } from 'node:child_process';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
-import { createInterface } from 'node:readline';
+import { lines as readLines } from '../server/lines.mjs';
 import { createGzip } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -105,7 +105,7 @@ let skipped = 0;
  * gemeldet – ein stiller Fehler hat sonst schon einmal eine ganze Ebene verschluckt.
  */
 async function readGeojsonSeq(file) {
-  const lines = createInterface({ input: createReadStream(file), crlfDelay: Infinity });
+  const lines = readLines(createReadStream(file));
   let n = 0, bad = 0, firstError = null;
   for await (const raw of lines) {
     const line = raw.replace(/^\x1e/, '').trim(); // Datensatz-Trenner von GeoJSON Text Sequences

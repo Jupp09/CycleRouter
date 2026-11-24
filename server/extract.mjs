@@ -9,13 +9,13 @@
 // gibt es dort keine Orte. Gegenden außerhalb (oder neue Ebenen, die das Paket noch nicht kennt) lädt der
 // POI-Cache weiter bei Overpass. Abschalten mit POI_EXTRACT_URL=off.
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
-import { createInterface } from 'node:readline';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { lines as readLines } from './lines.mjs';
 import { cellOfTile, cacheName, isTileKey, CELL } from '../js/poiSource.js';
 
 const DIR = fileURLToPath(new URL('../cache/extract/', import.meta.url));
@@ -123,7 +123,7 @@ async function update() {
     await mkdir(tmp, { recursive: true });
     const hash = createHash('sha256');
     const gunzip = createGunzip();
-    const lines = createInterface({ input: gunzip, crlfDelay: Infinity });
+    const lines = readLines(gunzip);
     const download = pipeline(Readable.fromWeb(/** @type {any} */ (data.body)), hashing(hash), gunzip);
     download.catch(() => {}); // Fehler kommen über die Zeilen bzw. `await download` unten an
     let head = null, count = 0;
