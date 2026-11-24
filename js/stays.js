@@ -1,13 +1,13 @@
 /**
  * Mehrtagestouren: Route in Tagesetappen teilen und für jede Nacht Unterkünfte aus OpenStreetMap
- * vorschlagen (Hotel, Motel, Pension/B&B, Hostel, Zeltplatz).
+ * vorschlagen (Hotel, Motel, Pension/B&B, Hostel, Zeltplatz, auf Wunsch Shelter in DK/SE/NO).
  *
  * Preise kennt OSM kaum – sie werden aus Art und Sternen geschätzt (oder aus einer Preisangabe im
  * OSM-Eintrag übernommen) und über einen Link zur Preissuche mit dem passenden Datum geprüft.
  * OSM enthält auch veraltete oder falsch eingetragene Unterkünfte; solche werden aussortiert
  * (poiSource.js) bzw. abgewertet (isStale) und lassen sich vom Nutzer ausblenden.
  */
-import { sampleRoute } from './utils.js';
+import { sampleRoute, haversine } from './utils.js';
 import { route } from './routing/index.js';
 import { openState } from './openingHours.js';
 import { fetchPoisNear } from './poiTiles.js';
@@ -19,15 +19,88 @@ export const STAY_TYPES = {
   guest_house: { label: 'Pension / B&B', icon: '🛏️', gpxSym: 'Lodging' },
   hostel: { label: 'Hostel', icon: '🛏️', gpxSym: 'Lodging' },
   camp_site: { label: 'Zeltplatz', icon: '⛺', gpxSym: 'Campground' },
+  shelter: { label: 'Shelter', icon: '🛖', gpxSym: 'Campground' },
 };
 
-/** Auswahl in den Einstellungen → OSM-Typen. */
+/**
+ * Auswahl in den Einstellungen → OSM-Typen. Shelter sind standardmäßig aus (state.js): Wer sie nutzt, braucht
+ * Schlafsack und Isomatte – wer ein Bett sucht, soll sie nicht vorgeschlagen bekommen, nur weil sie gratis sind.
+ */
 export const STAY_GROUPS = {
   hotel: { label: 'Hotel / Motel', types: ['hotel', 'motel'] },
   guest_house: { label: 'Pension / B&B', types: ['guest_house'] },
   hostel: { label: 'Hostel', types: ['hostel'] },
   camp_site: { label: 'Zeltplatz', types: ['camp_site'] },
+  shelter: { label: 'Shelter (DK, SE, NO)', types: ['shelter'] },
 };
+
+// ---------- Shelter ----------
+
+/**
+ * Gebiet, in dem Übernachten im Shelter erlaubt ist: Dänemark (Naturstyrelsen und Kommunen bauen sie genau dafür)
+ * sowie Schweden und Norwegen (Jedermannsrecht). In Deutschland und anderswo sind Schutzhütten meist nur zum
+ * Rasten. Grobes Vieleck (lat, lon) um DK/SE/NO, ohne Sylt, Flensburg, Fehmarn, Rügen, Polen, Åland und
+ * Finnland; an der Grenze in Lappland ungenau, dort gibt es kaum Shelter an Radrouten.
+ */
+const SHELTER_AREA = [
+  [55.06, 7.0], [55.06, 8.6], [54.93, 8.66], [54.91, 8.9], [54.86, 9.2], [54.81, 9.4], [54.84, 9.6],
+  [54.8, 10.05], [54.66, 10.6], [54.55, 11.0], [54.52, 12.1], [54.85, 12.6], [54.85, 15.5],
+  [56.0, 17.2], [57.0, 19.6], [58.5, 19.6], [59.9, 19.4], [60.6, 19.0], [61.5, 19.8], [63.5, 21.0],
+  [63.9, 21.3], [65.0, 23.3], [65.8, 24.16], [66.4, 23.65], [66.85, 23.95], [67.5, 23.55], [68.45, 22.4],
+  [69.06, 20.55], [69.31, 21.27], [68.95, 22.2], [68.6, 23.0], [68.75, 24.7], [69.05, 25.7], [69.6, 25.8],
+  [69.9, 26.9], [70.15, 28.0], [69.05, 28.95], [69.6, 30.6], [69.8, 30.9], [71.5, 31.5], [71.5, 4.0], [58.0, 4.0],
+];
+
+/** Liegt der Punkt im Gebiet, in dem Shelter zum Übernachten vorgeschlagen werden? (Strahlverfahren) */
+export function shelterAllowed(lat, lon) {
+  let inside = false;
+  for (let i = 0, j = SHELTER_AREA.length - 1; i < SHELTER_AREA.length; j = i++) {
+    const [ai, oi] = SHELTER_AREA[i], [aj, oj] = SHELTER_AREA[j];
+    if ((oi > lon) !== (oj > lon) && lat < ((aj - ai) * (lon - oi)) / (oj - oi) + ai) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Mehrere Shelter eines Platzes sind in OSM oft einzeln eingetragen (z. B. drei Halbhütten um eine Feuerstelle).
+ * Als Unterkunft zählt der Platz einmal: Shelter näher als 200 m zusammenfassen, der benannte bzw. erste bleibt,
+ * `count` sagt, wie viele es dort gibt.
+ */
+export function mergeShelters(pois) {
+  const out = [], places = [];
+  for (const p of pois) {
+    if (p.type !== 'shelter') { out.push(p); continue; }
+    const near = places.find(q => haversine(q, p) < 200);
+    if (!near) { const place = { ...p, count: 1 }; places.push(place); out.push(place); continue; }
+    near.count++;
+    if (!near.name && p.name) Object.assign(near, { name: p.name, id: p.id, tags: { ...p.tags, ...near.tags, name: p.name } });
+    else near.tags = { ...p.tags, ...near.tags }; // fehlende Angaben (Webseite, Buchung) von den anderen übernehmen
+  }
+  return out;
+}
+
+/** Hinweis, der bei jedem gewählten Shelter steht: Was man braucht und dass Übernachten dort erlaubt ist. */
+export const SHELTER_NOTE = 'Übernachten im Shelter ist dort erlaubt – Schlafsack und Isomatte mitbringen.';
+
+/** Kurzinfo zu einem Shelter-Platz, z. B. „3 Shelter · Platz für 6 · Feuerstelle · Buchung erforderlich“. */
+export function shelterFacts(poi) {
+  const t = poi.tags, n = poi.count || 1;
+  return [
+    n > 1 && `${n} Shelter`,
+    /^\d+$/.test(t.capacity || '') && `Platz für ${t.capacity}`,
+    t.fireplace === 'yes' && 'Feuerstelle',
+    shelterBooking(poi),
+  ].filter(Boolean).join(' · ');
+}
+
+/** Buchung laut OSM → kurzer Text oder null. `reservation` kann auch direkt ein Link sein. */
+export function shelterBooking(poi) {
+  const r = poi.tags.reservation;
+  if (r === 'required') return 'Buchung erforderlich';
+  if (r === 'yes' || r === 'recommended' || /^https?:\/\//.test(r || '')) return 'buchbar';
+  if (r === 'no') return 'ohne Buchung (wer zuerst kommt)';
+  return null;
+}
 
 const MAX_OFFSET = 3000;      // Unterkunft höchstens so weit neben der Route (Luftlinie, m)
 const MAX_OFFSET_END = 5000;  // am Ziel (Stadt) etwas großzügiger
@@ -43,6 +116,7 @@ const PRICE = {
   guest_house: [55, 95],
   motel: [55, 90],
   hotel: [80, 140],
+  shelter: [0, 10], // meist gratis; manche Kommunen nehmen eine kleine Gebühr
 };
 const HOTEL_BY_STARS = { 1: [50, 75], 2: [60, 90], 3: [80, 130], 4: [110, 190], 5: [200, 400] };
 
@@ -58,13 +132,14 @@ function parseEuro(text) {
 export function estimatePrice(poi) {
   const own = parseEuro(poi.tags.charge) ?? parseEuro(poi.tags.fee);
   if (own) return { min: own, max: own, typical: own, source: 'osm' };
+  if (poi.tags.fee === 'no') return { min: 0, max: 0, typical: 0, source: 'osm' };
   let [min, max] = PRICE[poi.type] || PRICE.hotel;
   const stars = Math.round(parseFloat(poi.tags.stars));
   if (poi.type === 'hotel' && HOTEL_BY_STARS[stars]) [min, max] = HOTEL_BY_STARS[stars];
   return { min, max, typical: Math.round((min + max) / 2), source: 'estimate' };
 }
 
-export const priceLabel = p => (p.source === 'osm' ? `${p.typical} € (laut OSM)` : `ca. ${p.min}–${p.max} €`);
+export const priceLabel = p => (p.source === 'osm' ? (p.typical ? `${p.typical} € (laut OSM)` : 'kostenlos (laut OSM)') : `ca. ${p.min}–${p.max} €`);
 
 /** Budget-Einstufung: 'ok' (typisch im Budget), 'maybe' (günstigste Variante im Budget), 'over'. */
 export const budgetFit = (p, budget) => (p.typical <= budget ? 'ok' : p.min <= budget ? 'maybe' : 'over');
@@ -73,10 +148,18 @@ export const budgetFit = (p, budget) => (p.typical <= budget ? 'ok' : p.min <= b
 
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-/** Link zur Preissuche für die Nacht (Booking.com mit Datum; Zeltplätze über eine Websuche). */
+/**
+ * Link zur Preissuche für die Nacht (Booking.com mit Datum; Zeltplätze über eine Websuche). Shelter: die
+ * Info-/Buchungsseite aus OSM (in Dänemark oft udinaturen.dk oder die Kommune), sonst eine Websuche nach dem
+ * Namen; ein Shelter ohne Namen und Seite hat keinen Link (null).
+ */
 export function priceLink(poi, night) {
   const place = poi.tags['addr:city'] || poi.tags['addr:place'] || '';
   const q = [poi.name, place].filter(Boolean).join(' ');
+  if (poi.type === 'shelter') {
+    const page = [poi.tags.reservation, websiteOf(poi), poi.tags.url].find(u => /^https?:\/\//.test(u || ''));
+    return page || (poi.name ? `https://www.google.com/search?q=${encodeURIComponent(`${q} shelter booking`)}` : null);
+  }
   if (poi.type === 'camp_site') return `https://www.google.com/search?q=${encodeURIComponent(`${q} Zeltplatz Preise`)}`;
   // Kalendertag + 1, nicht + 24 h: In der Nacht der Zeitumstellung im Oktober wäre das noch derselbe Tag
   const checkout = new Date(night.date.getFullYear(), night.date.getMonth(), night.date.getDate() + 1);
@@ -213,8 +296,8 @@ export async function planStays(r, { maxKm, budget, groups, departure, endStay, 
   const samples = sampleRoute(r, 250);
   const inWindow = (s, w) => s.along >= w.lo && s.along <= w.hi;
   const searchPoints = samples.filter(s => windows.some(w => inWindow(s, w)));
-  const pois = (await fetchPoisNear(searchPoints, signal, ['stay'], { margin: 0.04 }))
-    .filter(p => types.has(p.type) && !hiddenIds.has(p.id));
+  const pois = mergeShelters((await fetchPoisNear(searchPoints, signal, ['stay'], { margin: 0.04 }))
+    .filter(p => types.has(p.type) && !hiddenIds.has(p.id) && (p.type !== 'shelter' || shelterAllowed(p.lat, p.lon))));
 
   // Nächte der Reihe nach wählen: Die Etappe seit der vorigen Unterkunft (und bei der letzten Nacht
   // vor dem Ziel auch die Reststrecke) soll das Tageslimit nicht überschreiten und möglichst gleich lang sein.

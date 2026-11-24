@@ -11,7 +11,7 @@
  * `#roadbook-dialog` (siehe `standalone` am Ende der Datei).
  */
 import { STATE_LABELS } from '../stops.js';
-import { STAY_TYPES, priceLabel, websiteOf } from '../stays.js';
+import { STAY_TYPES, priceLabel, websiteOf, shelterFacts, SHELTER_NOTE } from '../stays.js';
 import { stageStats, dayTimes, pausedTimeline } from '../timeline.js';
 import { daylightNote } from '../sun.js';
 import { findClimbs } from '../climbs.js';
@@ -107,7 +107,10 @@ function dayBlock(r, stat, times, items, night, fixed, last, top) {
       const t = c.poi.tags;
       const place = [t['addr:postcode'], t['addr:city'] || t['addr:place']].filter(Boolean).join(' ');
       stay.append(el('p', `${c.poi.name || STAY_TYPES[c.poi.type].label} · ${STAY_TYPES[c.poi.type].label}${place ? ' · ' + place : ''}`, 'rb-name'));
-      stay.append(el('p', [`Preis ${priceLabel(c.price)} (Schätzung)`, t.phone || t['contact:phone'], websiteOf(c.poi)].filter(Boolean).join(' · ')));
+      stay.append(el('p', [`Preis ${priceLabel(c.price)}${c.price.source === 'estimate' ? ' (Schätzung)' : ''}`, t.phone || t['contact:phone'], websiteOf(c.poi)]
+        .filter(Boolean).join(' · ')));
+      // Shelter: wie viele, Plätze, Feuerstelle, Buchung – und dass Schlafsack/Isomatte mitmüssen
+      if (c.poi.type === 'shelter') stay.append(el('p', [shelterFacts(c.poi), SHELTER_NOTE].filter(Boolean).join(' · ')));
     }
     block.append(stay);
   }

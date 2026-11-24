@@ -3,13 +3,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseOpeningHours, openState } from '../../js/openingHours.js';
 import { computeStats, formatKm, formatM, formatInt, formatNumber, formatClock, formatWeekday, formatDayDate, formatDate, estimateTime, averageSpeed } from '../../js/utils.js';
-import { tileKey, isTileKey, cellOfTile, isLayer, LAYERS, layerOfType } from '../../js/poiSource.js';
+import { tileKey, isTileKey, cellOfTile, isLayer, LAYERS, layerOfType, toPoi } from '../../js/poiSource.js';
 import { headwind } from '../../js/weather.js';
 import { findClimbs, gradeSegments } from '../../js/climbs.js';
 import { timeline } from '../../js/timeline.js';
 import { sunTimes, darkMs, daylightNote } from '../../js/sun.js';
 import { groupNear } from '../../js/cluster.js';
-import { stageTargets } from '../../js/stays.js';
+import { stageTargets, shelterAllowed, mergeShelters, estimatePrice, priceLabel, priceLink, shelterBooking } from '../../js/stays.js';
 import { generateLoop } from '../../js/generators.js';
 import { SYNC_KEYS, MODES, BIKES } from '../../js/shared.js';
 
@@ -208,4 +208,34 @@ test('Rundkurs nach Fahrzeit: Länge passt sich der Wunschzeit an, Anstiege verk
   // nach Länge wie bisher
   const byLength = await generateLoop({ ...base, distance: 40_000 });
   assert.ok(Math.abs(byLength.distance - 40_000) / 40_000 <= 0.06, `${Math.round(byLength.distance)} m`);
+});
+
+test('Shelter: nur in Dänemark, Schweden und Norwegen; Plätze zusammengefasst; Preis und Buchung aus OSM', () => {
+  const inside = { Kopenhagen: [55.68, 12.57], Odense: [55.40, 10.39], Skagen: [57.72, 10.58], Rønne: [55.10, 14.70], Gedser: [54.575, 11.93],
+    Padborg: [54.83, 9.36], Tønder: [54.94, 8.87], Rømø: [55.15, 8.52], Stockholm: [59.33, 18.07], Malmö: [55.60, 13.0], Visby: [57.64, 18.29],
+    Kiruna: [67.86, 20.23], Haparanda: [65.83, 24.12], Oslo: [59.91, 10.75], Bergen: [60.39, 5.32], Tromsø: [69.65, 18.96], Kirkenes: [69.73, 30.05] };
+  const outside = { Flensburg: [54.78, 9.43], Sylt: [54.90, 8.31], Fehmarn: [54.47, 11.15], Rügen: [54.55, 13.40], Kiel: [54.32, 10.13],
+    Danzig: [54.35, 18.65], Helsinki: [60.17, 24.94], Mariehamn: [60.10, 19.94], Tornio: [65.85, 24.18], Vaasa: [63.1, 21.6], Utsjoki: [69.9, 27.03] };
+  for (const [name, [lat, lon]] of Object.entries(inside)) assert.ok(shelterAllowed(lat, lon), name);
+  for (const [name, [lat, lon]] of Object.entries(outside)) assert.ok(!shelterAllowed(lat, lon), name);
+
+  // Drei Halbhütten an einem Platz (je ~50 m auseinander) zählen einmal; der Name kommt vom benannten Eintrag
+  const sh = (id, lat, name, tags = {}) => ({ id, type: 'shelter', lat, lon: 10, name, tags: { ...(name && { name }), ...tags } });
+  const merged = mergeShelters([sh('n/1', 56.0, ''), sh('n/2', 56.0005, 'Shelter i Alken', { website: 'https://udinaturen.dk/shelter/1' }),
+    sh('n/3', 56.001, ''), sh('n/4', 56.1, 'Anderswo'), { id: 'n/5', type: 'hotel', lat: 56.0, lon: 10, name: 'Hotel', tags: {} }]);
+  assert.deepEqual(merged.map(p => [p.name, p.count ?? null]), [['Shelter i Alken', 3], ['Anderswo', 1], ['Hotel', null]]);
+  assert.equal(merged[0].tags.website, 'https://udinaturen.dk/shelter/1');
+
+  assert.equal(priceLabel(estimatePrice({ type: 'shelter', tags: { fee: 'no' } })), 'kostenlos (laut OSM)');
+  assert.equal(priceLabel(estimatePrice({ type: 'shelter', tags: {} })), 'ca. 0–10 €');
+  assert.equal(priceLink({ type: 'shelter', name: '', tags: { website: 'https://udinaturen.dk/shelter/4819' } }, null), 'https://udinaturen.dk/shelter/4819');
+  assert.equal(priceLink({ type: 'shelter', name: '', tags: {} }, null), null);
+  assert.equal(shelterBooking({ tags: { reservation: 'required' } }), 'Buchung erforderlich');
+  assert.equal(shelterBooking({ tags: { reservation: 'no' } }), 'ohne Buchung (wer zuerst kommt)');
+  // Dagshelter und Bushaltestellen sind keine Unterkunft
+  const stay = tags => toPoi({ id: 'node/1', lat: 56, lon: 10, tags }, 'stay')?.type ?? null;
+  assert.equal(stay({ amenity: 'shelter', shelter_type: 'lean_to' }), 'shelter');
+  assert.equal(stay({ amenity: 'shelter', shelter_type: 'lean_to', name: 'Dagshelter i Hørhaven' }), null);
+  assert.equal(stay({ amenity: 'shelter', shelter_type: 'public_transport' }), null);
+  assert.equal(stay({ amenity: 'shelter', shelter_type: 'lean_to', access: 'private' }), null);
 });

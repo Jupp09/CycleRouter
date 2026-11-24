@@ -9,7 +9,7 @@
  */
 import {
   STAY_TYPES, STAY_GROUPS, isMultiDayCandidate, priceLabel, priceLink, websiteOf,
-  AVAILABILITY_LABEL, lastConfirmed, stageTargets, MIN_LAST_DAY,
+  AVAILABILITY_LABEL, lastConfirmed, stageTargets, MIN_LAST_DAY, shelterFacts, SHELTER_NOTE,
 } from '../stays.js';
 import { stageStats, dayTimes } from '../timeline.js';
 import { daylightNote } from '../sun.js';
@@ -253,6 +253,7 @@ function renderNight(night) {
   meta.className = 'meta' + (c.fit === 'over' || c.open === 'season' || c.stale ? ' over' : '');
   meta.textContent = `${STAY_TYPES[c.poi.type].label} · ${priceLabel(c.price)} – ${FIT_LABEL[c.fit]} (Budget ${state.stays.budget} €)`
     + (AVAILABILITY_LABEL[c.open] ? ` · ${AVAILABILITY_LABEL[c.open]}` : '')
+    + (c.poi.type === 'shelter' && shelterFacts(c.poi) ? ` · ${shelterFacts(c.poi)}` : '')
     + (c.stale ? ` · Angaben von ${lastConfirmed(c.poi)} – evtl. veraltet, vorher prüfen` : '');
 
   const links = stayLinks(night);
@@ -267,7 +268,7 @@ function renderNight(night) {
 function optionLabel(o) {
   const t = STAY_TYPES[o.poi.type];
   const name = o.poi.name || t.label;
-  return `${t.icon} ${name}${o.poi.tags.stars ? ` ${o.poi.tags.stars}★` : ''} · ${priceLabel(o.price)} · ${(o.offset / 1000).toFixed(1)} km`
+  return `${t.icon} ${name}${o.poi.tags.stars ? ` ${o.poi.tags.stars}★` : ''}${o.poi.count > 1 ? ` (${o.poi.count})` : ''} · ${priceLabel(o.price)} · ${(o.offset / 1000).toFixed(1)} km`
     + `${o.fit === 'over' ? ' · über Budget' : ''}${o.open === 'season' ? ' · Saison prüfen' : ''}${o.stale ? ' · evtl. veraltet' : ''}`;
 }
 
@@ -283,6 +284,7 @@ function stayPopup(night) {
     `${priceLabel(price)} – ${FIT_LABEL[fit]}`,
     // Bei Unterkünften meist die Rezeptionszeiten – nur zeigen; fehlende sind keinen Hinweis wert
     ...(poi.tags.opening_hours ? [`Öffnungszeiten: ${poi.tags.opening_hours}`] : []),
+    ...(poi.type === 'shelter' ? [shelterFacts(poi), SHELTER_NOTE].filter(Boolean) : []),
   ]), osmLinks(poi, bookingLinks(night))); // Preis/Webseite + In OSM ansehen, Bearbeiten, Fehler melden
   return el;
 }
@@ -290,6 +292,11 @@ function stayPopup(night) {
 /** Preis prüfen und Webseite der gewählten Unterkunft → [Link]. */
 function bookingLinks(night) {
   const { poi } = night.chosen;
+  // Shelter: eine Seite für Infos und Buchung (oft udinaturen.dk), ohne Preissuche; ohne Seite und Namen kein Link
+  if (poi.type === 'shelter') {
+    const page = priceLink(poi, night);
+    return page ? [externalLink('Infos & Buchung', page)] : [];
+  }
   const links = [externalLink('Preis prüfen', priceLink(poi, night))];
   const web = websiteOf(poi);
   if (web && /^https?:\/\//i.test(web)) links.push(externalLink('Webseite', web));

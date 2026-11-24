@@ -68,16 +68,26 @@ export const LAYERS = {
 const NOT_PUBLIC = /meditat|retreat|vipassana|dhamma|zen-?zentrum|ashram|seminar|bildungs|tagungs|schullandheim|jugendbildung|freizeitheim|klassenfahrt|pfadfinder|scout/i;
 
 LAYERS.stay = {
-  // v2: mit Datum der letzten Bearbeitung (veraltete Einträge erkennen) – alte Cache-Daten ohne Datum nicht verwenden
+  // v2: mit Datum der letzten Bearbeitung (veraltete Einträge erkennen) – alte Cache-Daten ohne Datum nicht verwenden.
+  // Shelter kamen ohne neue Version dazu: Eine neue hätte alle Unterkunfts-Kacheln ungültig gemacht und bis zum
+  // nächsten Datenauszug jede Mehrtagestour zu Overpass geschickt. Der Auszug wird nach dieser Änderung neu gebaut
+  // und ist dann neuer als die Cache-Kacheln (der neuere Stand gewinnt); im Browser-Cache fehlen sie höchstens 7 Tage.
   cacheVersion: 2,
   meta: true,
   statements: b => `
-  nwr["tourism"~"^(hotel|motel|guest_house|hostel|camp_site)$"](${b});`,
-  filters: ['nwr/tourism=hotel,motel,guest_house,hostel,camp_site'],
+  nwr["tourism"~"^(hotel|motel|guest_house|hostel|camp_site)$"](${b});
+  nwr["amenity"="shelter"]["shelter_type"~"^(lean_to|basic_hut)$"](${b});`,
+  // osmium filtert Shelter nur nach amenity (auch Bushaltestellen usw.); shelter_type prüft classify
+  filters: ['nwr/tourism=hotel,motel,guest_house,hostel,camp_site', 'nwr/amenity=shelter'],
   classify(tags) {
     if (['private', 'no', 'customers', 'members'].includes(tags.access) || tags.disused === 'yes') return null;
     if (tags.group_only === 'yes' || tags.reservation === 'members_only') return null;
     if (NOT_PUBLIC.test(`${tags.name || ''} ${tags.operator || ''} ${tags.description || ''}`)) return null;
+    if (tags.amenity === 'shelter') {
+      // Halbhütte (lean_to) oder einfache Hütte zum Übernachten; „Dagshelter“ sind nur für den Tag (Rast, Schulklassen)
+      if (!['lean_to', 'basic_hut'].includes(tags.shelter_type) || /dag-?shelter|day shelter/i.test(tags.name || '')) return null;
+      return 'shelter';
+    }
     if (tags.tourism === 'camp_site') return tags.tents === 'no' ? null : 'camp_site'; // reine Wohnmobilplätze nicht
     if (['hotel', 'motel', 'guest_house', 'hostel'].includes(tags.tourism)) return tags.tourism;
     return null;
@@ -115,7 +125,7 @@ export const cacheName = layer => (LAYERS[layer]?.cacheVersion ? `${layer}.v${LA
 export const isLayer = l => Object.hasOwn(LAYERS, l);
 const LAYER_OF_TYPE = {
   cafe: 'food', restaurant: 'food', bakery: 'food',
-  hotel: 'stay', motel: 'stay', guest_house: 'stay', hostel: 'stay', camp_site: 'stay',
+  hotel: 'stay', motel: 'stay', guest_house: 'stay', hostel: 'stay', camp_site: 'stay', shelter: 'stay',
   station: 'service', bike_shop: 'service', repair_station: 'service', air: 'service', charging: 'service',
 };
 /** Ebene, zu der ein Ort-Typ gehört. */
@@ -126,6 +136,8 @@ const KEEP_TAGS = ['opening_hours', 'seasonal', 'fee', 'brand',
   // Unterkünfte: Sterne, Preisangaben (Freitext), Webseite, Ort für die Preissuche
   'stars', 'charge', 'website', 'contact:website', 'addr:city', 'addr:place', 'addr:postcode',
   'check_date', 'phone', 'contact:phone',
+  // Shelter: Buchung (yes/required/no oder ein Link), Plätze, Feuerstelle, Infoseite (oft udinaturen.dk)
+  'reservation', 'capacity', 'fireplace', 'url',
   // Fahrrad-Service: Was gibt es an der Station, wer betreibt sie
   'service:bicycle:pump', 'service:bicycle:tools', 'operator'];
 

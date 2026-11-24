@@ -6,6 +6,51 @@ export const title = 'Etappen und Unterkünfte (Bremen → Hamburg)';
 export default async function (t) {
   await stagesAndStays(t);
   await nightsWithoutStay(t);
+  await danishShelters(t);
+}
+
+/**
+ * Shelter in Dänemark (amenity=shelter + shelter_type=lean_to): nur zugeschaltet, als Platz zusammengefasst,
+ * mit Kurzinfo, Hinweis und Link zur Info-/Buchungsseite. Søhøjlandet zwischen Aarhus und Silkeborg hat viele.
+ */
+async function danishShelters({ app, page: newPage, check, step }) {
+  step('Shelter in Dänemark');
+  const page = await newPage({ height: 950 });
+  await page.open(app, { view: { center: [56.15, 9.9], zoom: 10 }, storage: {
+    bike: 'trekking', mode: 'ab', stageMaxKm: 30, stayTypes: ['shelter'], endStay: false } });
+  check('Einstellungen: Shelter als eigene Unterkunftsart', await page.ev(`[...document.querySelectorAll('#stay-types label')].some(l => l.textContent.trim() === 'Shelter (DK, SE, NO)')`));
+  await page.ev(`(async () => { const w = await import('/js/app/waypoints.js');
+    w.setPoint('start', { lat: 56.1567, lon: 10.2108, label: 'Aarhus' }); w.setPoint('end', { lat: 56.1697, lon: 9.5451, label: 'Silkeborg' }); return true; })()`);
+  await page.waitFor(`!document.querySelector('#results').hidden && document.querySelector('#stat-dist').textContent && !document.querySelector('#stages').hidden`, 120000);
+  await page.ev(`document.querySelector('#btn-multiday').click(); true`);
+  check('Etappen geplant', await page.waitFor(`!document.querySelector('#stages-body').hidden && !document.querySelector('#status').classList.contains('loading')
+    && document.querySelectorAll('#stage-list > li').length >= 2`, 180000), await page.text('#stages-summary'));
+  const r = await page.ev(`(async () => {
+    const { state } = await import('/js/app/state.js');
+    const nights = state.route.stays.nights.filter(n => n.chosen);
+    return { types: nights.map(n => n.chosen.poi.type), counts: nights.map(n => n.chosen.poi.count),
+      options: [...document.querySelectorAll('#stage-list select option')].map(o => o.textContent).slice(0, 3),
+      meta: document.querySelector('#stage-list .night select + .meta')?.textContent || '',
+      links: [...document.querySelectorAll('#stage-list .night .links a')].map(a => a.textContent + ' ' + a.href),
+      pins: document.querySelectorAll('.stay-pin').length };
+  })()`);
+  // Bis der Datenauszug mit Sheltern neu gebaut ist (GitHub Actions nach Änderungen an poiSource.js; lokal
+  // `npm run extract:update`), liefert er für Dänemark Unterkunfts-Kacheln ohne Shelter
+  if (!r.types.length) {
+    check('Datenauszug enthält noch keine Shelter – übersprungen (npm run extract:update)', true);
+    return;
+  }
+  check('Jede Nacht ein Shelter', r.types.every(t => t === 'shelter'), JSON.stringify(r.types));
+  check('Plätze zusammengefasst (Anzahl bekannt)', r.counts.every(n => n >= 1), JSON.stringify(r.counts));
+  check('Auswahlliste mit Shelter-Symbol', r.options.length > 0 && r.options.every(o => o.startsWith('🛖')), r.options.join(' | '));
+  check('Zeile nennt Shelter und Preis', /^Shelter · (kostenlos|ca\. 0–10 €|\d+ €)/.test(r.meta), r.meta);
+  check('Kein „Preis prüfen“ bei Sheltern', r.links.every(l => !l.startsWith('Preis prüfen')), r.links.join(' | '));
+  check('Marker auf der Karte', r.pins >= 1, `${r.pins}`);
+  await page.ev(`(async () => { const { state } = await import('/js/app/state.js'); const { map } = await import('/js/app/mapView.js');
+    map.openStay(state.route.stays.nights.find(n => n.chosen).chosen.poi.id); return true; })()`);
+  const popup = await page.ev(`document.querySelector('.leaflet-popup-content')?.textContent || ''`);
+  check('Popup: Hinweis zu Schlafsack und Isomatte', popup.includes('Schlafsack und Isomatte'), popup.slice(0, 160));
+  await page.shot('3-shelter');
 }
 
 async function stagesAndStays({ app, page: newPage, check, step, sleep }) {
