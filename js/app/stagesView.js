@@ -51,12 +51,40 @@ function renderStages() {
   gpx.classList.add('primary');
   syncSheetActions(false);
   const plan = r?.stays;
-  map.setStays(plan ? plan.nights.filter(n => n.chosen).map(n => ({
-    id: n.chosen.poi.id, lat: n.chosen.poi.lat, lon: n.chosen.poi.lon, icon: STAY_TYPES[n.chosen.poi.type].icon, popup: stayPopup(n),
-    title: `${n.end ? 'Übernachtung am Ziel' : `Nacht ${n.index + 1}`}: ${n.chosen.poi.name || STAY_TYPES[n.chosen.poi.type].label}`,
-  })) : []);
+  map.setStays(plan ? stayMarkers(plan) : []);
   if (box.hidden) return;
 
+  renderMultiDayButton(origin, gpx);
+  $('#stages-body').hidden = !state.multiDay || !plan;
+  if (!plan) return;
+
+  $('#stage-departure').value = state.supply.departure;
+  const stats = stageStats(r, state.bike);
+  const chosen = plan.nights.filter(n => n.chosen);
+  const sum = k => chosen.reduce((s, n) => s + n.chosen.price[k], 0);
+  const missing = plan.nights.length - chosen.length;
+  $('#stages-summary').textContent = `${stats.length} Tage · ${plan.nights.length} ${plan.nights.length === 1 ? 'Nacht' : 'Nächte'}`
+    + (chosen.length ? ` · Übernachtungen geschätzt ${sum('min')}–${sum('max')} €` : '')
+    + (missing ? ` · für ${missing} ${missing === 1 ? 'Nacht' : 'Nächte'} keine passende Unterkunft gefunden` : '');
+
+  const start = departureDate();
+  const times = dayTimes(r, start, state.bike);
+  $('#stage-list').replaceChildren(...stats.map((s, i) => dayRow(r, plan, s, i, start, times[i])));
+}
+
+/** Marker der gewählten Unterkünfte für die Karte. */
+function stayMarkers(plan) {
+  return plan.nights.filter(n => n.chosen).map(n => ({
+    id: n.chosen.poi.id, lat: n.chosen.poi.lat, lon: n.chosen.poi.lon, icon: STAY_TYPES[n.chosen.poi.type].icon, popup: stayPopup(n),
+    title: `${n.end ? 'Übernachtung am Ziel' : `Nacht ${n.index + 1}`}: ${n.chosen.poi.name || STAY_TYPES[n.chosen.poi.type].label}`,
+  }));
+}
+
+/**
+ * Knopf „Als Mehrtagestour planen“ / „… aufheben“ samt Fehlerzeile. Wird die Mehrtagestour angeboten, ist sie die
+ * Hauptaktion; „GPX exportieren“ (`gpx`) tritt dann zurück.
+ */
+function renderMultiDayButton(origin, gpx) {
   const { days } = stageTargets(origin.distance, state.stays.maxKm, state.stageKm);
   const btn = $('#btn-multiday');
   btn.disabled = !!state.staysLoading;
@@ -72,58 +100,50 @@ function renderStages() {
   const err = $('#stages-error');
   err.hidden = !state.staysError || state.staysLoading;
   err.textContent = state.staysError || '';
-  $('#stages-body').hidden = !state.multiDay || !plan;
-  if (!plan) return;
+}
 
-  $('#stage-departure').value = state.supply.departure;
-  const stats = stageStats(r, state.bike);
-  const chosen = plan.nights.filter(n => n.chosen);
-  const sum = k => chosen.reduce((s, n) => s + n.chosen.price[k], 0);
-  const missing = plan.nights.length - chosen.length;
-  $('#stages-summary').textContent = `${stats.length} Tage · ${plan.nights.length} ${plan.nights.length === 1 ? 'Nacht' : 'Nächte'}`
-    + (chosen.length ? ` · Übernachtungen geschätzt ${sum('min')}–${sum('max')} €` : '')
-    + (missing ? ` · für ${missing} ${missing === 1 ? 'Nacht' : 'Nächte'} keine passende Unterkunft gefunden` : '');
-
-  const start = departureDate();
-  const times = dayTimes(r, start, state.bike);
-  $('#stage-list').replaceChildren(...stats.map((s, i) => {
-    const li = document.createElement('li');
-    const day = document.createElement('div');
-    day.className = 'day';
-    const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
-    day.innerHTML = '<span></span><small></small>';
-    day.firstChild.textContent = `Tag ${s.day} · ${formatDayDate(date)}`;
-    // „fest“: Länge vom Nutzer festgelegt (im Fenster „Länge ändern“ wieder freizugeben)
-    day.lastChild.textContent = `${formatKm(s.distance)} · ${formatM(s.ascent)} ↑ · ca. ${formatDuration(s.time)}`
-      + (plan.fixed[i] ? ' · fest' : '');
-    const gpx = linkButton('Als GPX', () => exportGpx([dayFile(s)]));
-    gpx.setAttribute('aria-label', `Tag ${s.day} als GPX exportieren`);
-    const actions = document.createElement('div');
-    actions.className = 'day-links';
-    actions.append(gpx);
-    // Der letzte Tag ist immer der Rest der Strecke – seine Länge ergibt sich aus den anderen
-    if (i < plan.days - 1) {
-      const edit = linkButton('Länge ändern', () => openStageDialog(plan, i));
-      edit.classList.add('length-edit');
-      edit.setAttribute('aria-label', `Länge von Tag ${s.day} ändern`);
-      edit.disabled = !!state.staysLoading;
-      actions.append(edit);
-    }
-    li.append(day);
-    // Tageslicht: Sonnenaufgang am Start des Tages, Sonnenuntergang an seinem Ziel
-    const light = daylightNote(times[i], r.coords[indexAtDistance(r, s.from)], r.coords[indexAtDistance(r, s.to)]);
-    if (light) {
-      const sun = document.createElement('small');
-      sun.className = 'sun' + (light.warn ? ' warn' : '');
-      sun.textContent = light.text;
-      li.append(sun);
-    }
-    li.append(actions);
-    // Nacht nach diesem Tag (bzw. am Ziel nach dem letzten Tag)
-    const night = plan.nights[i];
-    if (night) li.append(renderNight(night));
-    return li;
-  }));
+/**
+ * Eine Tageszeile: Datum, Kennzahlen, Tageslicht, „Als GPX“, „Länge ändern“ und die Nacht danach.
+ * @param {Route} r @param {any} plan @param {any} s Tag aus stageStats @param {number} i
+ * @param {Date} start Abfahrt am ersten Tag @param {{start: Date, end: Date}} time Abfahrt und Ankunft dieses Tages
+ */
+function dayRow(r, plan, s, i, start, time) {
+  const li = document.createElement('li');
+  const day = document.createElement('div');
+  day.className = 'day';
+  const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+  day.innerHTML = '<span></span><small></small>';
+  day.firstChild.textContent = `Tag ${s.day} · ${formatDayDate(date)}`;
+  // „fest“: Länge vom Nutzer festgelegt (im Fenster „Länge ändern“ wieder freizugeben)
+  day.lastChild.textContent = `${formatKm(s.distance)} · ${formatM(s.ascent)} ↑ · ca. ${formatDuration(s.time)}`
+    + (plan.fixed[i] ? ' · fest' : '');
+  const gpx = linkButton('Als GPX', () => exportGpx([dayFile(s)]));
+  gpx.setAttribute('aria-label', `Tag ${s.day} als GPX exportieren`);
+  const actions = document.createElement('div');
+  actions.className = 'day-links';
+  actions.append(gpx);
+  // Der letzte Tag ist immer der Rest der Strecke – seine Länge ergibt sich aus den anderen
+  if (i < plan.days - 1) {
+    const edit = linkButton('Länge ändern', () => openStageDialog(plan, i));
+    edit.classList.add('length-edit');
+    edit.setAttribute('aria-label', `Länge von Tag ${s.day} ändern`);
+    edit.disabled = !!state.staysLoading;
+    actions.append(edit);
+  }
+  li.append(day);
+  // Tageslicht: Sonnenaufgang am Start des Tages, Sonnenuntergang an seinem Ziel
+  const light = daylightNote(time, r.coords[indexAtDistance(r, s.from)], r.coords[indexAtDistance(r, s.to)]);
+  if (light) {
+    const sun = document.createElement('small');
+    sun.className = 'sun' + (light.warn ? ' warn' : '');
+    sun.textContent = light.text;
+    li.append(sun);
+  }
+  li.append(actions);
+  // Nacht nach diesem Tag (bzw. am Ziel nach dem letzten Tag)
+  const night = plan.nights[i];
+  if (night) li.append(renderNight(night));
+  return li;
 }
 
 // ---------- Fenster „Länge ändern“ ----------

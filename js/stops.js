@@ -316,6 +316,47 @@ export function applyHolidays(stopped, ctx) {
 // ---------- Planen ----------
 
 /**
+ * Orte für die Stopps: `supply` (Supermärkte, Tankstellen …) wird abgewartet, `food` (Bäckereien, Cafés) nur aus
+ * dem Cache genommen – eine kalte Overpass-Anfrage dauert oft über 30 s. → {pois, foodComplete}
+ */
+async function loadStopPois(base, signal) {
+  const [supply, food] = await Promise.all([
+    fetchPois(base, signal, ['supply']),
+    fetchPois(base, signal, ['food'], { cacheOnly: true }).catch(e => {
+      if (signal?.aborted) throw e;
+      console.warn(e);
+      return Object.assign([], { complete: false });
+    }),
+  ]);
+  const seen = new Set();
+  return { pois: [...supply, ...food].filter(p => !seen.has(p.id) && seen.add(p.id)), foodComplete: !!food.complete };
+}
+
+/**
+ * Geplante Stopps auf der Route durch sie: Position, Ankunft (mit den Pausen davor), Öffnungsstand zur Ankunft
+ * und Feiertag. Die Region stammt aus der Planung (Position auf der Basisroute).
+ */
+function stopsOnRoute(routed, wps, along, stops, points, { departure, bike, style, regionFor, lookup }) {
+  const eta = timeline(routed, departure, bike, style.dwell);
+  const fixed = wps.flatMap((p, i) => (p.food ? [along[i]] : []));
+  const result = [];
+  wps.forEach((p, i) => {
+    if (!p.stop) return;
+    const s = stops[points.indexOf(p)];
+    const t = eta(along[i], pausesBefore(eta, result, fixed, along[i]));
+    const region = regionFor(s.along);
+    const holiday = lookup?.(region, t) ?? null;
+    const ev = evaluate(s.poi, t, holiday, style) || { state: 'closed' };
+    const type = STOP_TYPES[s.poi.type];
+    result.push({
+      ...s, planAlong: s.along, along: along[i], eta: t, state: ev.state, point: p, region, holiday,
+      icon: type.icon, typeLabel: type.label, gpxSym: type.gpxSym,
+    });
+  });
+  return result;
+}
+
+/**
  * Ergänzt eine Route um Verpflegungsstopps und Trinkwasser.
  * Ergebnis: neue Route (durch die Stopps) mit `stops`, `gaps`, `water`, `waterGaps`, `dwellMin`, `regions`,
  * `holidays` und `base` (Route ohne Stopps). Bei Mehrtagestouren werden `origin`, `stays` und `stageStarts`
@@ -332,17 +373,8 @@ export function applyHolidays(stopped, ctx) {
  */
 export async function addStops(base, { provider, opts, interval, departure, bike, style: styleId, signal, holidays = null, mark = _step => {} }) {
   const style = styleOf(styleId);
-  const [supply, food] = await Promise.all([
-    fetchPois(base, signal, ['supply']),
-    fetchPois(base, signal, ['food'], { cacheOnly: true }).catch(e => {
-      if (signal?.aborted) throw e;
-      console.warn(e);
-      return Object.assign([], { complete: false });
-    }),
-  ]);
+  const { pois, foodComplete } = await loadStopPois(base, signal);
   mark('Orte laden');
-  const seen = new Set();
-  const pois = [...supply, ...food].filter(p => !seen.has(p.id) && seen.add(p.id));
   const regions = holidays?.regions || null;
   const lookup = holidays?.lookup || null;
   const regionFor = along => regionAtDistance(regions, along);
@@ -351,7 +383,7 @@ export async function addStops(base, { provider, opts, interval, departure, bike
     regions: regions || [],
     holidays: holidays?.notes || [],
     holidayCheck: holidays ? !!lookup : 'pending', // false = Feiertage konnten nicht geprüft werden
-    foodPartial: !food.complete,
+    foodPartial: !foodComplete,
     dwellMin: style.dwell,
   };
   const waters = pois.filter(freeWater);
@@ -392,23 +424,7 @@ export async function addStops(base, { provider, opts, interval, departure, bike
   // Alle Tagesgrenzen übertragen – auch Nächte ohne gefundene Unterkunft (Grenze am Etappenziel); nur die
   // Unterkünfte zu nehmen, ließe solche Tage verschmelzen und verschöbe alle Ankunftszeiten danach
   routed.stageStarts = transferPositions(base, routed, base.stageStarts || []);
-  const eta = timeline(routed, departure, bike, style.dwell);
-  const fixed = wps.flatMap((p, i) => (p.food ? [along[i]] : []));
-  const finalStops = [];
-  wps.forEach((p, i) => {
-    if (!p.stop) return;
-    const s = stops[points.indexOf(p)];
-    const t = eta(along[i], pausesBefore(eta, finalStops, fixed, along[i]));
-    // Region aus der Planung (Position auf der Basisroute), Feiertag zur neuen Ankunftszeit
-    const region = regionFor(s.along);
-    const holiday = lookup?.(region, t) ?? null;
-    const ev = evaluate(s.poi, t, holiday, style) || { state: 'closed' };
-    const type = STOP_TYPES[s.poi.type];
-    finalStops.push({
-      ...s, planAlong: s.along, along: along[i], eta: t, state: ev.state, point: p, region, holiday,
-      icon: type.icon, typeLabel: type.label, gpxSym: type.gpxSym,
-    });
-  });
+  const finalStops = stopsOnRoute(routed, wps, along, stops, points, { departure, bike, style, regionFor, lookup });
   const water = withWater(routed, finalStops);
   mark('Ankunftszeiten, Trinkwasser');
   return { ...routed, base, origin: base.origin, stays: base.stays, stops: finalStops, gaps, ...water, ...info };
