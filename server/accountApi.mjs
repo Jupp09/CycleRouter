@@ -145,58 +145,8 @@ async function route(req, res, url) {
       data: fromJson(r.data), updatedAt: r.updated_at });
   }
 
-  // Registrieren / Anmelden
-  if (pathname === '/api/account/register' && m === 'POST') {
-    const ip = clientIp(req);
-    if (limitReached('register', ip)) throw new HttpError(429, 'Zu viele neue Konten von diesem Anschluss – bitte später erneut.');
-    if (limitReached('registerAll', 'all')) {
-      throw new HttpError(429, 'Heute wurden schon sehr viele Konten angelegt – bitte morgen erneut versuchen.');
-    }
-    const { username, password } = await readJson(req, 4096);
-    const invalid = validateCredentials(username, password, { isNew: true });
-    if (invalid) throw new HttpError(400, invalid);
-    const exists = await query('SELECT id FROM users WHERE username = ?', [username]);
-    if (exists.length) throw new HttpError(409, 'Dieser Benutzername ist schon vergeben.');
-    const result = await query('INSERT INTO users (username, pw_hash) VALUES (?, ?)', [username, await hashPassword(password)]);
-    countAttempt('register', ip);
-    countAttempt('registerAll', 'all');
-    if (limitReached('registerAll', 'all')) {
-      console.warn('Konten: Tagesgrenze für neue Konten erreicht – weitere Registrierungen werden 24 h lang abgelehnt');
-    }
-    await createSession(req, res, result.insertId);
-    return json(res, 201, { user: { id: result.insertId, username } });
-  }
-
-  if (pathname === '/api/account/login' && m === 'POST') {
-    const ip = clientIp(req);
-    if (limitReached('login', ip)) throw new HttpError(429, 'Zu viele fehlgeschlagene Anmeldungen – bitte in 15 Minuten erneut.');
-    const { username, password } = await readJson(req, 4096);
-    if (limitReached('loginUser', username)) {
-      throw new HttpError(429, 'Zu viele fehlgeschlagene Anmeldungen für dieses Konto – bitte in einer Stunde erneut.');
-    }
-    const invalid = validateCredentials(username, password);
-    const rows = invalid ? [] : await query('SELECT id, username, pw_hash FROM users WHERE username = ?', [username]);
-    const ok = rows.length ? await verifyPassword(password, rows[0].pw_hash) : (await burnPasswordCheck(String(password || '')), false);
-    if (!ok) {
-      countAttempt('login', ip);
-      if (typeof username === 'string' && username.length <= 40) countAttempt('loginUser', username);
-      throw new HttpError(401, 'Benutzername oder Passwort falsch.');
-    }
-    await createSession(req, res, rows[0].id);
-    // Ältere Hashes auf die aktuellen scrypt-Einstellungen umstellen (auth.mjs). Scheitert das (z. B. Server
-    // ausgelastet), bleibt der alte gültig und es klappt beim nächsten Mal. `pw_hash = ?`: Hat das Passwort sich
-    // inzwischen geändert (anderes Gerät), wird nichts überschrieben.
-    if (needsRehash(rows[0].pw_hash)) {
-      try {
-        await query('UPDATE users SET pw_hash = ? WHERE id = ? AND pw_hash = ?',
-          [await hashPassword(password), rows[0].id, rows[0].pw_hash]);
-      } catch (e) {
-        console.warn(`Konten: Passwort-Hash nicht umgestellt (${e.message})`);
-      }
-    }
-    return json(res, 200, { user: { id: rows[0].id, username: rows[0].username } });
-  }
-
+  if (pathname === '/api/account/register' && m === 'POST') return register(req, res);
+  if (pathname === '/api/account/login' && m === 'POST') return login(req, res);
   if (pathname === '/api/account/logout' && m === 'POST') {
     await destroySession(req, res);
     return json(res, 200, { ok: true });
@@ -207,14 +157,7 @@ async function route(req, res, url) {
   if (!user) throw new HttpError(401, 'Bitte anmelden.');
 
   if (pathname === '/api/account/delete' && m === 'POST') {
-    const ip = clientIp(req);
-    if (limitReached('login', ip)) throw new HttpError(429, 'Zu viele fehlgeschlagene Versuche – bitte in 15 Minuten erneut.');
-    const { password } = await readJson(req, 4096);
-    const rows = await query('SELECT pw_hash FROM users WHERE id = ?', [user.id]);
-    if (!rows.length || !await verifyPassword(String(password || ''), rows[0].pw_hash)) {
-      countAttempt('login', ip);
-      throw new HttpError(401, 'Passwort falsch.');
-    }
+    await confirmPassword(req, user, 'Passwort falsch.');
     await query('DELETE FROM users WHERE id = ?', [user.id]); // Sitzungen, Einstellungen, Routen per CASCADE
     await destroySession(req, res);
     return json(res, 200, { ok: true });
@@ -223,15 +166,9 @@ async function route(req, res, url) {
   // Passwort ändern: altes Passwort nötig; danach sind alle anderen Geräte abgemeldet (falls das alte
   // Passwort oder ein Sitzungs-Cookie in fremde Hände geraten ist).
   if (pathname === '/api/account/password' && m === 'POST') {
-    const ip = clientIp(req);
-    if (limitReached('login', ip)) throw new HttpError(429, 'Zu viele fehlgeschlagene Versuche – bitte in 15 Minuten erneut.');
-    const { password, newPassword } = await readJson(req, 4096);
-    if (typeof newPassword !== 'string') throw new HttpError(400, 'Neues Passwort fehlt.');
-    const rows = await query('SELECT pw_hash FROM users WHERE id = ?', [user.id]);
-    if (!rows.length || !await verifyPassword(String(password || ''), rows[0].pw_hash)) {
-      countAttempt('login', ip);
-      throw new HttpError(401, 'Bisheriges Passwort falsch.');
-    }
+    const { newPassword } = await confirmPassword(req, user, 'Bisheriges Passwort falsch.', body => {
+      if (typeof body.newPassword !== 'string') throw new HttpError(400, 'Neues Passwort fehlt.');
+    });
     const problem = passwordProblem(newPassword, user.username);
     if (problem) throw new HttpError(400, problem);
     await query('UPDATE users SET pw_hash = ? WHERE id = ?', [await hashPassword(newPassword), user.id]);
@@ -275,37 +212,121 @@ async function route(req, res, url) {
   }
 
   match = pathname.match(/^\/api\/routes\/(\d{1,10})(\/share)?$/);
-  if (match) {
-    const id = Number(match[1]);
-    const row = await ownRoute(user, id);
-    if (match[2]) {
-      if (m === 'POST') {
-        const token = row.share_token || randomBytes(16).toString('base64url'); // 22 Zeichen
-        if (!row.share_token) await query('UPDATE routes SET share_token = ?, updated_at = updated_at WHERE id = ?', [token, id]);
-        return json(res, 200, { token });
-      }
-      if (m === 'DELETE') {
-        await query('UPDATE routes SET share_token = NULL, updated_at = updated_at WHERE id = ?', [id]);
-        return json(res, 200, { ok: true });
-      }
-    } else {
-      if (m === 'GET') return json(res, 200, { ...toListItem(row), data: fromJson(row.data) });
-      if (m === 'PATCH') {
-        const r = cleanRoute(await readJson(req, 8 * 1024 * 1024), true);
-        if (r.data) await checkQuota(user, Buffer.byteLength(r.data), id);
-        const cols = Object.keys(r);
-        if (cols.length) {
-          await query(`UPDATE routes SET ${cols.map(c => `${c} = ?`).join(', ')} WHERE id = ?`, [...cols.map(c => r[c]), id]);
-        }
-        return json(res, 200, { ok: true });
-      }
-      if (m === 'DELETE') {
-        await query('DELETE FROM routes WHERE id = ?', [id]);
-        return json(res, 200, { ok: true });
-      }
+  if (match && await oneRoute(req, res, user, Number(match[1]), !!match[2])) return;
+  throw new HttpError(404, 'Unbekannte Anfrage');
+}
+
+/** Neues Konto: Grenzen je Anschluss und je Tag, dann anlegen und gleich anmelden. */
+async function register(req, res) {
+  const ip = clientIp(req);
+  if (limitReached('register', ip)) throw new HttpError(429, 'Zu viele neue Konten von diesem Anschluss – bitte später erneut.');
+  if (limitReached('registerAll', 'all')) {
+    throw new HttpError(429, 'Heute wurden schon sehr viele Konten angelegt – bitte morgen erneut versuchen.');
+  }
+  const { username, password } = await readJson(req, 4096);
+  const invalid = validateCredentials(username, password, { isNew: true });
+  if (invalid) throw new HttpError(400, invalid);
+  const exists = await query('SELECT id FROM users WHERE username = ?', [username]);
+  if (exists.length) throw new HttpError(409, 'Dieser Benutzername ist schon vergeben.');
+  const result = await query('INSERT INTO users (username, pw_hash) VALUES (?, ?)', [username, await hashPassword(password)]);
+  countAttempt('register', ip);
+  countAttempt('registerAll', 'all');
+  if (limitReached('registerAll', 'all')) {
+    console.warn('Konten: Tagesgrenze für neue Konten erreicht – weitere Registrierungen werden 24 h lang abgelehnt');
+  }
+  await createSession(req, res, result.insertId);
+  return json(res, 201, { user: { id: result.insertId, username } });
+}
+
+/** Anmelden; Fehlversuche zählen je Anschluss und je Benutzername (auth.mjs). */
+async function login(req, res) {
+  const ip = clientIp(req);
+  if (limitReached('login', ip)) throw new HttpError(429, 'Zu viele fehlgeschlagene Anmeldungen – bitte in 15 Minuten erneut.');
+  const { username, password } = await readJson(req, 4096);
+  if (limitReached('loginUser', username)) {
+    throw new HttpError(429, 'Zu viele fehlgeschlagene Anmeldungen für dieses Konto – bitte in einer Stunde erneut.');
+  }
+  const invalid = validateCredentials(username, password);
+  const rows = invalid ? [] : await query('SELECT id, username, pw_hash FROM users WHERE username = ?', [username]);
+  const ok = rows.length ? await verifyPassword(password, rows[0].pw_hash) : (await burnPasswordCheck(String(password || '')), false);
+  if (!ok) {
+    countAttempt('login', ip);
+    if (typeof username === 'string' && username.length <= 40) countAttempt('loginUser', username);
+    throw new HttpError(401, 'Benutzername oder Passwort falsch.');
+  }
+  await createSession(req, res, rows[0].id);
+  // Ältere Hashes auf die aktuellen scrypt-Einstellungen umstellen (auth.mjs). Scheitert das (z. B. Server
+  // ausgelastet), bleibt der alte gültig und es klappt beim nächsten Mal. `pw_hash = ?`: Hat das Passwort sich
+  // inzwischen geändert (anderes Gerät), wird nichts überschrieben.
+  if (needsRehash(rows[0].pw_hash)) {
+    try {
+      await query('UPDATE users SET pw_hash = ? WHERE id = ? AND pw_hash = ?',
+        [await hashPassword(password), rows[0].id, rows[0].pw_hash]);
+    } catch (e) {
+      console.warn(`Konten: Passwort-Hash nicht umgestellt (${e.message})`);
     }
   }
-  throw new HttpError(404, 'Unbekannte Anfrage');
+  return json(res, 200, { user: { id: rows[0].id, username: rows[0].username } });
+}
+
+/**
+ * Passwort des angemeldeten Kontos prüfen, bevor es gelöscht oder das Passwort geändert wird. Fehlversuche zählen
+ * wie bei der Anmeldung (je Anschluss), sonst ließe sich ein Passwort über eine offene Sitzung erraten.
+ * `check` prüft den übrigen Anfragekörper vor dem (teuren) Passwortvergleich. → Anfragekörper
+ * @param {any} req @param {{id: number}} user @param {string} wrong Meldung bei falschem Passwort
+ * @param {(body: any) => void} [check]
+ */
+async function confirmPassword(req, user, wrong, check = () => {}) {
+  const ip = clientIp(req);
+  if (limitReached('login', ip)) throw new HttpError(429, 'Zu viele fehlgeschlagene Versuche – bitte in 15 Minuten erneut.');
+  const body = await readJson(req, 4096);
+  check(body);
+  const rows = await query('SELECT pw_hash FROM users WHERE id = ?', [user.id]);
+  if (!rows.length || !await verifyPassword(String(body.password || ''), rows[0].pw_hash)) {
+    countAttempt('login', ip);
+    throw new HttpError(401, wrong);
+  }
+  return body;
+}
+
+/** /api/routes/:id und /api/routes/:id/share, nur eigene Routen → false, wenn die Methode nicht passt (404). */
+async function oneRoute(req, res, user, id, share) {
+  const m = req.method;
+  const row = await ownRoute(user, id);
+  if (share) {
+    if (m === 'POST') {
+      const token = row.share_token || randomBytes(16).toString('base64url'); // 22 Zeichen
+      if (!row.share_token) await query('UPDATE routes SET share_token = ?, updated_at = updated_at WHERE id = ?', [token, id]);
+      json(res, 200, { token });
+      return true;
+    }
+    if (m === 'DELETE') {
+      await query('UPDATE routes SET share_token = NULL, updated_at = updated_at WHERE id = ?', [id]);
+      json(res, 200, { ok: true });
+      return true;
+    }
+    return false;
+  }
+  if (m === 'GET') {
+    json(res, 200, { ...toListItem(row), data: fromJson(row.data) });
+    return true;
+  }
+  if (m === 'PATCH') {
+    const r = cleanRoute(await readJson(req, 8 * 1024 * 1024), true);
+    if (r.data) await checkQuota(user, Buffer.byteLength(r.data), id);
+    const cols = Object.keys(r);
+    if (cols.length) {
+      await query(`UPDATE routes SET ${cols.map(c => `${c} = ?`).join(', ')} WHERE id = ?`, [...cols.map(c => r[c]), id]);
+    }
+    json(res, 200, { ok: true });
+    return true;
+  }
+  if (m === 'DELETE') {
+    await query('DELETE FROM routes WHERE id = ?', [id]);
+    json(res, 200, { ok: true });
+    return true;
+  }
+  return false;
 }
 
 /** Bearbeitet /api/account…, /api/settings, /api/routes…, /api/shared/… → true, wenn zuständig. */
