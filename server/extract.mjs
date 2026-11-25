@@ -95,6 +95,60 @@ function hashing(hash) {
 }
 
 /**
+ * Paket entpacken: je Zelle eine Datei in `dir`, dabei Format, Zellen und Kacheln prüfen und die Orte je Ebene
+ * zählen. Wirft, wenn etwas nicht stimmt – auch, wenn die Prüfsumme über die geladenen Bytes nicht passt.
+ * → {head (Metadaten-Zeile), count (Zellen), counts (Orte je Ebene, auch leere Ebenen)}
+ */
+async function unpack(body, dir, sha256) {
+  await rm(dir, { recursive: true, force: true });
+  await mkdir(dir, { recursive: true });
+  const hash = createHash('sha256');
+  const gunzip = createGunzip();
+  const rows = readLines(gunzip);
+  const download = pipeline(Readable.fromWeb(/** @type {any} */ (body)), hashing(hash), gunzip);
+  download.catch(() => {}); // Fehler kommen über die Zeilen bzw. `await download` unten an
+  let head = null, count = 0;
+  const counts = {};
+  try {
+    for await (const line of rows) {
+      if (!line) continue;
+      const row = JSON.parse(line);
+      if (!head) {
+        if (row.type !== 'meta' || row.cell !== CELL || !Array.isArray(row.layers)) throw new Error('Paket hat ein unbekanntes Format');
+        head = row;
+        continue;
+      }
+      if (!isCellKey(row.cell) || !row.layers || typeof row.layers !== 'object') throw new Error('Paket enthält ungültige Zellen');
+      for (const [layer, tiles] of Object.entries(row.layers)) {
+        if (Object.keys(tiles).some(k => !isTileKey(k) || cellOfTile(k) !== row.cell)) throw new Error('Paket enthält ungültige Kacheln');
+        for (const pois of Object.values(tiles)) counts[layer] = (counts[layer] || 0) + pois.length;
+      }
+      await writeFile(join(dir, `${row.cell}.json`), JSON.stringify({ layers: row.layers }));
+      count++;
+    }
+    await download;
+  } catch (e) {
+    gunzip.destroy(); // Download abbrechen
+    throw e;
+  }
+  if (hash.digest('hex') !== sha256) throw new Error('Prüfsumme stimmt nicht (Paket wurde evtl. gerade ersetzt)');
+  if (!head) throw new Error('Paket ist leer');
+  for (const l of head.layers) counts[l] ??= 0;
+  return { head, count, counts };
+}
+
+/** Entpackten Stand übernehmen: Der alte wird erst nach dem Umbenennen gelöscht, dann neu eingelesen. */
+async function swapIn(dir, newMeta) {
+  const old = join(DIR, 'cells.old');
+  await rm(old, { recursive: true, force: true });
+  await rename(CELLS, old).catch(() => {});
+  await rename(dir, CELLS);
+  await writeFile(META, JSON.stringify(newMeta));
+  await rm(old, { recursive: true, force: true });
+  await loadIndex();
+}
+
+/**
  * Neues Paket laden, wenn die Beschreibung (pois-europe.json) einen neueren Stand meldet. Entpackt wird in
  * einen neuen Ordner, der den alten erst ersetzt, wenn alles geprüft ist (Prüfsumme, Format).
  * → false, wenn es fehlgeschlagen ist (dann wird früher erneut versucht), sonst true.
@@ -119,49 +173,8 @@ async function update() {
     const data = await fetch(new URL(manifest.file, url), { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(BUNDLE_TIMEOUT) });
     if (!data.ok) throw new Error(`Paket: HTTP ${data.status}`);
 
-    await rm(tmp, { recursive: true, force: true });
-    await mkdir(tmp, { recursive: true });
-    const hash = createHash('sha256');
-    const gunzip = createGunzip();
-    const lines = readLines(gunzip);
-    const download = pipeline(Readable.fromWeb(/** @type {any} */ (data.body)), hashing(hash), gunzip);
-    download.catch(() => {}); // Fehler kommen über die Zeilen bzw. `await download` unten an
-    let head = null, count = 0;
-    const counts = {}; // Orte je Ebene
-    try {
-      for await (const line of lines) {
-        if (!line) continue;
-        const row = JSON.parse(line);
-        if (!head) {
-          if (row.type !== 'meta' || row.cell !== CELL || !Array.isArray(row.layers)) throw new Error('Paket hat ein unbekanntes Format');
-          head = row;
-          continue;
-        }
-        if (!isCellKey(row.cell) || !row.layers || typeof row.layers !== 'object') throw new Error('Paket enthält ungültige Zellen');
-        for (const [layer, tiles] of Object.entries(row.layers)) {
-          if (Object.keys(tiles).some(k => !isTileKey(k) || cellOfTile(k) !== row.cell)) throw new Error('Paket enthält ungültige Kacheln');
-          for (const pois of Object.values(tiles)) counts[layer] = (counts[layer] || 0) + pois.length;
-        }
-        await writeFile(join(tmp, `${row.cell}.json`), JSON.stringify({ layers: row.layers }));
-        count++;
-      }
-      await download;
-    } catch (e) {
-      gunzip.destroy(); // Download abbrechen
-      throw e;
-    }
-    if (hash.digest('hex') !== manifest.sha256) throw new Error('Prüfsumme stimmt nicht (Paket wurde evtl. gerade ersetzt)');
-    if (!head) throw new Error('Paket ist leer');
-
-    // Austauschen: alter Stand wird erst nach dem Umbenennen gelöscht
-    const old = join(DIR, 'cells.old');
-    await rm(old, { recursive: true, force: true });
-    await rename(CELLS, old).catch(() => {});
-    await rename(tmp, CELLS);
-    for (const l of head.layers) counts[l] ??= 0;
-    await writeFile(META, JSON.stringify({ t: manifest.t, sha256: manifest.sha256, layers: head.layers, counts, regions: head.regions, cells: count }));
-    await rm(old, { recursive: true, force: true });
-    await loadIndex();
+    const { head, count, counts } = await unpack(data.body, tmp, manifest.sha256);
+    await swapIn(tmp, { t: manifest.t, sha256: manifest.sha256, layers: head.layers, counts, regions: head.regions, cells: count });
     const summary = Object.entries(counts).map(([l, n]) => `${l} ${n.toLocaleString('de-DE')}`).join(', ');
     log(`Datenauszug: ${count} Zellen (${head.regions?.length ?? '?'} Regionen) in ${Math.round((Date.now() - t0) / 1000)} s übernommen – ${summary}`);
     const unused = head.layers.filter(l => !counts[l]);

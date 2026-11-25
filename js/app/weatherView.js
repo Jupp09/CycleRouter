@@ -21,12 +21,18 @@ function hint(text) {
   return p;
 }
 
+/** Wetter, Wind und „Wetter je Abschnitt“ ausblenden; `clear` leert auch die Texte (keine Route mehr). */
+function hideWeather(clear = false) {
+  // „Wetter je Abschnitt“ steht in eigener Zeile unter Wind (#weather-more) und verschwindet mit details.hidden
+  $('#weather').hidden = true; $('#wind').hidden = true; $('#weather-details').hidden = true;
+  if (clear) { $('#weather-summary').replaceChildren(); $('#wind-summary').replaceChildren(); }
+}
+
 async function renderWeather(r) {
   controller?.abort();
   const box = $('#weather'), summary = $('#weather-summary'), details = $('#weather-details');
-  const windBox = $('#wind'), windSummary = $('#wind-summary');
-  // „Wetter je Abschnitt“ steht in eigener Zeile unter Wind (#weather-more) und verschwindet mit details.hidden
-  if (!r) { box.hidden = true; windBox.hidden = true; details.hidden = true; summary.replaceChildren(); windSummary.replaceChildren(); return; }
+  const windBox = $('#wind');
+  if (!r) { hideWeather(true); return; }
   const ctrl = controller = new AbortController();
 
   // Abfahrt nur mit Verpflegungsstopps oder Mehrtagestour sichtbar festgelegt – sonst gilt „jetzt“, und das steht auch da
@@ -39,7 +45,7 @@ async function renderWeather(r) {
   // Hinweis statt Wetter: Die Windzeile verschwindet; sonst bleibt sie bis zu den neuen Daten stehen (kein Flackern)
   const message = text => { summary.replaceChildren(hint(text)); details.hidden = true; box.hidden = false; windBox.hidden = true; };
 
-  if (departure < midnight) { box.hidden = true; windBox.hidden = true; details.hidden = true; return; } // Abfahrt in der Vergangenheit
+  if (departure < midnight) { hideWeather(); return; } // Abfahrt in der Vergangenheit
   const last = days.at(-1).end;
   if (last >= limit) {
     const first = new Date(last.getFullYear(), last.getMonth(), last.getDate() - FORECAST_DAYS + 1);
@@ -61,25 +67,41 @@ async function renderWeather(r) {
   if (ctrl.signal.aborted) return;
   if (!sections.length) { message('Wetter gerade nicht verfügbar.'); return; }
 
-  const multi = days.length > 1;
-  const dayLabel = d => `Tag ${d.day} · ${formatDayDate(d.start)}`;
   const start = fixed ? `${formatWeekday(departure)} ${formatClock(departure)}` : `jetzt (${formatClock(departure)})`;
+  renderSummaries(days, sections, start);
+  windBox.hidden = false;
+  $('#weather-list').replaceChildren(...sectionRows(days, sections));
+  details.hidden = false;
+  box.hidden = false;
+}
+
+const dayLabel = d => `Tag ${d.day} · ${formatDayDate(d.start)}`;
+
+/**
+ * Wetter und Wind als eigene Zeilen mit Symbol (Hinweisliste .facts), bei Mehrtagestouren je Tag. Bei einem Tag
+ * steht unter dem Wind der Vorschlag, die Route anders in den Wind zu legen.
+ */
+function renderSummaries(days, sections, start) {
+  const multi = days.length > 1;
   const ofDay = d => sections.filter(s => s.day === d.day);
-  // Wetter und Wind als eigene Zeilen mit Symbol (Hinweisliste .facts), bei Mehrtagestouren je Tag
   const withData = days.filter(d => ofDay(d).length);
-  summary.replaceChildren(...(multi
+  $('#weather-summary').replaceChildren(...(multi
     ? withData.map(d => hint(`${dayLabel(d)}: ${weatherParts(ofDay(d)).weather}`))
     : [hint(`Wetter bei Abfahrt ${start}: ${weatherParts(sections).weather}`)]));
+  const windSummary = $('#wind-summary');
   windSummary.replaceChildren(...(multi
     ? withData.map(d => hint(`Tag ${d.day}: ${weatherParts(ofDay(d)).wind}`))
     : [hint(weatherParts(sections).wind)]));
   const advice = !multi && adviceLine(sections);
   if (advice) windSummary.append(advice);
-  windBox.hidden = false;
+}
 
+/** „Wetter je Abschnitt“: eine Zeile je ~10 km, bei Mehrtagestouren mit einer Kopfzeile je Tag. */
+function sectionRows(days, sections) {
+  const multi = days.length > 1;
   const km = m => Math.round(m / 1000);
-  $('#weather-list').replaceChildren(...days.flatMap(d => {
-    const rows = ofDay(d).map(s => {
+  return days.flatMap(d => {
+    const rows = sections.filter(s => s.day === d.day).map(s => {
       const li = document.createElement('li');
       li.textContent = `km ${km(s.from)}–${km(s.to)} · ${formatClock(s.time)} · ${Math.round(s.temp)} °C · Regen ${s.rainProb} %`
         + (s.rain >= 0.1 ? ` (${formatNumber(s.rain)} mm)` : '') + ` · ${windLabel(s)}`;
@@ -90,9 +112,7 @@ async function renderWeather(r) {
     head.className = 'day';
     head.textContent = dayLabel(d);
     return [head, ...rows];
-  }));
-  details.hidden = false;
-  box.hidden = false;
+  });
 }
 
 /**
