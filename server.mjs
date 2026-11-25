@@ -49,6 +49,9 @@ const TYPES = {
  */
 const overpassBudget = createLimiter({ windowMs: 60 * 60 * 1000, max: 5000 });
 
+/** Kachelliste einer Anfrage: 1–1000 gültige Schlüssel (dieselben 0,1°-Kacheln für /api/pois und /api/warm-route). */
+const validTiles = keys => Array.isArray(keys) && keys.length > 0 && keys.length <= 1000 && keys.every(isTileKey);
+
 /**
  * Verpflegungsstellen je Kachel und Datenebene: POST {tiles: [Kachelschlüssel], layers?, cacheOnly?}
  * → {tiles, missing}. `cacheOnly`: nur Vorhandenes liefern, fehlende Kacheln im Hintergrund laden.
@@ -61,9 +64,7 @@ async function handlePois(req, res) {
   } catch (e) {
     return json(res, e.status || 400, { error: e.message });
   }
-  if (!Array.isArray(keys) || !keys.length || keys.length > 1000 || !keys.every(isTileKey)) {
-    return json(res, 400, { error: 'Ungültige Kachelliste' });
-  }
+  if (!validTiles(keys)) return json(res, 400, { error: 'Ungültige Kachelliste' });
   if (!Array.isArray(layers) || !layers.length || !layers.every(isLayer)) {
     return json(res, 400, { error: 'Ungültige Datenebene' });
   }
@@ -72,7 +73,7 @@ async function handlePois(req, res) {
   try {
     const result = await getTiles([...new Set(keys)], {
       layers: [...new Set(layers)], cacheOnly: cacheOnly === true, log: msg => console.log(msg),
-      allowFetch: n => overpassBudget.fits(ip, n) && (overpassBudget.add(ip, n), true),
+      allowFetch: n => overpassBudget.take(ip, n),
     });
     if (result.limited) {
       console.log(`/api/pois [${layers.join(',')}]: Overpass-Kontingent für einen Nutzer erschöpft (${result.limited} Kacheln fehlen)`);
@@ -114,7 +115,7 @@ async function handleRegions(req, res) {
   try {
     const t0 = Date.now();
     const out = await getRegions([...new Set(keys)], {
-      allowFetch: n => nominatimBudget.fits(ip, n) && (nominatimBudget.add(ip, n), true),
+      allowFetch: n => nominatimBudget.take(ip, n),
     });
     if (out.fetched || out.missing.length) {
       console.log(`/api/regions: ${keys.length} Punkte (${out.fetched} neu, ${out.missing.length} offen) in ${Date.now() - t0} ms`);
@@ -157,9 +158,7 @@ async function handleWarmRoute(req, res) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Nur POST' });
   try {
     const { tiles } = await readJson(req, 32 * 1024);
-    if (!Array.isArray(tiles) || !tiles.length || tiles.length > 1000 || !tiles.every(isTileKey)) {
-      return json(res, 400, { error: 'Ungültige Kachelliste' });
-    }
+    if (!validTiles(tiles)) return json(res, 400, { error: 'Ungültige Kachelliste' });
     json(res, 200, await requestRouteWarm(tiles, clientIp(req)));
   } catch (e) {
     json(res, e.status || 400, { error: e.message });

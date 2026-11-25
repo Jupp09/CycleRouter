@@ -47,6 +47,11 @@ test('Begrenzer: gleitendes Fenster mit Gewichten', () => {
     assert.ok(!limiter.reached('b'), 'andere Schlüssel unberührt');
     mock.timers.tick(60_000);
     assert.equal(limiter.used('a'), 0, 'nach Ablauf des Fensters wieder frei');
+    // take: zählt nur, was noch hineinpasst
+    assert.ok(limiter.take('c', 8));
+    assert.ok(!limiter.take('c', 3), 'passt nicht mehr');
+    assert.equal(limiter.used('c'), 8, 'ein abgelehntes take zählt nicht');
+    assert.ok(limiter.take('c', 2) && limiter.reached('c'));
   } finally {
     mock.timers.reset();
   }

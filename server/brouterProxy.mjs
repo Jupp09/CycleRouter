@@ -154,8 +154,7 @@ export async function handleBrouter(req, res, url) {
     }
     if (Date.now() < downUntil) throw new HttpError(503, 'BRouter nicht erreichbar, retry later');
     const ip = clientIp(req);
-    if (!budget.fits(ip, 1)) throw new HttpError(429, 'Zu viele BRouter-Anfragen, retry later');
-    budget.add(ip, 1);
+    if (!budget.take(ip)) throw new HttpError(429, 'Zu viele BRouter-Anfragen, retry later');
     const signal = clientGone(res);
 
     if (path === '/api/brouter/profile') {

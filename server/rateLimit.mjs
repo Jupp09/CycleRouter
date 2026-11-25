@@ -32,6 +32,12 @@ export function createLimiter({ windowMs, max }) {
     reached: key => used(key) >= max,
     /** Passen noch `n` Einheiten hinein? (zählt nicht mit) */
     fits: (key, n) => used(key) + n <= max,
+    /** `n` Einheiten zählen, wenn sie noch hineinpassen → true; sonst nichts zählen → false */
+    take(key, n = 1) {
+      if (used(key) + n > max) return false;
+      this.add(key, n);
+      return true;
+    },
     /** `n` Einheiten zählen */
     add(key, n = 1) {
       const now = Date.now();
