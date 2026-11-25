@@ -122,20 +122,32 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const motion = () => ({ animate: !reduceMotion.matches });
 
 /**
- * @param {HTMLElement} el
- * @param {{onClick: (p: {lat: number, lon: number}) => void, onMarkerDrag: Function,
- *   onRouteHover?: (p: {lat: number, lon: number} | null) => void}} handlers
+ * Orte mit Popup (Verpflegung, Wasser, Unterkunft, Suchtreffer): Aussehen je Art. `size` ist die Trefferfläche
+ * in px, `hit` die vergrößerte Trefferfläche (.marker-hit), `lift` hebt das Popup über den Punkt, `z` stapelt
+ * die Arten (Unterkünfte über Stopps über Suchtreffern über Wasser).
  */
-export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }) {
-  const view = storage.get('view', { center: [51.1657, 10.4515], zoom: 6 });
-  // Auch Zoomen per Mausrad/Knopf springt dann, statt zu animieren (gilt ab dem nächsten Laden der Seite)
-  const calm = reduceMotion.matches ? { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false } : {};
-  const map = L.map(el, { zoomControl: false, ...calm }).setView(view.center, view.zoom);
-  // Die Karte ist fokussierbar (Leaflet: Pfeiltasten verschieben, +/− zoomt) – mit Namen und Bedienhinweis
-  // (#map-help in index.html), sonst läse ein Screenreader beim Fokus nur den ganzen Inhalt vor
-  el.setAttribute('role', 'group');
-  el.setAttribute('aria-label', 'Karte');
-  el.setAttribute('aria-describedby', 'map-help');
+const POI_KINDS = {
+  stop: { pin: 'stop-pin', size: 28, lift: 14, z: 500 },
+  water: { pin: 'water-pin', size: 32, lift: 11, z: 300, hit: true, icon: '💧' },
+  stay: { pin: 'stay-pin', size: 30, lift: 15, z: 700 },
+  search: { pin: 'search-pin', size: 24, lift: 12, z: 400 },
+};
+
+/** Marker eines Ortes: {lat, lon, icon?, warn?, title?, popup: HTMLElement} */
+function poiMarker(kind, p) {
+  const { pin, size, lift, z, hit, icon: fixed } = POI_KINDS[kind];
+  return named(L.marker([p.lat, p.lon], {
+    icon: L.divIcon({
+      className: hit ? 'marker-hit' : '', iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -lift],
+      html: `<div class="${pin}${p.warn ? ' warn' : ''}">${fixed ?? p.icon}</div>`,
+    }),
+    zIndexOffset: z,
+    title: p.title || '',
+  }), p.title).bindPopup(p.popup);
+}
+
+/** Leaflet-Steuerelemente mit deutschen Texten; Kartenstil und Ausschnitt werden gemerkt. */
+function addControls(map) {
   // Leaflets eigene Texte sind englisch; ein deutscher Screenreader läse sie mit deutscher Aussprache vor
   L.control.zoom({ position: 'topright', zoomInTitle: 'Vergrößern', zoomOutTitle: 'Verkleinern' }).addTo(map);
   map.attributionControl.setPrefix(String(map.attributionControl.options.prefix)
@@ -153,12 +165,15 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
     const c = map.getCenter();
     storage.set('view', { center: [c.lat, c.lng], zoom: map.getZoom() });
   });
-  map.on('click', e => onClick({ lat: e.latlng.lat, lon: e.latlng.lng }));
+}
 
-  // Popups per Tastatur: Öffnet ein per Tastatur fokussiertes Element das Popup (Listenzeile, Enter auf einem
-  // Marker), wandert der Fokus hinein – sonst läge sein Inhalt hinter dem ganzen Panel und allen Markern in der
-  // Tab-Reihenfolge, und niemand erführe, dass es aufging. Escape schließt es, der Fokus geht zurück zum Auslöser.
-  // Mit Maus oder Finger (kein :focus-visible) bleibt der Fokus, wo er ist.
+/**
+ * Popups per Tastatur: Öffnet ein per Tastatur fokussiertes Element das Popup (Listenzeile, Enter auf einem
+ * Marker), wandert der Fokus hinein – sonst läge sein Inhalt hinter dem ganzen Panel und allen Markern in der
+ * Tab-Reihenfolge, und niemand erführe, dass es aufging. Escape schließt es, der Fokus geht zurück zum Auslöser.
+ * Mit Maus oder Finger (kein :focus-visible) bleibt der Fokus, wo er ist.
+ */
+function keyboardPopups(map, el) {
   let popupOpener = null;
   map.on('popupopen', e => {
     const box = e.popup.getElement();
@@ -185,20 +200,60 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
       map.closePopup();
     }
   });
+}
+
+/**
+ * @param {HTMLElement} el
+ * @param {{onClick: (p: {lat: number, lon: number}) => void, onMarkerDrag: Function,
+ *   onRouteHover?: (p: {lat: number, lon: number} | null) => void}} handlers
+ */
+export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }) {
+  const view = storage.get('view', { center: [51.1657, 10.4515], zoom: 6 });
+  // Auch Zoomen per Mausrad/Knopf springt dann, statt zu animieren (gilt ab dem nächsten Laden der Seite)
+  const calm = reduceMotion.matches ? { zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false } : {};
+  const map = L.map(el, { zoomControl: false, ...calm }).setView(view.center, view.zoom);
+  // Die Karte ist fokussierbar (Leaflet: Pfeiltasten verschieben, +/− zoomt) – mit Namen und Bedienhinweis
+  // (#map-help in index.html), sonst läse ein Screenreader beim Fokus nur den ganzen Inhalt vor
+  el.setAttribute('role', 'group');
+  el.setAttribute('aria-label', 'Karte');
+  el.setAttribute('aria-describedby', 'map-help');
+  addControls(map);
+  map.on('click', e => onClick({ lat: e.latlng.lat, lon: e.latlng.lng }));
+  keyboardPopups(map, el);
 
   const markerLayer = L.layerGroup().addTo(map);
   const routeLayer = L.layerGroup().addTo(map);
-  const waterMarkers = new Map();
-  const stopMarkers = new Map();
   const stayLayer = L.layerGroup().addTo(map);
-  const stayMarkers = new Map();
-  const searchMarkers = new Map();
-
   // Verpflegung, Trinkwasser und Suchtreffer liegen gemeinsam in poiLayer: Auf kleinen Zoomstufen fasst
   // refreshPois nahe Marker zu einem zusammen (sie überdeckten sich sonst, v. a. in Städten). Start, Ziel und
   // Zwischenstopps bleiben immer einzeln – sie werden gezogen; Unterkünfte sind wenige und liegen weit auseinander.
   const poiLayer = L.layerGroup().addTo(map);
-  const poiSources = { stop: stopMarkers, water: waterMarkers, search: searchMarkers };
+  /** Marker je Art: id → Marker */
+  const markersOf = { stop: new Map(), water: new Map(), search: new Map(), stay: new Map() };
+  const poiSources = { stop: markersOf.stop, water: markersOf.water, search: markersOf.search };
+
+  /** Orte einer Art ersetzen; Unterkünfte liegen in stayLayer (nie zusammengefasst), die übrigen in poiLayer. */
+  function setPois(kind, items) {
+    const markers = markersOf[kind];
+    const layer = kind === 'stay' ? stayLayer : poiLayer;
+    for (const m of markers.values()) layer.removeLayer(m);
+    markers.clear();
+    for (const p of items) {
+      const marker = poiMarker(kind, p);
+      markers.set(p.id, marker);
+      if (kind === 'stay') marker.addTo(stayLayer);
+    }
+    if (kind !== 'stay') refreshPois();
+  }
+
+  /** Zu einem Ort springen und sein Popup öffnen – auch wenn er gerade in einem zusammengefassten Marker steckt. */
+  function openPoi(kind, id, zoom) {
+    const m = markersOf[kind].get(id);
+    if (!m) return;
+    map.setView(m.getLatLng(), Math.max(map.getZoom(), zoom), motion());
+    if (kind !== 'stay') reveal(m);
+    m.openPopup();
+  }
 
   function refreshPois() {
     const zoom = map.getZoom();
@@ -319,109 +374,21 @@ export function createMap(el, { onClick, onMarkerDrag, onRouteHover = () => {} }
       hit().addTo(routeLayer);
     },
 
-    /** stops: [{id, lat, lon, icon, warn, title?, popup: HTMLElement}] */
-    setStops(stops = []) {
-      for (const m of stopMarkers.values()) poiLayer.removeLayer(m);
-      stopMarkers.clear();
-      for (const s of stops) {
-        const marker = named(L.marker([s.lat, s.lon], {
-          icon: L.divIcon({
-            className: '', iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -14],
-            html: `<div class="stop-pin${s.warn ? ' warn' : ''}">${s.icon}</div>`,
-          }),
-          zIndexOffset: 500,
-          title: s.title || '',
-        }), s.title).bindPopup(s.popup);
-        stopMarkers.set(s.id, marker);
-      }
-      refreshPois();
-    },
+    /** Verpflegungsstopps: [{id, lat, lon, icon, warn, title?, popup: HTMLElement}] */
+    setStops(stops = []) { setPois('stop', stops); },
+    /** Trinkwasser an der Route (nur angezeigt, kleiner als die Stopps): [{id, lat, lon, warn, title, popup}] */
+    setWater(points = []) { setPois('water', points); },
+    /** Gewählte Unterkünfte einer Mehrtagestour: [{id, lat, lon, icon, title?, popup}] */
+    setStays(stays = []) { setPois('stay', stays); },
+    /** Suchtreffer entlang der Route: [{id, lat, lon, icon, title?, popup}] */
+    setSearchResults(results = []) { setPois('search', results); },
 
-    /** Trinkwasser an der Route (nur angezeigt, kleiner als die Stopps): [{id, lat, lon, warn, title, popup: HTMLElement}] */
-    setWater(points = []) {
-      for (const m of waterMarkers.values()) poiLayer.removeLayer(m);
-      waterMarkers.clear();
-      for (const w of points) {
-        const marker = named(L.marker([w.lat, w.lon], {
-          icon: L.divIcon({
-            className: 'marker-hit', iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -11],
-            html: `<div class="water-pin${w.warn ? ' warn' : ''}">💧</div>`,
-          }),
-          zIndexOffset: 300,
-          title: w.title || '',
-        }), w.title).bindPopup(w.popup);
-        waterMarkers.set(w.id, marker);
-      }
-      refreshPois();
-    },
-
-    openWater(id) {
-      const m = waterMarkers.get(id);
-      if (!m) return;
-      map.setView(m.getLatLng(), Math.max(map.getZoom(), 15), motion());
-      reveal(m);
-      m.openPopup();
-    },
-
-    /** Gewählte Unterkünfte einer Mehrtagestour: [{id, lat, lon, icon, title?, popup: HTMLElement}] */
-    setStays(stays = []) {
-      stayLayer.clearLayers();
-      stayMarkers.clear();
-      for (const s of stays) {
-        const marker = named(L.marker([s.lat, s.lon], {
-          icon: L.divIcon({
-            className: '', iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -15],
-            html: `<div class="stay-pin">${s.icon}</div>`,
-          }),
-          zIndexOffset: 700,
-          title: s.title || '',
-        }), s.title).bindPopup(s.popup).addTo(stayLayer);
-        stayMarkers.set(s.id, marker);
-      }
-    },
-
-    openStay(id) {
-      const m = stayMarkers.get(id);
-      if (!m) return;
-      map.setView(m.getLatLng(), Math.max(map.getZoom(), 14), motion());
-      m.openPopup();
-    },
-
-    /** Suchtreffer entlang der Route: [{id, lat, lon, icon, title?, popup: HTMLElement}] */
-    setSearchResults(results = []) {
-      for (const m of searchMarkers.values()) poiLayer.removeLayer(m);
-      searchMarkers.clear();
-      for (const s of results) {
-        const marker = named(L.marker([s.lat, s.lon], {
-          icon: L.divIcon({
-            className: '', iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -12],
-            html: `<div class="search-pin">${s.icon}</div>`,
-          }),
-          zIndexOffset: 400,
-          title: s.title || '',
-        }), s.title).bindPopup(s.popup);
-        searchMarkers.set(s.id, marker);
-      }
-      refreshPois();
-    },
-
-    openSearchResult(id) {
-      const m = searchMarkers.get(id);
-      if (!m) return;
-      map.setView(m.getLatLng(), Math.max(map.getZoom(), 15), motion());
-      reveal(m);
-      m.openPopup();
-    },
+    openStop(id) { openPoi('stop', id, 14); },
+    openWater(id) { openPoi('water', id, 15); },
+    openStay(id) { openPoi('stay', id, 14); },
+    openSearchResult(id) { openPoi('search', id, 15); },
 
     closePopup() { map.closePopup(); },
-
-    openStop(id) {
-      const m = stopMarkers.get(id);
-      if (!m) return;
-      map.setView(m.getLatLng(), Math.max(map.getZoom(), 14), motion());
-      reveal(m);
-      m.openPopup();
-    },
 
     /** `bottom`: unten von Blatt und Höhenprofil verdeckte Höhe (px, nur Handy) – dort nicht hineinlegen. */
     fitRoute(coords, { bottom = 0 } = {}) {

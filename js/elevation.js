@@ -1,6 +1,6 @@
 import { CATEGORIES, segmentAt, segmentsFor } from './surfaces.js';
 import { gradeAt } from './climbs.js';
-import { formatNumber } from './utils.js';
+import { formatNumber, indexAtDistance } from './utils.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const M = { top: 22, right: 10, bottom: 28, left: 42 };
@@ -21,13 +21,71 @@ function niceStep(range, targetTicks) {
   return [1, 2, 5, 10].map(f => f * pow).find(s => s >= raw);
 }
 
-function indexAt(cum, d) {
-  let lo = 0, hi = cum.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (cum[mid] < d) lo = mid + 1; else hi = mid;
+/**
+ * Bereich der Höhenachse: {min, max, step}. Angepasst an die Daten, mit mindestens 20 m Spanne ab dem auf 10 m
+ * abgerundeten Tiefstwert – sonst wird eine flache Strecke (Bremen: 1–5 m) zur Linie auf einer Achse von −40 bis
+ * +40 m. Unter 0 nur, wenn die Route wirklich unter dem Meeresspiegel liegt (Niederlande).
+ */
+function heightAxis(coords) {
+  // Schleife statt Math.min(...eles): Bei sehr langen Touren (über ~100 000 Punkte) wären das zu viele Argumente
+  let lowest = Infinity, highest = -Infinity;
+  for (const c of coords) {
+    if (c[2] == null) continue;
+    if (c[2] < lowest) lowest = c[2];
+    if (c[2] > highest) highest = c[2];
   }
-  return lo;
+  let min = lowest, max = highest;
+  if (max - min < 20) { min = Math.floor(min / 10) * 10; max = Math.max(min + 20, max); }
+  const step = niceStep(max - min, 3);
+  min = Math.floor(min / step) * step;
+  max = Math.ceil(max / step) * step;
+  if (lowest >= 0) min = Math.max(0, min);
+  return { min, max, step };
+}
+
+/** Profillinie als SVG-Pfad, höchstens ein Punkt pro Pixel; Lücken in den Höhen übernehmen den letzten Wert. */
+function profilePath(coords, cum, x, y, width) {
+  const stride = Math.max(1, Math.floor(coords.length / width));
+  let path = '';
+  let lastEle = coords.find(c => c[2] != null)?.[2];
+  for (let i = 0; i < coords.length; i += stride) {
+    lastEle = coords[i][2] ?? lastEle;
+    path += `${path ? 'L' : 'M'}${x(cum[i]).toFixed(1)},${y(lastEle).toFixed(1)}`;
+  }
+  const last = coords.length - 1;
+  return path + `L${x(cum[last]).toFixed(1)},${y(coords[last][2] ?? lastEle).toFixed(1)}`;
+}
+
+/** Zusammenhängende Abschnitte gleicher Kategorie (Untergrund, Wegtyp oder Steigung) in Bildkoordinaten. */
+function categoryRuns(segments, kind, cum, x) {
+  const runs = [];
+  for (let k = 0; k < segments.length;) {
+    const key = segments[k][kind];
+    const from = segments[k].from;
+    while (k < segments.length && segments[k][kind] === key) k++;
+    runs.push({ key, x: x(cum[from]), width: Math.max(0.5, x(cum[segments[k - 1].to]) - x(cum[from])) });
+  }
+  return runs;
+}
+
+/**
+ * Steigung: Fläche unter der Kurve je Klasse in Farbe und – je steiler, desto dichter – schraffiert, damit nicht
+ * die Farbe allein die Steigung zeigt.
+ */
+function drawGradeFill(svg, area, runs, top, height) {
+  const defs = el('defs', {}, svg);
+  el('path', { d: area }, el('clipPath', { id: 'grade-area' }, defs));
+  for (const [n, gap] of [[1, 9], [2, 6], [3, 3.5]]) {
+    const p = el('pattern', { id: `grade-hatch-${n}`, patternUnits: 'userSpaceOnUse', width: gap, height: gap, patternTransform: 'rotate(45)' }, defs);
+    el('line', { class: 'hatch', x1: 0, y1: 0, x2: 0, y2: gap }, p);
+  }
+  const fills = el('g', { 'clip-path': 'url(#grade-area)' }, svg);
+  for (const run of runs) {
+    const cat = CATEGORIES.grade[run.key];
+    const box = { x: run.x, y: top, width: run.width, height };
+    el('rect', { ...box, class: 'grade-fill', fill: cat.color }, fills);
+    if (cat.pattern) el('rect', { ...box, fill: `url(#grade-hatch-${cat.pattern})` }, fills);
+  }
 }
 
 const km = m => formatNumber(m / 1000, { maximumFractionDigits: 1 });
@@ -104,24 +162,7 @@ export function createElevation(container, { onHover }) {
     const w = W - m.left - m.right, h = H - m.top - m.bottom;
     if (w < 20 || h < 20) return;
 
-    // Schleife statt Math.min(...eles): Bei sehr langen Touren (über ~100 000 Punkte) wären das zu viele Argumente
-    let lowest = Infinity, highest = -Infinity, firstEle = null;
-    for (const c of coords) {
-      if (c[2] == null) continue;
-      firstEle ??= c[2];
-      if (c[2] < lowest) lowest = c[2];
-      if (c[2] > highest) highest = c[2];
-    }
-    let min = lowest, max = highest;
-    // Achse an die Daten anpassen, mit mindestens 20 m Spanne ab dem auf 10 m abgerundeten Tiefstwert –
-    // sonst wird eine flache Strecke (Bremen: 1–5 m) zur Linie auf einer Achse von −40 bis +40 m
-    if (max - min < 20) { min = Math.floor(min / 10) * 10; max = Math.max(min + 20, max); }
-    const yStep = niceStep(max - min, 3);
-    min = Math.floor(min / yStep) * yStep;
-    max = Math.ceil(max / yStep) * yStep;
-    // Unter 0 nur, wenn die Route wirklich unter dem Meeresspiegel liegt (Niederlande)
-    if (lowest >= 0) min = Math.max(0, min);
-
+    const { min, max, step: yStep } = heightAxis(coords);
     const x = d => m.left + (d / distance) * w;
     const y = e => m.top + h - ((e - min) / (max - min)) * h;
 
@@ -137,46 +178,13 @@ export function createElevation(container, { onHover }) {
       el('text', { class: 'axis', x: x(d), y: H - 3, 'text-anchor': d === 0 ? 'start' : 'middle' }, svg).textContent = `${d / 1000} km`;
     }
 
-    // Auf höchstens einen Punkt pro Pixel reduzieren
-    const stride = Math.max(1, Math.floor(coords.length / w));
-    let path = '';
-    let lastEle = firstEle;
-    for (let i = 0; i < coords.length; i += stride) {
-      lastEle = coords[i][2] ?? lastEle;
-      path += `${path ? 'L' : 'M'}${x(cum[i]).toFixed(1)},${y(lastEle).toFixed(1)}`;
-    }
-    const last = coords.length - 1;
-    path += `L${x(cum[last]).toFixed(1)},${y(coords[last][2] ?? lastEle).toFixed(1)}`;
+    const path = profilePath(coords, cum, x, y, w);
     const area = `${path}L${x(distance)},${y(min)}L${x(0)},${y(min)}Z`;
     el('path', { class: 'area', d: area }, svg);
 
-    // Zusammenhängende Abschnitte gleicher Kategorie (Untergrund, Wegtyp oder Steigung)
     const segments = segmentsFor(route, kind);
-    const runs = [];
-    for (let k = 0; k < segments.length;) {
-      const key = segments[k][kind];
-      const from = segments[k].from;
-      while (k < segments.length && segments[k][kind] === key) k++;
-      runs.push({ key, x: x(cum[from]), width: Math.max(0.5, x(cum[segments[k - 1].to]) - x(cum[from])) });
-    }
-
-    // Steigung: Fläche unter der Kurve je Klasse in Farbe und – je steiler, desto dichter – schraffiert,
-    // damit nicht die Farbe allein die Steigung zeigt
-    if (kind === 'grade') {
-      const defs = el('defs', {}, svg);
-      el('path', { d: area }, el('clipPath', { id: 'grade-area' }, defs));
-      for (const [n, gap] of [[1, 9], [2, 6], [3, 3.5]]) {
-        const p = el('pattern', { id: `grade-hatch-${n}`, patternUnits: 'userSpaceOnUse', width: gap, height: gap, patternTransform: 'rotate(45)' }, defs);
-        el('line', { class: 'hatch', x1: 0, y1: 0, x2: 0, y2: gap }, p);
-      }
-      const fills = el('g', { 'clip-path': 'url(#grade-area)' }, svg);
-      for (const run of runs) {
-        const cat = CATEGORIES.grade[run.key];
-        const box = { x: run.x, y: m.top, width: run.width, height: h };
-        el('rect', { ...box, class: 'grade-fill', fill: cat.color }, fills);
-        if (cat.pattern) el('rect', { ...box, fill: `url(#grade-hatch-${cat.pattern})` }, fills);
-      }
-    }
+    const runs = categoryRuns(segments, kind, cum, x);
+    if (kind === 'grade') drawGradeFill(svg, area, runs, m.top, h);
     el('path', { class: 'line', d: path }, svg);
 
     // Farbband unter dem Profil
@@ -192,7 +200,7 @@ export function createElevation(container, { onHover }) {
     container.append(tip);
 
     place = d => {
-      const i = indexAt(cum, Math.min(distance, Math.max(0, d)));
+      const i = indexAtDistance(route, Math.min(distance, Math.max(0, d)));
       const [lat, lon, ele] = coords[i];
       cursor.setAttribute('x1', x(cum[i]));
       cursor.setAttribute('x2', x(cum[i]));
