@@ -18,7 +18,7 @@ import {
   formatClock, formatWeekday, osmNoteUrl, clampInt,
 } from '../utils.js';
 import { state, on, departureDate, originRoute } from './state.js';
-import { $, $$, textLines, externalLink, linkButton, flashStatus, osmLinks } from './dom.js';
+import { $, $$, el, textLines, externalLink, linkButton, flashStatus, osmLinks, popupBox } from './dom.js';
 import { map } from './mapView.js';
 import { replanStops } from './pipeline.js';
 import { setDeparture } from './supplyView.js';
@@ -119,8 +119,7 @@ function dayRow(r, plan, s, i, start, time) {
     + (plan.fixed[i] ? ' · fest' : '');
   const gpx = linkButton('Als GPX', () => exportGpx([dayFile(s)]));
   gpx.setAttribute('aria-label', `Tag ${s.day} als GPX exportieren`);
-  const actions = document.createElement('div');
-  actions.className = 'day-links';
+  const actions = el('div', 'day-links');
   actions.append(gpx);
   // Der letzte Tag ist immer der Rest der Strecke – seine Länge ergibt sich aus den anderen
   if (i < plan.days - 1) {
@@ -134,10 +133,7 @@ function dayRow(r, plan, s, i, start, time) {
   // Tageslicht: Sonnenaufgang am Start des Tages, Sonnenuntergang an seinem Ziel
   const light = daylightNote(time, r.coords[indexAtDistance(r, s.from)], r.coords[indexAtDistance(r, s.to)]);
   if (light) {
-    const sun = document.createElement('small');
-    sun.className = 'sun' + (light.warn ? ' warn' : '');
-    sun.textContent = light.text;
-    li.append(sun);
+    li.append(el('small', 'sun' + (light.warn ? ' warn' : ''), light.text));
   }
   li.append(actions);
   // Nacht nach diesem Tag (bzw. am Ziel nach dem letzten Tag)
@@ -294,11 +290,8 @@ function optionLabel(o) {
 
 function stayPopup(night) {
   const { poi, price, fit, offset } = night.chosen;
-  const el = document.createElement('div');
-  el.className = 'stop-popup';
-  const title = document.createElement('b');
-  title.textContent = `${STAY_TYPES[poi.type].icon} ${poi.name || STAY_TYPES[poi.type].label}`;
-  el.append(title, ...textLines([
+  const box = popupBox(`${STAY_TYPES[poi.type].icon} ${poi.name || STAY_TYPES[poi.type].label}`);
+  box.append(...textLines([
     `${night.end ? 'Übernachtung am Ziel' : `Nacht ${night.index + 1}`} · ${formatDayDate(night.date)}`,
     `${STAY_TYPES[poi.type].label}${poi.tags.stars ? ` · ${poi.tags.stars}★` : ''} · ${(offset / 1000).toFixed(1)} km neben der Route`,
     `${priceLabel(price)} – ${FIT_LABEL[fit]}`,
@@ -306,7 +299,7 @@ function stayPopup(night) {
     ...(poi.tags.opening_hours ? [`Öffnungszeiten: ${poi.tags.opening_hours}`] : []),
     ...(poi.type === 'shelter' ? [shelterFacts(poi), SHELTER_NOTE].filter(Boolean) : []),
   ]), osmLinks(poi, bookingLinks(night))); // Preis/Webseite + In OSM ansehen, Bearbeiten, Fehler melden
-  return el;
+  return box;
 }
 
 /** Preis prüfen und Webseite der gewählten Unterkunft → [Link]. */

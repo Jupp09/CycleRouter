@@ -8,7 +8,7 @@ import { arrivalAt } from '../timeline.js';
 import { haversine, debounce, formatClock } from '../utils.js';
 import { announce } from '../announce.js';
 import { state, on, departureDate } from './state.js';
-import { $, rowButton, span, popupButton, listAction, osmLinks, missingHoursLine } from './dom.js';
+import { $, el, rowButton, span, popupBox, popupButton, listAction, osmLinks, missingHoursLine } from './dom.js';
 import { map } from './mapView.js';
 import { addVia } from './waypoints.js';
 
@@ -54,20 +54,16 @@ function openingText(res) {
 }
 
 function alongPopup(res) {
-  const el = document.createElement('div');
-  el.className = 'stop-popup';
-  const title = document.createElement('b');
-  title.textContent = `${PLACE_CATEGORIES[res.category].icon} ${res.name}`;
-  el.append(title);
-  const line = (text, cls) => { const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = text; el.append(d); };
+  const box = popupBox(`${PLACE_CATEGORIES[res.category].icon} ${res.name}`);
+  const line = (text, cls = '') => box.append(el('div', cls, text));
   if (res.detail) line(res.detail, 'muted');
   line(openingText(res).text);
   if (res.opening.hours) line(`Öffnungszeiten${res.opening.typical ? ' (typisch)' : ''}: ${res.opening.hours}`, 'muted');
   // Nur wenn der OSM-Eintrag bekannt ist (Cache) – ein Photon-Treffer allein sagt nichts über Öffnungszeiten
-  if (PLACE_CATEGORIES[res.category].hours && res.poi && !res.poi.tags.opening_hours) el.append(missingHoursLine());
+  if (PLACE_CATEGORIES[res.category].hours && res.poi && !res.poi.tags.opening_hours) box.append(missingHoursLine());
   line(`km ${(res.along / 1000).toFixed(1)} · ${offsetText(res)}`);
-  el.append(osmLinks(res), popupButton('Als Zwischenstopp hinzufügen', () => addAlongResult(res)));
-  return el;
+  box.append(osmLinks(res), popupButton('Als Zwischenstopp hinzufügen', () => addAlongResult(res)));
+  return box;
 }
 
 function addAlongResult(res) {

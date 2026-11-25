@@ -7,7 +7,7 @@ import { regionAt, regionLabel } from '../regions.js';
 import { holidayAt } from '../holidays.js';
 import { storage, formatKm, formatM, formatClock, formatWeekday, formatDayDate } from '../utils.js';
 import { state, on, defaultDeparture } from './state.js';
-import { $, textLines, rowButton, span, popupButton, listAction, osmLinks, missingHoursLine, flashStatus } from './dom.js';
+import { $, el, textLines, rowButton, span, popupBox, popupButton, listAction, osmLinks, missingHoursLine, flashStatus } from './dom.js';
 import { addVia } from './waypoints.js';
 import { map } from './mapView.js';
 import { syncUi } from './controls.js';
@@ -38,10 +38,7 @@ function hoursText(s) {
 }
 
 function stopPopup(s) {
-  const el = document.createElement('div');
-  el.className = 'stop-popup';
-  const title = document.createElement('b');
-  title.textContent = `${s.icon} ${s.poi.name || s.typeLabel}`;
+  const box = popupBox(`${s.icon} ${s.poi.name || s.typeLabel}`);
   const lines = [
     `${s.typeLabel} · km ${(s.along / 1000).toFixed(1)}`,
     `Ankunft ca. ${formatWeekday(s.eta)} ${formatClock(s.eta)} – ${STATE_LABELS[s.state]}`,
@@ -50,11 +47,11 @@ function stopPopup(s) {
   if (hours) lines.push(hours);
   if (s.region) lines.push(regionLabel(s.region, homeCountry()));
   if (s.holiday) lines.push(`🎉 Feiertag: ${s.holiday.name}`);
-  el.append(title, ...textLines(lines));
-  if (!s.poi.tags.opening_hours) el.append(missingHoursLine()); // auch bei typischen Zeiten der Kette
-  el.append(osmLinks(s.poi),
+  box.append(...textLines(lines));
+  if (!s.poi.tags.opening_hours) box.append(missingHoursLine()); // auch bei typischen Zeiten der Kette
+  box.append(osmLinks(s.poi),
     popupButton('Als festen Zwischenstopp übernehmen', () => fixStop(s)));
-  return el;
+  return box;
 }
 
 /**
@@ -76,18 +73,29 @@ function addWater(w) {
 const waterId = w => `${w.poi.id}@${Math.round(w.along)}`;
 
 function waterPopup(w) {
-  const el = document.createElement('div');
-  el.className = 'stop-popup';
-  const title = document.createElement('b');
-  title.textContent = `💧 ${w.poi.name || 'Trinkwasser'}`;
+  const box = popupBox(`💧 ${w.poi.name || 'Trinkwasser'}`);
   const lines = [
     `Trinkwasser · km ${(w.along / 1000).toFixed(1)} · ${formatM(w.offset)} neben der Route`,
     `Ankunft ca. ${formatWeekday(w.eta)} ${formatClock(w.eta)} – ${STATE_LABELS[w.state]}`,
   ];
   if (w.poi.tags.opening_hours) lines.push(`Öffnungszeiten: ${w.poi.tags.opening_hours}`);
-  el.append(title, ...textLines(lines), osmLinks(w.poi),
+  box.append(...textLines(lines), osmLinks(w.poi),
     popupButton('Als Zwischenstopp hinzufügen', () => addWater(w)));
-  return el;
+  return box;
+}
+
+/**
+ * Inhalt einer Listenzeile für Stopps und Trinkwasser: Symbol (für Screenreader stumm – die Art steht im Text),
+ * Name mit Detailzeile (gewarnt, wenn der Öffnungsstand unsicher ist) und rechts „km · ca. Uhrzeit“.
+ */
+function placeParts(icon, name, detail, item) {
+  const ico = span('ico', icon);
+  ico.setAttribute('aria-hidden', 'true');
+  const main = span('main');
+  main.append(span('name', name), el('small', isWarn(item) ? 'warn' : '', detail));
+  const when = span('when');
+  when.append(el('b', '', formatKm(item.along)), el('small', '', `ca. ${formatClock(item.eta)}`));
+  return [ico, main, when];
 }
 
 /** Trinkwasser: kleine Marker (ohne Umweg, nur zur Info) und eine einklappbare Liste. */
@@ -104,22 +112,9 @@ function renderWater(r) {
   if (box.hidden) return;
   $('#water-count').textContent = water.length ? `(${water.length})` : '– keine gefunden';
   $('#water-list').replaceChildren(...water.map(w => {
-    const li = document.createElement('li');
-    const ico = span('ico', '💧');
-    ico.setAttribute('aria-hidden', 'true');
-    const main = span('main');
-    const detail = document.createElement('small');
-    detail.textContent = `${formatM(w.offset)} neben der Route · ${STATE_LABELS[w.state]}`;
-    if (isWarn(w)) detail.className = 'warn';
-    main.append(span('name', w.poi.name || 'Trinkwasser'), detail);
-    const when = span('when');
-    const km = document.createElement('b');
-    km.textContent = formatKm(w.along);
-    const clock = document.createElement('small');
-    clock.textContent = `ca. ${formatClock(w.eta)}`;
-    when.append(km, clock);
-    li.className = 'with-action';
-    li.append(rowButton([ico, main, when], () => map.openWater(waterId(w))),
+    const li = el('li', 'with-action');
+    const parts = placeParts('💧', w.poi.name || 'Trinkwasser', `${formatM(w.offset)} neben der Route · ${STATE_LABELS[w.state]}`, w);
+    li.append(rowButton(parts, () => map.openWater(waterId(w))),
       listAction('+', `${w.poi.name || 'Trinkwasser'} bei km ${Math.round(w.along / 1000)} als Zwischenstopp hinzufügen`, () => addWater(w)));
     return li;
   }));
@@ -147,24 +142,11 @@ function renderStops() {
   renderRegions(r);
 
   $('#stop-list').replaceChildren(...stops.map(s => {
-    const li = document.createElement('li');
-    const ico = span('ico', s.icon);
-    ico.setAttribute('aria-hidden', 'true'); // Typ steht ohnehin im Text
-    const main = span('main');
-    const detail = document.createElement('small');
-    detail.textContent = `${s.poi.name ? s.typeLabel + ' · ' : ''}${STATE_LABELS[s.state]}${s.holiday ? ` · 🎉 ${s.holiday.name}` : ''}`;
-    if (isWarn(s)) detail.className = 'warn';
-    main.append(span('name', s.poi.name || s.typeLabel), detail);
-    const when = span('when');
-    const km = document.createElement('b');
-    km.textContent = formatKm(s.along);
-    const clock = document.createElement('small');
-    clock.textContent = `ca. ${formatClock(s.eta)}`;
-    when.append(km, clock);
+    const li = el('li', 'with-action');
+    const detail = `${s.poi.name ? s.typeLabel + ' · ' : ''}${STATE_LABELS[s.state]}${s.holiday ? ` · 🎉 ${s.holiday.name}` : ''}`;
     // Ganze Zeile als Knopf: zeigt den Stopp auf der Karte (per Tastatur erreichbar)
-    const row = rowButton([ico, main, when], () => map.openStop(s.poi.id));
+    const row = rowButton(placeParts(s.icon, s.poi.name || s.typeLabel, detail, s), () => map.openStop(s.poi.id));
     row.title = hoursText(s) || '';
-    li.className = 'with-action';
     li.append(row, listAction('📌', `${s.poi.name || s.typeLabel} als festen Zwischenstopp übernehmen`, () => fixStop(s)));
     return li;
   }));

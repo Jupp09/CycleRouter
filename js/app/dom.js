@@ -99,69 +99,69 @@ export function osmLinks(poi, extra = []) {
   return box;
 }
 
-/** Hinweiszeile, wenn ein Laden/Café in OSM keine eigenen Öffnungszeiten hat. */
-export function missingHoursLine() {
-  const d = document.createElement('div');
-  d.className = 'muted';
-  d.textContent = 'Öffnungszeiten fehlen in OpenStreetMap – über „Bearbeiten“ nachtragen.';
-  return d;
+/**
+ * Element mit Klasse und Text – Text immer über textContent, also auch für OSM-, Nutzer- und Serverdaten geeignet.
+ * @param {string} tag @param {string} [className] @param {string} [text] @returns {any}
+ */
+export function el(tag, className = '', text = '') {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text) node.textContent = text;
+  return node;
 }
 
-/** Knopf im Link-Stil (für Nebenaktionen in Hinweiszeilen). */
-export function linkButton(text, onClick, title = '') {
-  const b = document.createElement('button');
+/** <span> mit Klasse und Text. */
+export function span(className, text = '') { return el('span', className, text); }
+
+/** Knopf (type="button", schickt kein Formular ab) mit Klickaktion. */
+function button(className, text, onClick) {
+  const b = el('button', className, text);
   b.type = 'button';
-  b.className = 'link-btn inline';
-  b.textContent = text;
-  if (title) b.title = title;
   b.addEventListener('click', onClick);
   return b;
 }
 
+/** Hinweiszeile, wenn ein Laden/Café in OSM keine eigenen Öffnungszeiten hat. */
+export function missingHoursLine() {
+  return el('div', 'muted', 'Öffnungszeiten fehlen in OpenStreetMap – über „Bearbeiten“ nachtragen.');
+}
+
+/** Knopf im Link-Stil (für Nebenaktionen in Hinweiszeilen). */
+export function linkButton(text, onClick, title = '') {
+  const b = button('link-btn inline', text, onClick);
+  if (title) b.title = title;
+  return b;
+}
+
 /** Einfache Textzeilen als <div>-Elemente (z. B. für Popups). */
-export const textLines = lines => lines.map(t => { const d = document.createElement('div'); d.textContent = t; return d; });
+export function textLines(lines) { return lines.map(t => el('div', '', t)); }
+
+/** Inhalt eines Karten-Popups: Rahmen mit fettem Titel (Symbol und Name); der Rest wird angehängt. */
+export function popupBox(title) {
+  const box = el('div', 'stop-popup');
+  box.append(el('b', '', title));
+  return box;
+}
 
 /**
  * Listenzeile als Knopf (per Tastatur erreichbar). `parts`: Inhalt als <span>/<small> – ein <button> darf
  * keine <div> enthalten.
  */
 export function rowButton(parts, onClick) {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'row';
+  const b = button('row', '', onClick);
   b.append(...parts);
-  b.addEventListener('click', onClick);
   return b;
 }
 
 /** Hauptknopf in einem Karten-Popup (z. B. „Als Zwischenstopp hinzufügen“). */
-export function popupButton(text, onClick) {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'primary';
-  b.textContent = text;
-  b.addEventListener('click', onClick);
-  return b;
-}
+export function popupButton(text, onClick) { return button('primary', text, onClick); }
 
 /** Kleiner Knopf rechts in einer Listenzeile; `label` ist der vollständige Name für Screenreader. */
 export function listAction(text, label, onClick) {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'add';
-  b.textContent = text;
+  const b = button('add', text, onClick);
   b.title = label;
   b.setAttribute('aria-label', label);
-  b.addEventListener('click', onClick);
   return b;
-}
-
-/** <span> mit Klasse und Text. */
-export function span(className, text = '') {
-  const s = document.createElement('span');
-  if (className) s.className = className;
-  s.textContent = text;
-  return s;
 }
 
 // ---------- Umschalter (role="radiogroup") ----------
