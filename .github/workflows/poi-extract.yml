@@ -8,15 +8,22 @@ on:
   schedule:
     - cron: '23 3 * * 1' # montags früh – Geofabrik aktualisiert die Auszüge nachts
   workflow_dispatch:
+    inputs:
+      attempt:
+        description: Versuch (startet sich selbst neu, wenn Geofabrik den Rechner ablehnt)
+        default: '1'
   push:
     branches: [main]
     paths:
       - scripts/build-poi-extract.mjs
+      - scripts/poly.mjs
+      - server/lines.mjs
       - js/poiSource.js
       - .github/workflows/poi-extract.yml
 
 permissions:
   contents: write # Release-Dateien hochladen
+  actions: write  # Neustart auf einem anderen Rechner, wenn Geofabrik diesen ablehnt
 
 concurrency:
   group: poi-extract
@@ -38,7 +45,21 @@ jobs:
 
       - name: Auszüge laden und aufbereiten
         # Ganz Europa liegt bis zum Schreiben im Speicher (einige Millionen Orte)
+        env:
+          EXTRACT_ATTEMPT: ${{ inputs.attempt || '1' }}
         run: node --max-old-space-size=12288 scripts/build-poi-extract.mjs --out dist --work "$RUNNER_TEMP/extract"
+
+      # Geofabrik lehnt manche Runner-Rechner ab (siehe build-poi-extract.mjs). Das Skript legt dann dist/retry an
+      # und bricht ab; ein neuer Lauf bekommt meist einen anderen Rechner. Höchstens drei Versuche – im letzten
+      # lädt das Skript die übrigen Länder vom Spiegel statt abzubrechen.
+      - name: Neuer Versuch auf einem anderen Rechner
+        if: failure() && hashFiles('dist/retry') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEXT: ${{ (inputs.attempt || '1') == '1' && '2' || '3' }}
+        run: |
+          echo "::warning::$(cat dist/retry) – starte Versuch $NEXT"
+          gh workflow run poi-extract.yml --ref "${{ github.ref_name }}" -f attempt="$NEXT"
 
       - name: Release „poi-data“ aktualisieren
         env:

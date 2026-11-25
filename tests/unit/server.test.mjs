@@ -12,6 +12,7 @@ import { cleanRoute, cleanSettings } from '../../server/accountApi.mjs';
 import { contentSecurityPolicy } from '../../server/security.mjs';
 import { moduleGraph } from '../../server/static.mjs';
 import { lines } from '../../server/lines.mjs';
+import { parsePoly } from '../../scripts/poly.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const req = (peer, headers = {}) => ({ socket: { remoteAddress: peer }, headers });
@@ -151,4 +152,15 @@ test('lines: trennt nur an "\\n", auch über Blockgrenzen und in Mehrbyte-Zeiche
   const tail = [];
   for await (const line of lines([Buffer.from('a\nb')])) tail.push(line);
   assert.deepEqual(tail, ['a', 'b']);
+});
+
+test('parsePoly: .poly des Spiegels → MultiPolygon mit Löchern', () => {
+  const poly = ['testland', '1', '  0 0', '  10 0', '  10 10', '  0 10', 'END', '!2', '  4 4', '  6 4', '  6 6', 'END',
+    '3', '  20 0', '  21 0', '  21 1', 'END', 'END', ''].join('\r\n');
+  const g = parsePoly(poly);
+  assert.equal(g.type, 'MultiPolygon');
+  assert.equal(g.coordinates.length, 2);
+  assert.equal(g.coordinates[0].length, 2, 'Loch gehört zum ersten Polygon');
+  assert.deepEqual(g.coordinates[0][1][0], [4, 4]);
+  assert.throws(() => parsePoly('leer\nEND\n'));
 });

@@ -21,6 +21,7 @@ import { spawn } from 'node:child_process';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { lines as readLines } from '../server/lines.mjs';
+import { parsePoly } from './poly.mjs';
 import { createGzip } from 'node:zlib';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -117,6 +118,58 @@ async function readGeojsonSeq(file) {
   return n;
 }
 
+// ---------- Laden (Geofabrik, notfalls Spiegel) ----------
+
+// Geofabrik lehnt manche Rechner der GitHub-Runner ab (ECONNREFUSED oder 404 für alles, gesehen bei Runnern
+// in AWS-Rechenzentren). Scheitern so viele Länder nacheinander, gilt dieser Rechner als gesperrt: Der Lauf
+// bricht dann ab und startet sich auf einem anderen Rechner neu (Workflow, EXTRACT_ATTEMPT). Im letzten
+// Versuch kommen die übrigen Länder vom Spiegel download.openstreetmap.fr – soweit er sie unter demselben
+// Namen führt (etwa die Hälfte). Seine Auszüge haben eigene Grenzen, daher gilt für die Abdeckung dann
+// sein .poly statt des Geofabrik-Polygons; sonst stünden Zellen mit Lücken als „keine Orte“ im Paket.
+const BLOCKED_AFTER = 3;
+const ATTEMPT = Number(process.env.EXTRACT_ATTEMPT) || 1;
+const LAST_ATTEMPT = Number(process.env.EXTRACT_MAX_ATTEMPTS) || 3;
+const MIRROR = 'https://download.openstreetmap.fr';
+let geofabrikFailures = 0; // nacheinander
+let geofabrikBlocked = false;
+
+/** Für den Workflow: Abbruch, weil dieser Rechner nicht laden darf – ein neuer Lauf soll es woanders versuchen. */
+class BlockedError extends Error {}
+
+async function blocked(reason) {
+  await mkdir(OUT, { recursive: true });
+  await writeFile(join(OUT, 'retry'), reason);
+  return new BlockedError(`${reason} – Versuch ${ATTEMPT} von ${LAST_ATTEMPT}, neuer Lauf auf einem anderen Rechner`);
+}
+
+const curl = (url, file) => run('curl', ['-fsSL', '--retry', '3', '--retry-delay', '30', '--retry-connrefused',
+  '-A', USER_AGENT, '-o', file, url]);
+
+/** Auszug eines Landes laden. → Geometrie, die für die Abdeckung gilt (Geofabrik oder die des Spiegels). */
+async function download(region, pbf) {
+  if (!geofabrikBlocked) {
+    try {
+      await curl(region.pbf, pbf);
+      geofabrikFailures = 0;
+      return region.geometry;
+    } catch (e) {
+      if (++geofabrikFailures >= BLOCKED_AFTER) {
+        geofabrikBlocked = true;
+        if (ATTEMPT < LAST_ATTEMPT) throw await blocked(`Geofabrik: ${BLOCKED_AFTER} Länder nacheinander nicht ladbar`);
+        log(`Geofabrik scheint diesen Rechner abzulehnen – die übrigen Länder kommen, soweit vorhanden, vom Spiegel`);
+      } else {
+        throw e;
+      }
+    }
+  }
+  const res = await fetch(`${MIRROR}/polygons/europe/${region.id}.poly`, { headers: { 'User-Agent': USER_AGENT } });
+  if (!res.ok) throw new Error(`weder bei Geofabrik noch beim Spiegel (Polygon: HTTP ${res.status})`);
+  const geometry = parsePoly(await res.text());
+  await curl(`${MIRROR}/extracts/europe/${region.id}-latest.osm.pbf`, pbf);
+  log(`${region.id}: vom Spiegel ${MIRROR} (mit dessen Grenzen)`);
+  return geometry;
+}
+
 /** Ein Land: laden, filtern, exportieren, einlesen – und die großen Zwischendateien gleich wieder löschen. */
 async function processRegion(region) {
   if (givenGeojson.has(region.id)) return readGeojsonSeq(givenGeojson.get(region.id));
@@ -124,7 +177,7 @@ async function processRegion(region) {
   const filtered = join(WORK, `${region.id}-pois.osm.pbf`);
   const geojson = join(WORK, `${region.id}.geojsonseq`);
   try {
-    await run('curl', ['-fsSL', '--retry', '3', '--retry-delay', '30', '-A', USER_AGENT, '-o', pbf, region.pbf]);
+    region.geometry = await download(region, pbf);
     log(`${region.id}: ${((await stat(pbf)).size / 1e9).toFixed(2)} GB geladen`);
     const filters = layers.flatMap(l => LAYERS[l].filters);
     await run('osmium', ['tags-filter', pbf, ...filters, '-o', filtered, '--overwrite', '--no-progress']);
@@ -223,8 +276,26 @@ async function writeBundle(covered, regionIds, counts) {
 
 // ---------- Ablauf ----------
 
-log('Geofabrik-Index wird geladen …');
-const index = await (await fetch(INDEX, { headers: { 'User-Agent': USER_AGENT } })).json();
+/** Geofabrik-Index (Länder, Download-Adressen, Grenzen) – mit Wiederholungen, ohne ihn geht nichts. */
+async function loadIndex() {
+  let last;
+  for (let i = 0; i < 3; i++) {
+    if (i) await new Promise(r => setTimeout(r, 30_000));
+    try {
+      const res = await fetch(INDEX, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(120_000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      last = e;
+      log(`Geofabrik-Index: ${e.message}${e.cause ? ` (${e.cause.code || e.cause.message})` : ''}`);
+    }
+  }
+  if (ATTEMPT < LAST_ATTEMPT) throw await blocked('Geofabrik-Index nicht ladbar');
+  throw last;
+}
+
+log(`Geofabrik-Index wird geladen … (Versuch ${ATTEMPT} von ${LAST_ATTEMPT})`);
+const index = await loadIndex();
 const regions = index.features
   .filter(f => f.properties.parent === 'europe' && !COMPOSITE.has(f.properties.id))
   .filter(f => !onlyRegions || onlyRegions.includes(f.properties.id))
@@ -240,6 +311,7 @@ for (const region of regions) {
     done.push(region);
     log(`${region.id}: ${n} Objekte in ${Math.round((Date.now() - t0) / 1000)} s – bisher ${poiCount} Orte`);
   } catch (e) {
+    if (e instanceof BlockedError) throw e;
     // Ein fehlendes Land ist kein Grund zum Abbruch – es wird nur nicht als abgedeckt markiert
     log(`${region.id}: übersprungen (${e.message})`);
   }
