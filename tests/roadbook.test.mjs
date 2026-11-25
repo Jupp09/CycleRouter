@@ -11,6 +11,11 @@ const BOOK = `(() => { const b = document.querySelector('#roadbook'), all = s =>
     rows: all('.rb-day').map(d => [...d.querySelectorAll('table tr')].slice(1).map(tr => [...tr.children].map(td => td.textContent))),
     stays: all('.rb-stay').map(s => s.textContent), times: all('.rb-day').map(d => d.children[2]?.textContent),
     footer: b.querySelector('footer')?.textContent, printed: window.__printed || 0,
+    profileHint: all('header .rb-muted').map(p => p.textContent).find(t => t.startsWith('Höhenprofile')),
+    profiles: all('.rb-day').map(d => { const p = d.querySelector('svg.rb-profile');
+      return p && { label: p.getAttribute('aria-label'), line: !!p.querySelector('path.line'), fills: p.querySelectorAll('rect.grade-fill').length,
+        km: [...p.querySelectorAll('text.axis')].map(t => t.textContent).filter(t => t.endsWith(' km')).map(t => parseFloat(t.replace(',', '.'))),
+        ids: [...p.querySelectorAll('[id]')].map(e => e.id), height: p.getBoundingClientRect().height }; }),
     screen: getComputedStyle(b).display, cls: document.documentElement.classList.contains('print-roadbook') }; })()`;
 const VISIBLE = `({ book: getComputedStyle(document.querySelector('#roadbook')).display, app: getComputedStyle(document.querySelector('main')).display,
   aside: getComputedStyle(document.querySelector('aside')).display, height: document.querySelector('#roadbook').offsetHeight })`;
@@ -46,11 +51,17 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Reihenfolge nach km', rows.every((r, i) => !i || parseFloat(r[0].replace(',', '.')) >= parseFloat(rows[i - 1][0].replace(',', '.'))));
   check('Öffnungszeiten stehen dabei', expected.hours.every(h => rows.some(r => r[4].includes(h))), expected.hours[0]);
   check('Fuß mit Quelle', /OpenStreetMap-Mitwirkende/.test(book.footer) && /ohne Gewähr/.test(book.footer));
+  const prof = book.profiles[0];
+  check('Höhenprofil des Tages: Linie, Steigungsflächen, Beschreibung', !!prof && prof.line && prof.fills > 0 && /^Höhenprofil über [\d,]+ km, tiefster Punkt/.test(prof.label), JSON.stringify(prof && { ...prof, ids: undefined }));
+  check('km-Achse beginnt am Start der Route', prof?.km.length >= 2 && prof.km[0] >= 0 && prof.km[0] < 10, prof?.km.join(' '));
+  check('Kopf erklärt die Schraffur', !!book.profileHint, book.profileHint);
 
   step('Druckansicht');
   await page.send('Emulation.setEmulatedMedia', { media: 'print' });
   const print = await page.ev(VISIBLE);
   check('Nur das Roadbook ist sichtbar', print.book === 'block' && print.app === 'none' && print.height > 200, JSON.stringify(print));
+  const printed = (await page.ev(BOOK)).profiles[0];
+  check('Höhenprofil im Druck sichtbar', printed?.height > 60, String(printed?.height));
   await page.shot('1-druckansicht');
   await page.send('Emulation.setEmulatedMedia', { media: '' });
   await page.ev(`window.dispatchEvent(new Event('afterprint')); true`);
@@ -73,6 +84,12 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Ein Block je Tag', book.days.length === plan.days && book.days.every((d, i) => d.startsWith(`Tag ${i + 1} · `)), book.days.join(' | '));
   check('Kopf nennt Zeitraum und Zahl der Tage', new RegExp(` · ${plan.days} Tage · .+ – .+$`).test(book.facts), book.facts);
   check('Unterkunft je Nacht', book.stays.length === plan.nights && plan.chosen.every(name => book.stays.some(s => s.includes(name))), book.stays[0]);
+  check('Ein Höhenprofil je Tag', book.profiles.length === plan.days && book.profiles.every(p => p?.line), String(book.profiles.filter(p => p?.line).length));
+  const ids = book.profiles.flatMap(p => p.ids);
+  check('Kennungen der Profile eindeutig', ids.length > 0 && new Set(ids).size === ids.length, ids.slice(0, 4).join(' '));
+  const dayStart = await page.ev(`(async () => (await import('/js/timeline.js')).stageStats(${STATE}.route, 'trekking').map(s => s.from / 1000))()`);
+  check('km-Achse je Tag in km der ganzen Route', book.profiles.every((p, i) => p.km[0] >= dayStart[i] - 0.01 && (i === 0 || p.km[0] > book.profiles[i - 1].km[0])),
+    book.profiles.map(p => p.km[0]).join(' · '));
   check('Unterkunft mit Art und geschätztem Preis', book.stays.filter(s => /Preis (ca\. \d+–\d+ €|\d+ € \(laut OSM\)) \(Schätzung\)/.test(s)).length === plan.chosen.length, book.stays[0]);
   await page.send('Emulation.setEmulatedMedia', { media: 'print' });
   await page.shot('2-mehrtagestour');
@@ -96,13 +113,16 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
     return { open: d.open, printed: window.__printed || 0, title: v.querySelector('header h2')?.textContent, days: v.querySelectorAll('.rb-day').length,
       headings: [...d.querySelectorAll('h1, h2, h3, h4, h5, h6')].map(h => h.tagName).filter((t, i, a) => t !== a[i - 1]).join(' '),
       untouched: !document.querySelector('#roadbook').children.length, hint: document.querySelector('#roadbook-hint').textContent,
-      cls: document.documentElement.classList.contains('print-roadbook'), width: v.scrollWidth <= v.clientWidth + 1 }; })()`;
+      cls: document.documentElement.classList.contains('print-roadbook'), width: v.scrollWidth <= v.clientWidth + 1,
+      profile: v.querySelector('svg.rb-profile')?.viewBox.baseVal.width ?? null }; })()`;
   const shown = await page.ev(DIALOG);
   check('Dialog mit dem Roadbook, kein Druckaufruf', shown.open && shown.printed === 0 && !shown.cls && shown.days === 1 && !!shown.title, JSON.stringify(shown));
   check('Überschriften in richtiger Reihenfolge', shown.headings === 'H2 H3', shown.headings);
   // Die App hat ihren eigenen Speicher: Nach Safari kommt die Route über „Link teilen“ (linkView.js)
   check('Hinweis auf Safari, Druckvorlage unberührt', /^Drucken und als PDF sichern geht nur in Safari\. Dorthin kommt die Route über „Link teilen“\.$/.test(shown.hint) && shown.untouched, shown.hint);
   check('Passt in die Breite des Handys', shown.width);
+  // Profil in Handybreite gerechnet: eine SVG-Einheit ≈ ein Pixel, die Achsenschrift bleibt lesbar
+  check('Höhenprofil im Dialog in Handybreite', shown.profile >= 300 && shown.profile <= 390, String(shown.profile));
   const axe = await (await fetch('https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.10.2/axe.min.js')).text();
   await page.ev(axe + '; true');
   const violations = await page.ev(`axe.run(document.querySelector('#roadbook-dialog'), { resultTypes: ['violations'] })

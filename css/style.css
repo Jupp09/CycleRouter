@@ -597,6 +597,14 @@ dialog h2 { margin: 0; font-size: 1.125rem; }
 #roadbook-view th, #roadbook-view td { text-align: left; vertical-align: top; padding: 3px 6px 3px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
 #roadbook-view td:nth-child(1), #roadbook-view td:nth-child(2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
 #roadbook-view .rb-stay { margin-top: 6px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; }
+/* Höhenprofil je Tag (profileSvg in elevation.js); dieselben Klassen wie das Live-Profil, aber eigene Regeln */
+.rb-profile { display: block; width: 100%; height: auto; margin: 4px 0 6px; }
+#roadbook-view .rb-profile .area { fill: var(--accent-soft); }
+#roadbook-view .rb-profile .line { fill: none; stroke: var(--text); stroke-width: 1.5; }
+#roadbook-view .rb-profile .grade-fill { fill-opacity: 0.75; }
+#roadbook-view .rb-profile .hatch { stroke: #111827; stroke-width: 1.3; stroke-opacity: 0.55; }
+#roadbook-view .rb-profile .grid { stroke: var(--border); stroke-width: 1; }
+#roadbook-view .rb-profile .axis { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 #roadbook-view footer { font-size: 0.75rem; margin-top: 8px; }
 
 [hidden] { display: none !important; }
@@ -728,6 +736,14 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
   #roadbook tr { break-inside: avoid; }
   #roadbook .rb-stay { margin-top: 5pt; padding: 4pt 6pt; border: 0.75pt solid #000; break-inside: avoid; }
   #roadbook .rb-name { font-weight: 600; }
+  /* Farben der Steigung mitdrucken (Browser lassen Hintergründe sonst weg); die Schraffur trägt sie auch schwarz-weiß */
+  #roadbook .rb-profile { margin: 3pt 0 5pt; max-height: 45mm; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  #roadbook .rb-profile .area { fill: #eee; }
+  #roadbook .rb-profile .line { fill: none; stroke: #000; stroke-width: 1.2; }
+  #roadbook .rb-profile .grade-fill { fill-opacity: 0.6; }
+  #roadbook .rb-profile .hatch { stroke: #000; stroke-width: 1.1; stroke-opacity: 0.6; }
+  #roadbook .rb-profile .grid { stroke: #bbb; stroke-width: 0.6; }
+  #roadbook .rb-profile .axis { fill: #333; font-size: 10px; font-variant-numeric: tabular-nums; }
   #roadbook footer { font-size: 8.5pt; color: #444; }
   @page { margin: 15mm; }
 }

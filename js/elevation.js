@@ -72,19 +72,20 @@ function categoryRuns(segments, kind, cum, x) {
  * Steigung: Fläche unter der Kurve je Klasse in Farbe und – je steiler, desto dichter – schraffiert, damit nicht
  * die Farbe allein die Steigung zeigt.
  */
-function drawGradeFill(svg, area, runs, top, height) {
+function drawGradeFill(svg, area, runs, top, height, id = 'grade') {
+  // `id`: Präfix für clipPath und Muster – mehrere Profile im selben Dokument (Roadbook) brauchen eigene
   const defs = el('defs', {}, svg);
-  el('path', { d: area }, el('clipPath', { id: 'grade-area' }, defs));
+  el('path', { d: area }, el('clipPath', { id: `${id}-area` }, defs));
   for (const [n, gap] of [[1, 9], [2, 6], [3, 3.5]]) {
-    const p = el('pattern', { id: `grade-hatch-${n}`, patternUnits: 'userSpaceOnUse', width: gap, height: gap, patternTransform: 'rotate(45)' }, defs);
+    const p = el('pattern', { id: `${id}-hatch-${n}`, patternUnits: 'userSpaceOnUse', width: gap, height: gap, patternTransform: 'rotate(45)' }, defs);
     el('line', { class: 'hatch', x1: 0, y1: 0, x2: 0, y2: gap }, p);
   }
-  const fills = el('g', { 'clip-path': 'url(#grade-area)' }, svg);
+  const fills = el('g', { 'clip-path': `url(#${id}-area)` }, svg);
   for (const run of runs) {
     const cat = CATEGORIES.grade[run.key];
     const box = { x: run.x, y: top, width: run.width, height };
     el('rect', { ...box, class: 'grade-fill', fill: cat.color }, fills);
-    if (cat.pattern) el('rect', { ...box, fill: `url(#grade-hatch-${cat.pattern})` }, fills);
+    if (cat.pattern) el('rect', { ...box, fill: `url(#${id}-hatch-${cat.pattern})` }, fills);
   }
 }
 
@@ -124,6 +125,51 @@ function elevationSummary({ coords, cum, distance }) {
     parts.push(`steilster Anstieg ${Math.round(best.grade * 100)} % auf ${STEEP_WINDOW} m ab km ${km(best.from)}`);
   }
   return parts.join(', ') + '.';
+}
+
+/**
+ * Festes Höhenprofil eines Abschnitts (`from`–`to` in m auf `route`), z. B. eines Tages im Roadbook: Fläche nach
+ * Steigung eingefärbt und schraffiert (je steiler, desto dichter – lesbar auch schwarz-weiß gedruckt), Achsen in
+ * Metern bzw. in den km der ganzen Route, passend zu den Tabellen daneben. Ohne Höhen → null.
+ * `id` muss im Dokument eindeutig sein (clipPath und Muster).
+ * @param {Route} route @param {number} from @param {number} to
+ * @param {{id: string, width?: number, height?: number}} options
+ */
+export function profileSvg(route, from, to, { id, width = 680, height = 130 }) {
+  const i0 = indexAtDistance(route, from);
+  const i1 = Math.max(i0 + 1, indexAtDistance(route, to));
+  const coords = route.coords.slice(i0, i1 + 1), cum = route.cum.slice(i0, i1 + 1);
+  if (coords.length < 2 || !coords.some(c => c[2] != null)) return null;
+  const m = { top: 8, right: 10, bottom: 20, left: 46 };
+  const w = width - m.left - m.right, h = height - m.top - m.bottom;
+  const start = cum[0], span = cum.at(-1) - start || 1;
+  const { min, max, step } = heightAxis(coords);
+  const x = d => m.left + ((d - start) / span) * w;
+  const y = e => m.top + h - ((e - min) / (max - min)) * h;
+
+  // Linksbündig, falls die Höhe begrenzt ist (max-height im Druck)
+  const svg = el('svg', { viewBox: `0 0 ${width} ${height}`, preserveAspectRatio: 'xMinYMid meet', class: 'rb-profile', role: 'img',
+    'aria-label': elevationSummary({ coords, cum, distance: span }) });
+  for (let v = min; v <= max + 1e-6; v += step) {
+    el('line', { class: 'grid', x1: m.left, x2: width - m.right, y1: y(v), y2: y(v) }, svg);
+    el('text', { class: 'axis', x: m.left - 5, y: y(v) + 4, 'text-anchor': 'end' }, svg).textContent = `${v} m`;
+  }
+  // km-Marken auf runden Werten der ganzen Route (Tag 2 beginnt z. B. bei km 63,4 → Marken bei 70, 80 …)
+  const xStep = niceStep(span / 1000, 6) * 1000;
+  for (let d = Math.ceil(start / xStep) * xStep; d <= start + span + 1e-6; d += xStep) {
+    el('text', { class: 'axis', x: x(d), y: height - 4, 'text-anchor': 'middle' }, svg).textContent = `${km(d)} km`;
+  }
+
+  const path = profilePath(coords, cum, x, y, w);
+  const area = `${path}L${x(start + span)},${y(min)}L${x(start)},${y(min)}Z`;
+  el('path', { class: 'area', d: area }, svg);
+  // Steigungsabschnitte der ganzen Route auf diesen Ausschnitt zuschneiden (Indizes ab i0)
+  const segments = segmentsFor(route, 'grade')
+    .filter(s => s.to > i0 && s.from < i1)
+    .map(s => ({ ...s, from: Math.max(s.from, i0) - i0, to: Math.min(s.to, i1) - i0 }));
+  if (segments.length) drawGradeFill(svg, area, categoryRuns(segments, 'grade', cum, x), m.top, h, id);
+  el('path', { class: 'line', d: path }, svg);
+  return svg;
 }
 
 /**

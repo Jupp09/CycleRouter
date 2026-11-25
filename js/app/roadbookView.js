@@ -4,8 +4,9 @@
  *
  * Gedruckt wird über den Druckdialog des Browsers (dort auch „Als PDF speichern“). Die Übersicht steht in
  * `#roadbook`, das auf dem Bildschirm nie sichtbar ist; solange `html.print-roadbook` gesetzt ist, zeigt der
- * Druck nur sie (css/style.css). Ohne Route druckt Strg+P die Seite wie bisher. Karte und Höhenprofil fehlen
- * bewusst (Kacheln drucken unzuverlässig), ebenso das Wetter (auf dem Papier schnell veraltet).
+ * Druck nur sie (css/style.css). Ohne Route druckt Strg+P die Seite wie bisher. Jeder Tag hat sein Höhenprofil
+ * (festes SVG aus elevation.js, nach Steigung schraffiert, also auch schwarz-weiß lesbar). Die Karte fehlt bewusst
+ * (Kacheln drucken unzuverlässig), ebenso das Wetter (auf dem Papier schnell veraltet).
  *
  * Die installierte App auf iPhone/iPad hat keinen Druckdialog; dort zeigt der Knopf die Übersicht im Dialog
  * `#roadbook-dialog` (siehe `standalone` am Ende der Datei).
@@ -14,7 +15,8 @@ import { STATE_LABELS } from '../stops.js';
 import { STAY_TYPES, priceLabel, websiteOf, shelterFacts, SHELTER_NOTE } from '../stays.js';
 import { stageStats, dayTimes, pausedTimeline } from '../timeline.js';
 import { daylightNote } from '../sun.js';
-import { findClimbs } from '../climbs.js';
+import { findClimbs, hasElevation } from '../climbs.js';
+import { profileSvg } from '../elevation.js';
 import { locateOnRoute } from '../routeGeometry.js';
 import { indexAtDistance, formatKm, formatM, formatDuration, formatClock, formatDayDate, formatDate, formatNumber, kmValue } from '../utils.js';
 import { account } from '../account.js';
@@ -57,7 +59,7 @@ function waypointsOf(r, at) {
   return items.sort((a, b) => a.along - b.along);
 }
 
-function dayBlock(r, stat, times, items, night, fixed, last, top) {
+function dayBlock(r, stat, times, items, night, fixed, last, top, profileWidth) {
   const block = el('section', '', 'rb-day');
   const head = el(`h${top + 1}`,`${times ? `Tag ${stat.day} · ${formatDayDate(times.start)}` : `Tag ${stat.day}`}`);
   block.append(head, el('p', `${formatKm(stat.distance)} · ${formatM(stat.ascent)} Anstieg · Fahrzeit ca. ${formatDuration(stat.time)} · km ${kmValue(stat.from)}–${kmValue(stat.to)}`, 'rb-facts'));
@@ -66,6 +68,9 @@ function dayBlock(r, stat, times, items, night, fixed, last, top) {
     const light = daylightNote(times, r.coords[indexAtDistance(r, stat.from)], r.coords[indexAtDistance(r, stat.to)]);
     if (light) block.append(el('p', light.text, light.warn ? 'rb-warn' : ''));
   }
+  // Im Druck und im Dialog dasselbe Profil – die Kennung muss je Ort eindeutig sein (clipPath, Muster)
+  const profile = profileSvg(r, stat.from, stat.to, { id: `rb${top}-day${stat.day}`, width: profileWidth });
+  if (profile) block.append(profile);
   const climbs = findClimbs(r, 50).filter(c => c.from >= stat.from && c.from < stat.to).sort((a, b) => b.gain - a.gain).slice(0, 3)
     .sort((a, b) => a.from - b.from);
   if (climbs.length) {
@@ -130,6 +135,9 @@ function buildRoadbook(box = $('#roadbook'), top = 1) {
   const times = fixed ? dayTimes(r, departure, state.bike) : null;
   const items = waypointsOf(r, fixed ? pausedTimeline(r, departure, state.bike) : null);
   const nights = r.stays?.nights || [];
+  // Profilbreite in SVG-Einheiten: Im Druck A4-Breite; im Dialog (Handy) die echte Breite, damit eine Einheit etwa
+  // ein Pixel ist und die Achsenschrift nicht auf ein paar Pixel schrumpft
+  const profileWidth = top === 1 ? 680 : Math.max(300, Math.min(680, window.innerWidth - 48));
 
   const header = el('header');
   header.append(el(`h${top}`, gpxName()));
@@ -138,9 +146,10 @@ function buildRoadbook(box = $('#roadbook'), top = 1) {
     `Fahrzeit ca. ${formatDuration(stats.reduce((sum, s) => sum + s.time, 0))}`, stats.length > 1 ? `${stats.length} Tage` : '', period]
     .filter(Boolean).join(' · '), 'rb-facts'));
   if (r.dwellMin && r.stops?.length) header.append(el('p', `Ankunftszeiten inkl. ${r.dwellMin} min Pause je Stopp.`, 'rb-muted'));
+  if (hasElevation(r)) header.append(el('p', 'Höhenprofile: Fläche nach Steigung gefärbt, je steiler, desto dichter schraffiert.', 'rb-muted'));
 
   box.replaceChildren(header,
-    ...stats.map((s, i) => dayBlock(r, s, times?.[i], items, nights[i], fixed, i === stats.length - 1, top)),
+    ...stats.map((s, i) => dayBlock(r, s, times?.[i], items, nights[i], fixed, i === stats.length - 1, top, profileWidth)),
     el('footer', `Erstellt mit CycloRouter am ${formatDate(new Date())}. Daten © OpenStreetMap-Mitwirkende. Öffnungszeiten und Preise ohne Gewähr.`));
   return true;
 }
