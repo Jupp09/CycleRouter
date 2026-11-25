@@ -115,70 +115,90 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
 
     // Mehrtagestour (nur auf Wunsch): Unterkünfte suchen und die Route durch sie führen
     if (state.multiDay && isMultiDayCandidate(r, state.stays.maxKm)) {
-      setStatus('Unterkünfte für die Übernachtungen werden gesucht …', 'loading');
-      state.staysLoading = true;
-      state.staysError = null;
-      emit('stages');
-      try {
-        r = await withStays(r, signal);
-        if (signal.aborted) return;
-        watch.mark('Unterkünfte');
-        setStatus(null);
-        state.staysLoading = false;
-        showRoute(r, { fit: false });
-      } catch (e) {
-        if (e.name === 'AbortError' || signal.aborted) return;
-        console.error(e);
-        state.staysLoading = false;
-        state.staysError = `Unterkünfte konnten nicht gesucht werden: ${e.message}`;
-        setStatus(state.staysError, 'error');
-        emit('stages');
-      } finally {
-        if (controller === ctrl) state.staysLoading = false;
-      }
+      r = await staysStep(r, ctrl, watch);
+      if (!r) return;
     }
     if (!state.supply.enabled) { announce(routeSummary(r)); watch.done(); return; }
-
-    // Route steht schon auf der Karte; Stopps werden nachgeladen und die Route dann durch sie geführt
-    setStatus('Verpflegungsstopps werden gesucht … (die Route ist bereits nutzbar)', 'loading');
-    // Feiertagsprüfung parallel starten – sie ist langsam (Nominatim, 1 Anfrage/s), die Stopps warten nicht darauf
-    const tHoliday = performance.now();
-    const holidays = holidayContext(r, departureDate(), state.bike, signal);
-    holidays.catch(() => {}); // ein Abbruch wird unten behandelt
-    let holidayMs = null;
-    holidays.then(() => { holidayMs = performance.now() - tHoliday; }, () => {});
-    try {
-      let withStops = await withSupply(r, signal, null, watch.mark);
-      if (signal.aborted) return;
-      setStatus(null);
-      showRoute(withStops, { fit: false });
-      watch.mark('Anzeige');
-      announce(routeSummary(withStops)); // Screenreader: jetzt ist die Route mit Stopps fertig
-
-      // Feiertage anwenden: meist ist keiner – dann bleiben die Stopps und bekommen nur ihre Regionen
-      const ctx = await holidays;
-      if (signal.aborted) return;
-      watch.mark('Warten auf Feiertage');
-      watch.add('Feiertagsprüfung', holidayMs ?? 0);
-      const annotated = applyHolidays(withStops, ctx);
-      if (annotated) { showRoute(annotated, { fit: false }); watch.done(); return; }
-      setStatus('Feiertag auf der Strecke – Verpflegungsstopps werden angepasst …', 'loading');
-      withStops = await withSupply(r, signal, ctx);
-      if (signal.aborted) return;
-      watch.mark('Neuplanung wegen Feiertag');
-      setStatus(null);
-      showRoute(withStops, { fit: false });
-      announce(`Wegen eines Feiertags angepasst. ${routeSummary(withStops)}`);
-      watch.done();
-    } catch (e) {
-      if (e.name === 'AbortError' || signal.aborted) return;
-      if (!offline()) console.error(e); // ohne Netz erwartet
-      setStatus(offline() ? 'Ohne Netz lassen sich keine Stopps planen – die Route selbst ist da.' : e.message, 'error');
-    }
+    await supplyStep(r, signal, watch);
   } catch (e) {
     if (e.name === 'AbortError') return;
     if (!offline()) console.error(e); // ohne Netz erwartet
     setStatus(offline() ? 'Ohne Netz lassen sich keine neuen Routen berechnen.' : e.message, 'error');
+  }
+}
+
+/**
+ * Schritt Mehrtagestour: Unterkünfte suchen, Route durch sie führen und zeigen. → neue Route; bei einem Fehler die
+ * bisherige (Stopps werden trotzdem geplant, die Meldung steht im Etappenkasten); null, wenn abgebrochen.
+ * @param {Route} r @param {AbortController} ctrl @param {ReturnType<typeof stopwatch>} watch
+ */
+async function staysStep(r, ctrl, watch) {
+  const { signal } = ctrl;
+  setStatus('Unterkünfte für die Übernachtungen werden gesucht …', 'loading');
+  state.staysLoading = true;
+  state.staysError = null;
+  emit('stages');
+  try {
+    const withNights = await withStays(r, signal);
+    if (signal.aborted) return null;
+    watch.mark('Unterkünfte');
+    setStatus(null);
+    state.staysLoading = false;
+    showRoute(withNights, { fit: false });
+    return withNights;
+  } catch (e) {
+    if (e.name === 'AbortError' || signal.aborted) return null;
+    console.error(e);
+    state.staysLoading = false;
+    state.staysError = `Unterkünfte konnten nicht gesucht werden: ${e.message}`;
+    setStatus(state.staysError, 'error');
+    emit('stages');
+    return r;
+  } finally {
+    if (controller === ctrl) state.staysLoading = false;
+  }
+}
+
+/**
+ * Schritt Verpflegungsstopps: Die Route steht schon auf der Karte; Stopps werden gesucht und die Route durch sie
+ * geführt. Die Feiertagsprüfung läuft parallel – sie ist langsam (Nominatim, 1 Anfrage/s), die Stopps warten nicht
+ * auf sie. Meist ist kein Feiertag, dann bekommen die Stopps nur ihre Regionen; sonst wird neu geplant.
+ * Fehler hier lassen die Route ohne Stopps stehen.
+ * @param {Route} r @param {AbortSignal} signal @param {ReturnType<typeof stopwatch>} watch
+ */
+async function supplyStep(r, signal, watch) {
+  setStatus('Verpflegungsstopps werden gesucht … (die Route ist bereits nutzbar)', 'loading');
+  const tHoliday = performance.now();
+  const holidays = holidayContext(r, departureDate(), state.bike, signal);
+  holidays.catch(() => {}); // ein Abbruch wird unten behandelt
+  let holidayMs = null;
+  holidays.then(() => { holidayMs = performance.now() - tHoliday; }, () => {});
+  try {
+    let withStops = await withSupply(r, signal, null, watch.mark);
+    if (signal.aborted) return;
+    setStatus(null);
+    showRoute(withStops, { fit: false });
+    watch.mark('Anzeige');
+    announce(routeSummary(withStops)); // Screenreader: jetzt ist die Route mit Stopps fertig
+
+    const ctx = await holidays;
+    if (signal.aborted) return;
+    watch.mark('Warten auf Feiertage');
+    watch.add('Feiertagsprüfung', holidayMs ?? 0);
+    const annotated = applyHolidays(withStops, ctx);
+    if (annotated) { showRoute(annotated, { fit: false }); watch.done(); return; }
+    setStatus('Feiertag auf der Strecke – Verpflegungsstopps werden angepasst …', 'loading');
+    withStops = await withSupply(r, signal, ctx);
+    if (signal.aborted) return;
+    watch.mark('Neuplanung wegen Feiertag');
+    setStatus(null);
+    showRoute(withStops, { fit: false });
+    announce(`Wegen eines Feiertags angepasst. ${routeSummary(withStops)}`);
+    watch.done();
+  } catch (e) {
+    if (e.name === 'AbortError' || signal.aborted) return;
+    if (!offline()) console.error(e); // ohne Netz erwartet
+    setStatus(offline() ? 'Ohne Netz lassen sich keine Stopps planen – die Route selbst ist da.' : e.message, 'error');
   }
 }
 

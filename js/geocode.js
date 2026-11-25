@@ -186,7 +186,9 @@ export function attachSearch(input, { onSelect, getBias }) {
     ? `${items.length} ${items.length === 1 ? 'Vorschlag' : 'Vorschläge'} – mit Pfeiltasten auswählen`
     : notice || 'Keine Vorschläge');
 
-  const showNotice = text => { items = []; notice = text; active = -1; render(); speak(); };
+  /** Neue Vorschläge (oder statt ihrer eine Hinweiszeile) zeigen und ansagen. */
+  const show = (results, text = '') => { items = results; notice = text; active = -1; render(); speak(); };
+  const showNotice = text => show([], text);
 
   async function fallbackSearch() {
     const q = input.value.trim();
@@ -196,7 +198,7 @@ export function attachSearch(input, { onSelect, getBias }) {
     try {
       const results = await searchFallback(q, getBias());
       if (id !== requestId) return;
-      items = results; notice = results.length ? '' : 'Nichts gefunden.'; active = -1; render(); speak();
+      show(results, results.length ? '' : 'Nichts gefunden.');
     } catch {
       if (id === requestId) showNotice('Ortssuche gerade nicht erreichbar – Ort bitte auf der Karte anklicken.');
     }
@@ -209,7 +211,7 @@ export function attachSearch(input, { onSelect, getBias }) {
     try {
       const results = await search(query, getBias());
       if (id !== requestId) return;
-      items = results; notice = ''; active = -1; render(); speak();
+      show(results);
     } catch (e) {
       if (id === requestId && e.unavailable) showNotice(FALLBACK_HINT);
     }
