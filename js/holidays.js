@@ -1,4 +1,4 @@
-import { storage } from './utils.js';
+import { storage, isoDay } from './utils.js';
 
 /**
  * Gesetzliche Feiertage je Land und Jahr (Quelle: date.nager.at, ~100 Länder),
@@ -39,11 +39,8 @@ function load(country, year, signal) {
   return p;
 }
 
-const pad = n => String(n).padStart(2, '0');
-const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
 function find(list, region, date) {
-  const day = ymd(date);
+  const day = isoDay(date);
   const h = list.find(h => h.date === day && (!h.regions || (region.region && h.regions.includes(region.region))));
   return h ? { name: h.name, national: !h.regions, date: day } : null;
 }

@@ -11,6 +11,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { tilesAround, tilesNeedingFetch, fetchTiles, isBusy, ALL_LAYERS } from './poiCache.mjs';
 import { TILE, tileKey } from '../js/poiSource.js';
+import { sleep } from '../js/shared.js';
 
 export const RADIUS_KM = 200;
 const CHUNK = 40;                     // Kacheln je Paket (eine Overpass-Abfrage je Kombination fehlender Ebenen)
@@ -26,7 +27,6 @@ const SAME_REGION_KM = 30;            // näher beieinander liegende Heimatorte 
 const REDO_AFTER = 7 * 24 * 3600 * 1000; // fertige Region frühestens nach 7 Tagen erneut prüfen
 
 const QUEUE_FILE = fileURLToPath(new URL('../cache/warm-queue.json', import.meta.url));
-const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // jobs: Regionen {lat, lon, t} und Routen {tiles: [kachel], t}; done: fertige Regionen {lat, lon, t}
 let state = { jobs: [], done: [] };

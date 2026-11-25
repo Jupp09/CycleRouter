@@ -212,7 +212,7 @@ function renderRegions(r) {
 
 let hintRequest = 0;
 /** Hinweis unter der Abfahrtszeit, wenn am Startort an diesem Tag ein Feiertag ist. */
-export async function updateDepartureHint() {
+async function updateDepartureHint() {
   const el = $('#departure-hint');
   const id = ++hintRequest; // nur die jüngste Anfrage darf den Hinweis setzen
   const date = new Date(state.supply.departure);

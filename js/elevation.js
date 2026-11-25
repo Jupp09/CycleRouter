@@ -42,7 +42,7 @@ function filledElevations(coords) {
  * Zusammenfassung für Screenreader: tiefster und höchster Punkt, steilster Anstieg über STEEP_WINDOW.
  * Ohne sie wäre das Profil nur mit der Maus lesbar.
  */
-export function elevationSummary({ coords, cum, distance }) {
+function elevationSummary({ coords, cum, distance }) {
   const ele = filledElevations(coords);
   let lo = 0, hi = 0;
   for (let i = 1; i < ele.length; i++) {

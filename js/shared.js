@@ -22,6 +22,16 @@ export const BIKES = ['road', 'gravel', 'trekking', 'ebike'];
  * Abbruch durch den Aufrufer (`signal`, optional) oder nach `ms` (dann TimeoutError) – jede Anfrage an einen
  * fremden Dienst bekommt so ein Zeitlimit, damit ein hängender Server nichts blockiert.
  */
+/** `ms` warten; bricht mit AbortError ab, sobald `signal` abgebrochen wird. */
+export function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException('Abgebrochen', 'AbortError'));
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', onAbort); resolve(undefined); }, ms);
+    const onAbort = () => { clearTimeout(timer); reject(new DOMException('Abgebrochen', 'AbortError')); };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
 export function withTimeout(signal, ms) {
   if (!AbortSignal.timeout) return signal; // sehr alte Browser: ohne Zeitlimit
   if (!signal) return AbortSignal.timeout(ms);

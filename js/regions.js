@@ -65,7 +65,7 @@ async function fromServer(keys, signal) {
 }
 
 /** Mehrere Punkte auf einmal: erst gesammelt beim Server, den Rest einzeln bei Nominatim → [Ergebnis] */
-export async function regionsAt(points, signal) {
+async function regionsAt(points, signal) {
   await fromServer([...new Set(points.map(keyOf).filter(k => !cache.has(k)))], signal);
   const out = [];
   for (const p of points) out.push(await regionAt(p, signal));

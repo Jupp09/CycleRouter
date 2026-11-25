@@ -130,8 +130,3 @@ export async function getRegions(keys, { allowFetch = () => true } = {}) {
   return { regions, missing: missing.filter(k => !(k in regions)), fetched };
 }
 
-/** Anzahl gespeicherter Punkte (für das Startprotokoll). */
-export async function regionCacheSize() {
-  await load();
-  return cache.size;
-}

@@ -15,6 +15,7 @@
  * Lesezeichen die Route.
  */
 import { MODES, BIKES } from '../shared.js';
+import { clampInt } from '../utils.js';
 import { account } from '../account.js';
 import { state, on, defaultName, clampDuration } from './state.js';
 import { $, ui, isMobile, setStatus, flashStatus } from './dom.js';
@@ -36,7 +37,7 @@ const point = (p, food = false) => [p.lat.toFixed(5), p.lon.toFixed(5), shortLab
 export const isTrackRoute = r => !!(r && (r.track || r.origin?.track || r.base?.track));
 
 /** Link zur aktuellen Route oder null (keine Route, GPX-Strecke). */
-export function encodeLink() {
+function encodeLink() {
   const r = state.route;
   if (!r || !state.start || isTrackRoute(r)) return null;
   const q = new URLSearchParams({ v: VERSION, m: state.mode, b: state.bike });
@@ -74,7 +75,6 @@ function parsePoint(text) {
   return { lat, lon, ...(label && { label }), food: food === '1' };
 }
 
-const clamp = (v, min, max, fallback) => (Number.isFinite(Number(v)) && v !== null ? Math.min(max, Math.max(min, Math.round(Number(v)))) : fallback);
 
 /**
  * Beim Start: Link aus der Adresse übernehmen und die Route berechnen → true, wenn einer da war.
@@ -95,18 +95,18 @@ export function openLinkFromUrl() {
 
     applyRouteSettings({ mode, bike, traffic: TRAFFIC.includes(q.get('t')) ? q.get('t') : 'normal', eurovelo: EUROVELO.includes(q.get('e')) ? q.get('e') : 'off' });
     if (mode !== 'ab') {
-      state.distanceKm = clamp(q.get('d'), 5, 400, state.distanceKm);
+      state.distanceKm = clampInt(q.get('d'), 5, 400, state.distanceKm);
       // Nur für diese Route, nicht als eigene Einstellung gespeichert (wie die Verpflegung unten)
       if (mode === 'loop') {
         state.loopBy = q.has('dt') ? 'time' : 'distance';
         if (q.has('dt')) state.durationMin = clampDuration(q.get('dt'));
       }
       state.direction = DIRECTIONS.includes(q.get('r')) ? q.get('r') : 'random';
-      state.seed = clamp(q.get('x'), 0, 2 ** 31, state.seed);
+      state.seed = clampInt(q.get('x'), 0, 2 ** 31, state.seed);
     }
     // Verpflegung nur für diese Route, nicht als eigene Einstellung gespeichert
     state.supply.enabled = q.has('f');
-    if (q.has('f')) state.supply.intervalKm = clamp(q.get('f'), 10, 200, state.supply.intervalKm);
+    if (q.has('f')) state.supply.intervalKm = clampInt(q.get('f'), 10, 200, state.supply.intervalKm);
     state.multiDay = q.get('md') === '1';
     state.loadedName = q.get('n') || null;
     syncUi();

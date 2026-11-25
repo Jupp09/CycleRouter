@@ -89,7 +89,7 @@ export async function search(query, bias) {
 }
 
 /** Ausweich-Suche über Nominatim – nur auf ausdrückliche Anforderung (Enter) aufrufen. */
-export async function searchFallback(query, bias) {
+async function searchFallback(query, bias) {
   const params = new URLSearchParams({ q: query, format: 'jsonv2', addressdetails: '1', limit: '6', 'accept-language': 'de' });
   if (bias) {
     // Bevorzugter Bereich (±1°) – Treffer außerhalb bleiben möglich

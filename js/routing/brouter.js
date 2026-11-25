@@ -1,7 +1,7 @@
 import { classifyOsmTags, mergeSegments } from '../surfaces.js';
 import { haversine } from '../utils.js';
-import { routingNotice, sleep } from './notice.js';
-import { withTimeout } from '../shared.js';
+import { routingNotice } from './notice.js';
+import { sleep, withTimeout } from '../shared.js';
 
 /** Hochladen eines Profils: Ohne Zeitlimit hinge bei einem hängenden brouter.de jede Berechnung mit EuroVelo. */
 const UPLOAD_TIMEOUT = 20000;
@@ -95,7 +95,7 @@ function translateError(text) {
 // hochgeladen. Die Profil-Quelltexte liegen im Ordner /profiles, da brouter.de sie nicht per CORS ausliefert.
 
 /** Aufschlag für Wege abseits von EuroVelo-Routen. Gemessen Köln→Koblenz: 1,5 → 80 %, 3 → 98 % auf EuroVelo. */
-export const EUROVELO_PENALTY = { prefer: 1.5, strong: 3 };
+const EUROVELO_PENALTY = { prefer: 1.5, strong: 3 };
 /**
  * Nationale Radfernwege (`ncn`) bekommen nur einen kleinen Teil des Aufschlags: In Deutschland ist EuroVelo
  * oft nur als Super-Relation über D-Routen erfasst (z. B. EV3 = D7 zwischen Bremen und Hamburg). BRouter
@@ -123,7 +123,7 @@ function loadSource(name) {
  * Benennt `costfactor` um und multipliziert ihn abseits internationaler Radrouten mit `penalty`,
  * auf nationalen Radfernwegen nur mit einem kleinen Teil davon.
  */
-export function patchProfile(src, penalty) {
+function patchProfile(src, penalty) {
   const ncn = (1 + (penalty - 1) * NCN_SHARE).toFixed(3);
   const start = src.search(/^assign costfactor\b/m);
   if (start < 0) throw new Error('Profil lässt sich nicht anpassen');

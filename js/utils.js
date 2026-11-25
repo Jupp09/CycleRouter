@@ -117,7 +117,7 @@ export function indexAtDistance(r, along) {
 /** Standard-Durchschnittsgeschwindigkeit in der Ebene (km/h) je Fahrradtyp. */
 // E-Bike: knapp unter der 25-km/h-Grenze der Unterstützung; Anstiege nimmt der Motor zum großen Teil ab
 export const DEFAULT_SPEED = { road: 27, gravel: 20, trekking: 18, ebike: 22 };
-export const SPEED_MIN = 10, SPEED_MAX = 35;
+const SPEED_MIN = 10, SPEED_MAX = 35;
 /** Höhenmeter, die etwa eine Stunde Zusatzzeit kosten, je Fahrradtyp. */
 const CLIMB_RATE = { road: 1200, gravel: 1000, trekking: 800, ebike: 2500 };
 
@@ -172,10 +172,18 @@ export const formatDayDate = dateFormat('dayDate', { weekday: 'short', day: '2-d
 /** „08.11.2026“ */
 export const formatDate = dateFormat('date', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
+const pad = n => String(n).padStart(2, '0');
+/** Kalendertag in Ortszeit als „2026-11-25“ (Feiertagslisten, Buchungslinks). */
+export const isoDay = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 /** Wert für <input type="datetime-local"> (Ortszeit, Minutengenau). */
-export function toDateTimeLocal(d) {
-  const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+export const toDateTimeLocal = d => `${isoDay(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+/** Kilometer mit genau einer Nachkommastelle, ohne Einheit („12,0“) – für Tabellen und Listen. */
+export const kmValue = m => formatNumber(m / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/** Ganze Zahl aus Eingabe oder Link in [min, max]; ohne gültige Zahl (auch leer/null) → fallback. */
+export function clampInt(v, min, max, fallback) {
+  const n = v === null || v === '' ? NaN : Number(v);
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback;
 }
 
 // ---------- Sonstiges ----------

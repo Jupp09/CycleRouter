@@ -8,7 +8,7 @@
  */
 import { storage } from '../utils.js';
 
-export const THEMES = ['system', 'light', 'dark'];
+const THEMES = ['system', 'light', 'dark'];
 
 // Farbe der Browser-/Statusleiste (theme-color) je Schema – wie --panel in css/style.css
 const BAR_COLOR = { light: '#ffffff', dark: '#1b1a22' };

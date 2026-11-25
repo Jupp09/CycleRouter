@@ -41,7 +41,7 @@ export const STYLES = {
     bias: { cafe: 0, bakery: 0.1, restaurant: 0.2, supermarket: 0.3, convenience: 0.4 },
   },
 };
-export const styleOf = id => STYLES[id] || STYLES.fast;
+const styleOf = id => STYLES[id] || STYLES.fast;
 /** Größte Pause aller Stile – für die grobe Abschätzung der Ankunft in holidayContext. */
 const MAX_DWELL = Math.max(...Object.values(STYLES).map(s => s.dwell));
 
@@ -50,7 +50,7 @@ const MAX_DWELL = Math.max(...Object.values(STYLES).map(s => s.dwell));
  * ohne Umweg nur angezeigt – daher nur Stellen nahe an der Route. Ein neuer Typ braucht außerdem einen
  * `bias`-Eintrag in STYLES, sonst kommt er als Stopp nicht infrage.
  */
-export const STOP_TYPES = {
+const STOP_TYPES = {
   water: { label: 'Trinkwasser', icon: '💧', gpxSym: 'Drinking Water', maxOffset: 400 },
   supermarket: { label: 'Supermarkt', icon: '🛒', gpxSym: 'Shopping Center', maxOffset: 1000 },
   convenience: { label: 'Laden/Kiosk', icon: '🛒', gpxSym: 'Shopping Center', maxOffset: 800 },

@@ -15,7 +15,7 @@ import { stageStats, dayTimes } from '../timeline.js';
 import { daylightNote } from '../sun.js';
 import {
   storage, indexAtDistance, cumulativeAscent, estimateTime, formatKm, formatM, formatDuration, formatDayDate,
-  formatClock, formatWeekday, osmNoteUrl,
+  formatClock, formatWeekday, osmNoteUrl, clampInt,
 } from '../utils.js';
 import { state, on, departureDate, originRoute } from './state.js';
 import { $, $$, textLines, externalLink, linkButton, flashStatus, osmLinks } from './dom.js';
@@ -40,7 +40,7 @@ const FIT_LABEL = { ok: 'im Budget', maybe: 'evtl. im Budget', over: 'über Budg
 // ---------- Etappen und Nächte ----------
 
 /** Knopf, Zusammenfassung, Tagesliste mit Unterkunftswahl und Unterkunfts-Marker auf der Karte. */
-export function renderStages() {
+function renderStages() {
   const box = $('#stages');
   const r = state.route;
   const origin = originRoute();
@@ -370,10 +370,9 @@ export function renderStaySettings() {
 
 /** Werte aus dem Dialog übernehmen und speichern → true, wenn sich etwas geändert hat. */
 export function saveStaySettings() {
-  const clamp = (v, lo, hi, fallback) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : fallback);
   const next = {
-    maxKm: clamp(Number($('#stage-max').value), 30, 300, state.stays.maxKm),
-    budget: clamp(Number($('#night-budget').value), 10, 500, state.stays.budget),
+    maxKm: clampInt($('#stage-max').value, 30, 300, state.stays.maxKm),
+    budget: clampInt($('#night-budget').value, 10, 500, state.stays.budget),
     groups: $$('#stay-types input:checked').map(cb => cb.value),
     endStay: $('#end-stay').checked,
   };

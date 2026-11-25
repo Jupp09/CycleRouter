@@ -6,7 +6,7 @@
  * Abhängigkeiten zu Browser-APIs. Overpass-Abfrage (`statements`) und Auszug (`filters`) müssen dieselben
  * Objekte erfassen; eingeordnet wird beides mit toPoi.
  */
-import { withTimeout } from './shared.js';
+import { sleep, withTimeout } from './shared.js';
 
 const OVERPASS = [
   'https://overpass-api.de/api/interpreter',
@@ -165,18 +165,13 @@ export function toPoi(obj, layer) {
 // ---------- Zellen des Datenauszugs ----------
 // Der Datenauszug (scripts/build-poi-extract.mjs, server/extract.mjs) fasst 5 × 5 Kacheln zu einer Zelle
 // (0,5°) zusammen – eine Datei je Zelle statt je Kachel und Ebene (Webhoster begrenzen oft die Dateianzahl).
-export const CELL_TILES = 5;
+const CELL_TILES = 5;
 export const CELL = TILE * CELL_TILES;
 /** Zelle, in der eine Kachel liegt. */
 export function cellOfTile(key) {
   const [i, j] = key.split('_').map(Number);
   return `${Math.floor(i / CELL_TILES)}_${Math.floor(j / CELL_TILES)}`;
 }
-
-const sleep = (ms, signal) => new Promise((resolve, reject) => {
-  const t = setTimeout(resolve, ms);
-  signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Abgebrochen', 'AbortError')); }, { once: true });
-});
 
 /**
  * `headers`: zusätzliche Header – der Server muss einen User-Agent mitschicken, sonst lehnt Overpass ab.

@@ -29,7 +29,7 @@ const nearestHour = d => new Date(Math.round(d.getTime() / 3600000) * 3600000);
  * Stundenwerte für Orte und Zeitraum laden (fehlende Zellen in einer Anfrage) → `at(lat, lon, date)`
  * liefert die Werte der nächstgelegenen vollen Stunde oder null.
  */
-export async function fetchWeather(points, from, to, signal) {
+async function fetchWeather(points, from, to, signal) {
   const days = [];
   for (let t = Date.parse(utcDay(nearestHour(from))); t <= nearestHour(to).getTime(); t += 86400000) days.push(utcDay(new Date(t)));
   const fresh = key => cache.has(key) && Date.now() - cache.get(key).at < TTL;
@@ -115,12 +115,6 @@ export function windLabel(s) {
   if (s.head >= NOTABLE) return `Gegenwind ${Math.round(s.head)} km/h`;
   if (s.head <= -NOTABLE) return `Rückenwind ${Math.round(-s.head)} km/h`;
   return s.wind >= 15 ? `Seitenwind ${Math.round(s.wind)} km/h` : calm(s.wind);
-}
-
-/** Kurztext für mehrere Abschnitte (eine Tour oder ein Tag): „6–9 °C · Regen wahrscheinlich ab ca. 15:10 (60 %) · …“ */
-export function weatherSummary(sections) {
-  const { weather, wind } = weatherParts(sections);
-  return `${weather} · ${wind}`;
 }
 
 /**

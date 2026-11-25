@@ -7,6 +7,7 @@ import { summarize, estimatedShare, longDistanceShare } from '../surfaces.js';
 import { findClimbs, hasElevation } from '../climbs.js';
 import {
   storage, estimateTime, averageSpeed, haversine, indexAtDistance, formatKm, formatM, formatDuration, formatNumber, formatClock, formatWeekday,
+  kmValue,
 } from '../utils.js';
 import { fetchPoisNear } from '../poiTiles.js';
 import { dayTimes } from '../timeline.js';
@@ -236,7 +237,6 @@ function renderBreakdown() {
 function renderClimbs(r, kind) {
   const climbs = kind === 'grade' ? findClimbs(r) : [];
   $('#climbs').hidden = !climbs.length;
-  const km = m => formatNumber(m / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const pct = g => formatNumber(g * 100, { maximumFractionDigits: g < 0.1 ? 1 : 0 });
   $('#climb-list').replaceChildren(...climbs.map(c => {
     const li = document.createElement('li');
@@ -244,7 +244,7 @@ function renderClimbs(r, kind) {
     const detail = document.createElement('small');
     detail.textContent = `Ø ${pct(c.mean)} %, bis ${pct(c.max)} %`;
     main.append(span('name', `${formatM(c.gain)} ↑ auf ${formatKm(c.length)}`), detail);
-    li.append(rowButton([main, span('km', `km ${km(c.from)}–${km(c.to)}`)],
+    li.append(rowButton([main, span('km', `km ${kmValue(c.from)}–${kmValue(c.to)}`)],
       () => map.fitSection(r.coords.slice(indexAtDistance(r, c.from), indexAtDistance(r, c.to) + 1))));
     return li;
   }));

@@ -7,7 +7,7 @@
  * OSM enthält auch veraltete oder falsch eingetragene Unterkünfte; solche werden aussortiert
  * (poiSource.js) bzw. abgewertet (isStale) und lassen sich vom Nutzer ausblenden.
  */
-import { sampleRoute, haversine } from './utils.js';
+import { sampleRoute, haversine, isoDay } from './utils.js';
 import { route } from './routing/index.js';
 import { openState } from './openingHours.js';
 import { fetchPoisNear } from './poiTiles.js';
@@ -142,11 +142,9 @@ export function estimatePrice(poi) {
 export const priceLabel = p => (p.source === 'osm' ? (p.typical ? `${p.typical} € (laut OSM)` : 'kostenlos (laut OSM)') : `ca. ${p.min}–${p.max} €`);
 
 /** Budget-Einstufung: 'ok' (typisch im Budget), 'maybe' (günstigste Variante im Budget), 'over'. */
-export const budgetFit = (p, budget) => (p.typical <= budget ? 'ok' : p.min <= budget ? 'maybe' : 'over');
+const budgetFit = (p, budget) => (p.typical <= budget ? 'ok' : p.min <= budget ? 'maybe' : 'over');
 
 // ---------- Links ----------
-
-const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /**
  * Link zur Preissuche für die Nacht (Booking.com mit Datum; Zeltplätze über eine Websuche). Shelter: die
@@ -163,7 +161,7 @@ export function priceLink(poi, night) {
   if (poi.type === 'camp_site') return `https://www.google.com/search?q=${encodeURIComponent(`${q} Zeltplatz Preise`)}`;
   // Kalendertag + 1, nicht + 24 h: In der Nacht der Zeitumstellung im Oktober wäre das noch derselbe Tag
   const checkout = new Date(night.date.getFullYear(), night.date.getMonth(), night.date.getDate() + 1);
-  const p = new URLSearchParams({ ss: q, checkin: ymd(night.date), checkout: ymd(checkout), group_adults: '1', no_rooms: '1' });
+  const p = new URLSearchParams({ ss: q, checkin: isoDay(night.date), checkout: isoDay(checkout), group_adults: '1', no_rooms: '1' });
   return `https://www.booking.com/searchresults.html?${p}`;
 }
 
@@ -175,7 +173,7 @@ export const websiteOf = poi => poi.tags.website || poi.tags['contact:website'] 
  * Geöffnet in dieser Nacht? → 'open' | 'closed' (laut OSM-Öffnungszeiten am Abend) |
  * 'season' (Zeltplatz ohne Angaben im Winter – oft geschlossen) | 'unknown'
  */
-export function availability(poi, date) {
+function availability(poi, date) {
   const oh = poi.tags.opening_hours;
   if (oh) {
     const st = openState(oh, date, 0);
@@ -198,7 +196,7 @@ export function lastConfirmed(poi) {
 }
 
 /** Veraltet: seit über 5 Jahren unverändert, oder nie überarbeitet (Version 1) und älter als 3 Jahre. */
-export function isStale(poi, now = new Date()) {
+function isStale(poi, now = new Date()) {
   const year = lastConfirmed(poi);
   if (!year) return false;
   const age = now.getFullYear() - year;

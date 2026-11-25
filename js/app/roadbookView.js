@@ -16,14 +16,13 @@ import { stageStats, dayTimes, pausedTimeline } from '../timeline.js';
 import { daylightNote } from '../sun.js';
 import { findClimbs } from '../climbs.js';
 import { locateOnRoute } from '../routeGeometry.js';
-import { indexAtDistance, formatKm, formatM, formatDuration, formatClock, formatDayDate, formatDate, formatNumber } from '../utils.js';
+import { indexAtDistance, formatKm, formatM, formatDuration, formatClock, formatDayDate, formatDate, formatNumber, kmValue } from '../utils.js';
 import { account } from '../account.js';
 import { isTrackRoute } from './linkView.js';
 import { state, departureDate, departureFixed, BIKE_LABELS, on } from './state.js';
 import { $ } from './dom.js';
 import { gpxName } from './exportView.js';
 
-const km = m => formatNumber(m / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const pct = g => formatNumber(g * 100, { maximumFractionDigits: 1 });
 
 function el(tag, text = '', cls = '') {
@@ -61,7 +60,7 @@ function waypointsOf(r, at) {
 function dayBlock(r, stat, times, items, night, fixed, last, top) {
   const block = el('section', '', 'rb-day');
   const head = el(`h${top + 1}`,`${times ? `Tag ${stat.day} · ${formatDayDate(times.start)}` : `Tag ${stat.day}`}`);
-  block.append(head, el('p', `${formatKm(stat.distance)} · ${formatM(stat.ascent)} Anstieg · Fahrzeit ca. ${formatDuration(stat.time)} · km ${km(stat.from)}–${km(stat.to)}`, 'rb-facts'));
+  block.append(head, el('p', `${formatKm(stat.distance)} · ${formatM(stat.ascent)} Anstieg · Fahrzeit ca. ${formatDuration(stat.time)} · km ${kmValue(stat.from)}–${kmValue(stat.to)}`, 'rb-facts'));
   if (fixed) {
     block.append(el('p', `Abfahrt ${formatClock(times.start)} · Ankunft ca. ${formatClock(times.end)}${r.stops?.length ? ' (mit Pausen an den Stopps)' : ''}`));
     const light = daylightNote(times, r.coords[indexAtDistance(r, stat.from)], r.coords[indexAtDistance(r, stat.to)]);
@@ -70,7 +69,7 @@ function dayBlock(r, stat, times, items, night, fixed, last, top) {
   const climbs = findClimbs(r, 50).filter(c => c.from >= stat.from && c.from < stat.to).sort((a, b) => b.gain - a.gain).slice(0, 3)
     .sort((a, b) => a.from - b.from);
   if (climbs.length) {
-    block.append(el('p', 'Größte Anstiege: ' + climbs.map(c => `km ${km(c.from)}–${km(c.to)} (${formatM(c.gain)}, Ø ${pct(c.mean)} %)`).join(' · ')));
+    block.append(el('p', 'Größte Anstiege: ' + climbs.map(c => `km ${kmValue(c.from)}–${kmValue(c.to)} (${formatM(c.gain)}, Ø ${pct(c.mean)} %)`).join(' · ')));
   }
 
   const rows = items.filter(it => it.along >= stat.from && (it.along < stat.to || (last && it.along <= stat.to)));
@@ -81,7 +80,7 @@ function dayBlock(r, stat, times, items, night, fixed, last, top) {
     table.append(el('caption', `Punkte unterwegs an Tag ${stat.day}`, 'sr-only'), tr);
     for (const it of rows) {
       const row = el('tr');
-      row.append(el('td', km(it.along)), el('td', it.eta ? formatClock(it.eta) : '–'), el('td', it.kind), el('td', it.name), el('td', it.note));
+      row.append(el('td', kmValue(it.along)), el('td', it.eta ? formatClock(it.eta) : '–'), el('td', it.kind), el('td', it.name), el('td', it.note));
       table.append(row);
     }
     block.append(table);
@@ -121,7 +120,7 @@ function dayBlock(r, stat, times, items, night, fixed, last, top) {
  * Übersicht für die aktuelle Route in `box` aufbauen → true, wenn es etwas zu zeigen gibt. `top` ist die Ebene
  * der obersten Überschrift (Routenname): 1 im Druck, 2 im Dialog unter dessen eigener Überschrift.
  */
-export function buildRoadbook(box = $('#roadbook'), top = 1) {
+function buildRoadbook(box = $('#roadbook'), top = 1) {
   const r = state.route;
   if (!r) { box.replaceChildren(); return false; }
   // Zeiten nur, wenn die Abfahrt sichtbar festgelegt ist (Verpflegungsstopps oder Mehrtagestour)

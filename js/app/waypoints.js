@@ -153,7 +153,7 @@ function removeVia(i) {
 }
 
 /** Eingabezeilen der Zwischenstopps (A→B), je mit eigener Ortssuche und Entfernen-Knopf. */
-export function renderVias() {
+function renderVias() {
   $('#via-list').replaceChildren(...state.vias.map((via, i) => {
     const row = document.createElement('div');
     row.className = 'field via-row';

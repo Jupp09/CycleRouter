@@ -43,7 +43,6 @@ export const CATEGORIES = {
   },
 };
 
-export const KIND_LABELS = { surface: 'Untergrund', waytype: 'Wegtyp', grade: 'Steigung' };
 
 /** Abschnitte der Route für eine Einteilung: nach Steigung berechnet, sonst die des Routing-Dienstes. */
 export function segmentsFor(route, kind) {
