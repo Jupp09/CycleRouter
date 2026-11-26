@@ -4,6 +4,7 @@
 // /api/regions – Land/Bundesland je Punkt für die Feiertagsprüfung (server/regions.mjs),
 // /api/brouter – Weiterleitung an einen eigenen BRouter-Server (server/brouterProxy.mjs, BROUTER_URL),
 // /api/client-error – Fehlerberichte aus dem Browser ins Log (server/clientErrors.mjs),
+// /api/feedback – Rückmeldungen der Nutzer in die Datenbank (server/feedbackApi.mjs),
 // /api/account|settings|routes|shared – Konten (server/accountApi.mjs).
 import './server/env.mjs'; // muss der erste Import bleiben (.env laden, bevor andere Module Werte lesen)
 import { createServer } from 'node:http';
@@ -23,6 +24,7 @@ import { serveStatic } from './server/static.mjs';
 import { getRegions, isRegionKey } from './server/regions.mjs';
 import { handleBrouter, brouterEnabled } from './server/brouterProxy.mjs';
 import { handleClientError } from './server/clientErrors.mjs';
+import { handleFeedback } from './server/feedbackApi.mjs';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 8000;
@@ -185,6 +187,7 @@ createServer(async (req, res) => {
   if (path === '/api/client-error') return handleClientError(req, res);
   if (await handleBrouter(req, res, url)) return;
   if (await handleAccountApi(req, res, url)) return;
+  if (await handleFeedback(req, res, url)) return;
   if (path === '/') path = '/index.html';
   const file = normalize(join(ROOT, path));
   if (!PUBLIC.some(re => re.test(path)) || path.includes('..') || !file.startsWith(ROOT.endsWith(sep) ? ROOT : ROOT + sep)) {

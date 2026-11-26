@@ -582,17 +582,17 @@ dialog h2 { margin: 0; font-size: 1.125rem; }
 /* ---------- Einstellungen (settingsDialog.js) ----------
    Kopf und Fuß stehen fest, dazwischen scrollt der Inhalt: „Speichern“ bleibt auch auf dem Handy erreichbar.
    Abschnitte mit eigener Überschrift, Bedienelemente mindestens 44 px hoch (bequem mit dem Finger). */
-#settings-dialog { width: min(480px, calc(100vw - 16px)); max-height: calc(100dvh - 24px); padding: 0; overflow: hidden; }
-#settings-dialog[open] { display: flex; }
-#settings-dialog form.settings { gap: 0; width: 100%; min-height: 0; }
+:is(#settings-dialog, #feedback-dialog) { width: min(480px, calc(100vw - 16px)); max-height: calc(100dvh - 24px); padding: 0; overflow: hidden; }
+:is(#settings-dialog, #feedback-dialog)[open] { display: flex; }
+:is(#settings-dialog, #feedback-dialog) form.settings { gap: 0; width: 100%; min-height: 0; }
 .settings-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 10px 10px 20px; border-bottom: 1px solid var(--border); }
 .settings-head h2 { font-size: 1.25rem; }
 .settings-close { width: 44px; height: 44px; background: transparent; }
 .settings-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; display: flex; flex-direction: column; gap: 28px; }
 .settings-foot { display: flex; gap: 12px; padding: 12px 20px 16px; border-top: 1px solid var(--border); }
 .settings-foot button { flex: 1; }
-#settings-dialog button, #settings-dialog input[type="text"], #settings-dialog input[type="password"], #settings-dialog input[type="number"] { min-height: 44px; }
-#settings-dialog .link-btn.inline { min-height: 0; }
+:is(#settings-dialog, #feedback-dialog) button, :is(#settings-dialog, #feedback-dialog) input[type="text"], :is(#settings-dialog, #feedback-dialog) input[type="password"], :is(#settings-dialog, #feedback-dialog) input[type="number"] { min-height: 44px; }
+:is(#settings-dialog, #feedback-dialog) .link-btn.inline { min-height: 0; }
 .settings-section { display: flex; flex-direction: column; gap: 10px; }
 .settings-section h3 { margin: 0; font-size: 1rem; font-weight: 700; }
 .settings-section .hint { font-size: 0.875rem; }
@@ -606,9 +606,19 @@ dialog h2 { margin: 0; font-size: 1.125rem; }
 .settings-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 .hint.done::before { content: "✓ "; content: "✓ " / ""; color: var(--accent-text); font-weight: 700; }
 #settings-dialog .choice-set legend { font-size: 0.875rem; font-weight: 600; color: var(--text); }
-#settings-dialog .check { min-height: 44px; padding: 0 8px; border-radius: 8px; font-size: 0.9375rem; }
-#settings-dialog .check:hover { background: var(--surface); }
-#settings-dialog .check input { width: 20px; height: 20px; flex: none; }
+:is(#settings-dialog, #feedback-dialog) .check { min-height: 44px; padding: 0 8px; border-radius: 8px; font-size: 0.9375rem; }
+:is(#settings-dialog, #feedback-dialog) .check:hover { background: var(--surface); }
+:is(#settings-dialog, #feedback-dialog) .check input { width: 20px; height: 20px; flex: none; }
+.settings-section textarea, .settings-section input[type="email"] { font: inherit; color: inherit; }
+.settings-section input[type="email"] { width: 100%; min-height: 44px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--field-border); border-radius: 8px; outline: none; }
+.settings-section input[type="email"]:focus { border-color: var(--accent); }
+.settings-section textarea { width: 100%; min-height: 8rem; padding: 8px 10px; background: var(--surface); border: 1px solid var(--field-border); border-radius: 8px; resize: vertical; }
+.settings-section textarea:focus { border-color: var(--accent); outline: none; }
+.settings-section textarea:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 1px; }
+#feedback-preview pre { margin: 6px 0 0; padding: 8px 10px; background: var(--surface); border-radius: 8px; font-size: 0.8125rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Feedback am Ende des Panels: leise, aber immer zu finden */
+.panel-foot { margin: 4px 0 0; padding-top: 10px; border-top: 1px solid var(--border); }
+.panel-foot .link-btn { min-height: 1.5rem; }
 .choice-set.single { display: block; }
 .choice-set.single .stay-types { grid-template-columns: 1fr; gap: 0; }
 #settings-dialog .range-row input[type="range"] { min-height: 44px; margin: 0; }
@@ -758,6 +768,9 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
     margin: 0 -16px; padding: 10px 16px; background: var(--panel); border-top: 1px solid var(--border);
   }
   .sheet-actions[hidden], .panel:has(#plan:not([hidden])) .sheet-actions { display: none; }
+  /* „Route erstellen“ klebt nur innerhalb des Formulars fest – stünde danach noch die Feedback-Zeile, reichte die
+     Leiste nicht bis an den Rand des Blatts. Solange sie zu sehen ist: Feedback nur über die Einstellungen. */
+  .panel:has(#plan:not([hidden]) .plan-actions:not([hidden])) .panel-foot { display: none; }
   .sheet-actions button { min-height: 44px; font-weight: 600; }
   #btn-sheet-gpx { flex: none; }
   #btn-sheet-gpx.primary, #btn-sheet-multiday { flex: 1; }

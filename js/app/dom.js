@@ -4,6 +4,7 @@
  * Daten aus OSM, vom Nutzer oder vom Server.
  */
 import { announce } from '../announce.js';
+import { noteProblem } from '../errorReport.js';
 import { osmUrl, osmEditUrl, osmNoteUrl } from '../utils.js';
 
 /**
@@ -41,6 +42,7 @@ export function setStatus(text, kind) {
   ui.status.className = 'status' + (kind ? ' ' + kind : '');
   ui.status.textContent = text || '';
   if (text) announce(text, { urgent: kind === 'error' });
+  if (text && kind === 'error') noteProblem(text); // für „Feedback geben“ mit technischen Angaben
 }
 
 /** Mindestdauer, die ein Hinweis aus flashStatus() sichtbar bleibt */

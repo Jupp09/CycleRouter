@@ -24,35 +24,13 @@ import {
   createSession, destroySession, destroyOtherSessions, currentUser, limitReached, countAttempt, clientIp,
 } from './auth.mjs';
 import { SYNC_KEYS, MODES, BIKES } from '../js/shared.js';
-import { HttpError, sendJson, readJson as parseJson } from './http.mjs';
+import { HttpError, sendJson, readJsonStrict as readJson, checkOrigin } from './http.mjs';
 
 // Konto-Antworten nie zwischenspeichern (enthalten persönliche Daten)
 const json = (res, status, data) => sendJson(res, status, data, { 'Cache-Control': 'no-store' });
 
-/** JSON-Körper lesen; nur mit Content-Type application/json (Teil des CSRF-Schutzes, siehe checkOrigin). */
-async function readJson(req, limit) {
-  if (!String(req.headers['content-type'] || '').startsWith('application/json')) {
-    throw new HttpError(415, 'Erwartet JSON');
-  }
-  return parseJson(req, limit);
-}
-
 /** JSON-Spalten: Der MariaDB-Treiber liefert sie je nach Version/Server als Text oder schon als Objekt. */
 const fromJson = v => (typeof v === 'string' ? JSON.parse(v) : v);
-
-/**
- * Schutz vor Anfragen fremder Webseiten (CSRF): Ändernde Anfragen müssen JSON sein (geht von fremden
- * Seiten nur mit CORS-Vorabprüfung, die dieser Server nicht erlaubt) und dürfen, falls der Browser
- * einen Origin mitschickt, nur von dieser Seite kommen. Dazu kommt SameSite=Lax beim Cookie.
- */
-function checkOrigin(req) {
-  const origin = req.headers.origin;
-  if (!origin) return;
-  const host = req.headers['x-forwarded-host'] || req.headers.host;
-  let originHost = null;
-  try { originHost = new URL(origin).host; } catch { /* z. B. "null" */ }
-  if (originHost !== host) throw new HttpError(403, 'Fremde Herkunft');
-}
 
 // ---------- Einstellungen ----------
 

@@ -107,6 +107,11 @@ export async function logoutOthers() {
   return (await api('POST', 'account/logout-others', {})).count;
 }
 
+/** Rückmeldung senden (server/feedbackApi.mjs) → {ok, id}; auch ohne Anmeldung. */
+export function sendFeedback(body) {
+  return api('POST', 'feedback', body);
+}
+
 export const fetchSettings =() => api('GET', 'settings');
 export const pushSettings = data => api('PUT', 'settings', { data });
 

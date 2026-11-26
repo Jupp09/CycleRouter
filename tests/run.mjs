@@ -95,6 +95,8 @@ for (const file of files) {
   const t = {
     app: APP,
     sleep,
+    /** Speicher der Konto-Attrappe dieses Tests (z. B. `accounts.feedback`: angenommene Rückmeldungen). */
+    accounts,
     /** Neue Seite (eigener Browser-Kontext). `accounts: true` → Konto-API aus dem gemeinsamen Speicher dieses Tests. */
     async page({ accounts: withAccounts = false, ...opts } = {}) {
       const shots = flags.has('--shots');

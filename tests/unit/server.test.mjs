@@ -13,6 +13,7 @@ import { contentSecurityPolicy } from '../../server/security.mjs';
 import { moduleGraph } from '../../server/static.mjs';
 import { lines } from '../../server/lines.mjs';
 import { parsePoly } from '../../scripts/poly.mjs';
+import { cleanFeedback } from '../../server/feedbackApi.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const req = (peer, headers = {}) => ({ socket: { remoteAddress: peer }, headers });
@@ -168,4 +169,28 @@ test('parsePoly: .poly des Spiegels → MultiPolygon mit Löchern', () => {
   assert.equal(g.coordinates[0].length, 2, 'Loch gehört zum ersten Polygon');
   assert.deepEqual(g.coordinates[0][1][0], [4, 4]);
   assert.throws(() => parsePoly('leer\nEND\n'));
+});
+
+test('cleanFeedback: Art, Länge, E-Mail, Routen-Link nur auf diese Seite, Fehler ohne Orte', () => {
+  const host = 'cyclorouter.de';
+  const ok = cleanFeedback({ kind: 'bug', text: '  Karte bleibt grau\nnach dem Laden.\u0007  ', email: 'a@b.de' }, host);
+  assert.deepEqual(ok, { kind: 'bug', text: 'Karte bleibt grau\nnach dem Laden.', email: 'a@b.de', tech: null, route: null });
+  const status = fn => { try { fn(); } catch (e) { return [e.status, e.message]; } return null; };
+  assert.equal(status(() => cleanFeedback({ kind: 'spam', text: 'x'.repeat(20) }, host))[0], 400);
+  assert.match(status(() => cleanFeedback({ kind: 'idea', text: 'zu kurz' }, host))[1], /mindestens 10/);
+  assert.match(status(() => cleanFeedback({ kind: 'idea', text: 'x'.repeat(20), email: 'keine-adresse' }, host))[1], /E-Mail/);
+  assert.equal(cleanFeedback({ kind: 'idea', text: 'y'.repeat(5000) }, host).text.length, 4000);
+  // Routen-Link: nur auf diese Seite und mit Route im #-Teil
+  const route = 'https://cyclorouter.de/#v=1&m=ab&s=50.94,6.95,K%C3%B6ln';
+  assert.equal(cleanFeedback({ kind: 'bug', text: 'x'.repeat(20), route }, host).route, route);
+  for (const bad of ['https://example.com/#v=1', 'https://cyclorouter.de/', 'javascript:alert(1)', 'kein link']) {
+    assert.equal(status(() => cleanFeedback({ kind: 'bug', text: 'x'.repeat(20), route: bad }, host))?.[0], 400, bad);
+  }
+  // Technische Angaben: Fehlermeldungen ohne Koordinaten, höchstens 10, unbekannte Felder fallen weg
+  const tech = cleanFeedback({ kind: 'bug', text: 'x'.repeat(20), tech: {
+    browser: 'Firefox', standalone: 'ja', secret: 'x', errors: [...Array(12)].map((_, i) => `Fehler ${i} bei 50.94123,6.95123`) } }, host).tech;
+  assert.equal(tech.errors.length, 10);
+  assert.ok(tech.errors.every(e => !/50\.94123/.test(e)), tech.errors[0]);
+  assert.equal(tech.standalone, false);
+  assert.ok(!('secret' in tech));
 });

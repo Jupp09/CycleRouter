@@ -46,6 +46,7 @@ import { openLinkFromUrl } from './app/linkView.js';
 import { initAccount } from './app/accountView.js';
 import { initHome } from './app/homeView.js';
 import './app/settingsDialog.js';
+import './app/feedbackView.js';
 
 syncUi();
 

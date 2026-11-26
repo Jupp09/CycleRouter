@@ -56,6 +56,22 @@ const SCHEMA = [
     KEY ix_user_updated (user_id, updated_at),
     CONSTRAINT fk_routes_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // Rückmeldungen (server/feedbackApi.mjs). Wird ein Konto gelöscht, bleibt die Meldung ohne Bezug zum Konto
+  // stehen (SET NULL); eine angegebene E-Mail steht in der Meldung selbst und lässt sich mit ihr löschen.
+  `CREATE TABLE IF NOT EXISTS feedback (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    kind VARCHAR(10) NOT NULL,
+    text TEXT NOT NULL,
+    email VARCHAR(254) NULL,
+    tech TEXT NULL CHECK (tech IS NULL OR JSON_VALID(tech)),
+    route TEXT NULL,
+    user_id INT UNSIGNED NULL,
+    done TINYINT(1) NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY ix_created (created_at),
+    CONSTRAINT fk_feedback_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 ];
 
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '::1'];

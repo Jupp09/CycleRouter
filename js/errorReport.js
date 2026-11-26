@@ -17,11 +17,26 @@ const MAX_REPORTS = 5;
 /** Erlaubte Herkunft der Skripte: die App selbst und Leaflet von cdnjs. */
 const OWN = [location.origin, 'https://cdnjs.cloudflare.com'];
 
+/**
+ * Die letzten Probleme dieser Sitzung (ohne Orte, `scrub`), für „Feedback geben“ mit technischen Angaben:
+ * ungefangene Fehler und Fehlermeldungen in der Statuszeile (dom.js meldet sie mit noteProblem).
+ */
+const recent = [];
+const RECENT_MAX = 10;
+export function noteProblem(text) {
+  const t = scrub(text, 300);
+  if (!t || recent.at(-1)?.endsWith(t)) return;
+  recent.push(`${new Date().toTimeString().slice(0, 5)} ${t}`);
+  if (recent.length > RECENT_MAX) recent.shift();
+}
+export function recentProblems() { return [...recent]; }
+
 let left = MAX_REPORTS;
 let available = true; // false, wenn die App ohne server.mjs läuft (statischer Server) – dann gar nicht erst senden
 const seen = new Set();
 
 function send(kind, error, where = {}) {
+  noteProblem(error?.message ?? error);
   if (!available || left <= 0 || !navigator.onLine) return;
   const message = scrub(error?.message ?? error, 500);
   if (!message || message === 'Script error.') return; // fremdes Skript ohne Einzelheiten

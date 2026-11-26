@@ -1,5 +1,5 @@
 // Konto-API im Speicher – nur für die Browsertests, damit sie ohne MariaDB laufen.
-// Fängt im Testbrowser die Aufrufe an /api/account…, /api/settings, /api/routes…, /api/shared/… ab
+// Fängt im Testbrowser die Aufrufe an /api/account…, /api/settings, /api/routes…, /api/shared/… und /api/feedback ab
 // (DevTools Fetch.requestPaused) und beantwortet sie wie server/accountApi.mjs. Getestet wird so die
 // Oberfläche; die echte Server-API mit SQL deckt das nicht ab.
 //
@@ -7,6 +7,7 @@
 // und übersteht so auch ein Neuladen. Alle Seiten mit demselben Store teilen sich Konten und Routen.
 import { randomBytes } from 'node:crypto';
 import { SYNC_KEYS, MODES, BIKES } from '../../js/shared.js';
+import { cleanFeedback } from '../../server/feedbackApi.mjs';
 
 class ApiError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -16,6 +17,7 @@ export function createAccountStore() {
   const users = new Map();     // username → {id, username, password, settings, settingsAt}
   const routes = new Map();    // id → {…, userId, data, shareToken}
   const sessions = new Map();  // sessionId der Seite → username
+  const feedback = [];         // angenommene Rückmeldungen (wie Tabelle feedback), für die Prüfungen
   let nextUser = 1, nextRoute = 1, clock = Date.now();
   const now = () => new Date(clock += 1000).toISOString(); // streng steigend, damit die Reihenfolge eindeutig ist
 
@@ -40,11 +42,19 @@ export function createAccountStore() {
     return out;
   }
 
-  function handle(session, method, path, body) {
+  function handle(session, method, path, body, host) {
     const user = users.get(sessions.get(session)) || null;
     const pub = u => ({ id: u.id, username: u.username });
 
     if (path === '/api/account' && method === 'GET') return [200, { enabled: true, user: user && pub(user) }];
+
+    // Rückmeldung: dieselbe Prüfung wie der Server (cleanFeedback), auch ohne Anmeldung
+    if (path === '/api/feedback' && method === 'POST') {
+      let f;
+      try { f = cleanFeedback(body, host); } catch (e) { throw new ApiError(e.status, e.message); }
+      feedback.push({ ...f, id: feedback.length + 1, userId: user?.id ?? null });
+      return [201, { ok: true, id: feedback.length }];
+    }
 
     let m = path.match(/^\/api\/shared\/([A-Za-z0-9_-]{22})$/);
     if (m && method === 'GET') {
@@ -148,7 +158,7 @@ export function createAccountStore() {
         }
         let status, data;
         try {
-          [status, data] = handle(page.sessionId, verb, new URL(url).pathname, raw ? JSON.parse(raw) : {});
+          [status, data] = handle(page.sessionId, verb, new URL(url).pathname, raw ? JSON.parse(raw) : {}, new URL(url).host);
         } catch (e) {
           if (!(e instanceof ApiError)) throw e;
           [status, data] = [e.status, { error: e.message }];
@@ -161,9 +171,10 @@ export function createAccountStore() {
       });
       await page.send('Network.enable');
       await page.send('Fetch.enable', {
-        patterns: ['account', 'settings', 'routes', 'shared'].map(p => ({ urlPattern: `*/api/${p}*`, requestStage: 'Request' })),
+        patterns: ['account', 'settings', 'routes', 'shared', 'feedback'].map(p => ({ urlPattern: `*/api/${p}*`, requestStage: 'Request' })),
       });
     },
     get userCount() { return users.size; },
+    get feedback() { return feedback; },
   };
 }
