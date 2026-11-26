@@ -85,4 +85,39 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   check('Einstellung bleibt (nur Fahrrad, Umschalter weg)', await ev(`document.querySelector('#bike-switch').hidden`));
   check('Routenarten bleiben', await ev(visible('#mode-tabs')) === 'A → B|Rundkurs');
   await page.shot('2-panel');
+
+  step('Dialog: Aufbau und Bedienung');
+  const D = `document.querySelector('#settings-dialog')`;
+  await ev(`document.querySelector('#btn-settings').click(); true`); await sleep(300);
+  const layout = await ev(`(() => { const d = ${D}, body = d.querySelector('.settings-body'), foot = d.querySelector('.settings-foot');
+    return { heads: [...d.querySelectorAll('.settings-section:not([hidden]) h3')].map(h => h.textContent),
+      danger: d.querySelector('#account-danger').hidden, scrolls: body.scrollHeight > body.clientHeight,
+      footVisible: foot.getBoundingClientRect().bottom <= innerHeight + 1,
+      checkmark: getComputedStyle(d.querySelector('#theme-switch [aria-checked=true]'), '::before').content,
+      small: [...d.querySelectorAll('button, input:not([type=checkbox])')].filter(e => e.offsetParent && e.getBoundingClientRect().height < 43.5 && !e.matches('.link-btn')).map(e => e.id || e.textContent.trim()) }; })()`);
+  check('Abschnitte in der Reihenfolge des Entwurfs', layout.heads.join('|') === 'Darstellung|Auswahl anpassen|Heimatadresse|Durchschnittsgeschwindigkeit|Rundkurs planen nach|Pausenstil bei Verpflegungsstopps|Mehrtagestouren|OpenRouteService', layout.heads.join('|'));
+  check('Ohne Konto kein Löschbereich', layout.danger);
+  check('Inhalt scrollt, Speichern bleibt sichtbar', layout.scrolls && layout.footVisible, JSON.stringify(layout));
+  check('Gewählte Option mit Häkchen', /✓/.test(layout.checkmark), layout.checkmark);
+  check('Bedienelemente mindestens 44 px hoch', !layout.small.length, layout.small.join(', '));
+
+  await ev(`{ const n = document.querySelector('#speed-num'); n.value = 24; n.dispatchEvent(new Event('change')); } true`);
+  check('Zahlenfeld stellt den Regler', await ev(`document.querySelector('#speed-range').value`) === '24');
+  const before = Number(await ev(`document.querySelector('#stage-max').value`));
+  await ev(`document.querySelector('[data-step=stage-max][data-delta="10"]').click(); true`);
+  check('+ erhöht die km pro Tag um 10', Number(await ev(`document.querySelector('#stage-max').value`)) === before + 10);
+  await ev(`document.querySelector('#ors-show').click(); true`);
+  check('API-Key anzeigen', await ev(`document.querySelector('#ors-key').type === 'text' && document.querySelector('#ors-show').getAttribute('aria-pressed') === 'true'`));
+  await page.shot('3-einstellungen');
+  await ev(`document.querySelector('.settings-body').scrollTop = 1e6; true`); await sleep(100);
+  await page.shot('4-einstellungen-unten');
+  // Enter in einem Feld speichert (nur „Speichern“ schickt ab), Kreuz und „Abbrechen“ verwerfen
+  await ev(`document.querySelector('.settings-close').click(); true`); await sleep(200);
+  check('Kreuz schließt ohne Speichern', await ev(`!${D}.open && ${D}.returnValue === 'cancel' && localStorage.getItem('cyclerouter.avgSpeed') !== '24'`));
+  await ev(`document.querySelector('#btn-settings').click(); true`); await sleep(300);
+  check('Beim Öffnen ist der Key wieder verdeckt', await ev(`document.querySelector('#ors-key').type === 'password'`));
+  await ev(`{ const n = document.querySelector('#speed-num'); n.value = 24; n.dispatchEvent(new Event('change')); } true`);
+  await ev(`document.querySelector('#stage-max').focus(); true`);
+  await page.key('Enter'); await sleep(200);
+  check('Enter in einem Feld speichert', await ev(`${D}.returnValue === 'save' && localStorage.getItem('cyclerouter.avgSpeed') === '24'`));
 }

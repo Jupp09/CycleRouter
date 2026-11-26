@@ -4,7 +4,7 @@
  * und Konto. Die Abschnitte füllen und speichern ihre Felder selbst (homeView, stagesView, accountView);
  * hier wird nur beim Öffnen gefüllt und beim Speichern entschieden, was neu berechnet werden muss.
  */
-import { storage, DEFAULT_SPEED, setAverageSpeed } from '../utils.js';
+import { storage, DEFAULT_SPEED, SPEED_MIN, SPEED_MAX, setAverageSpeed, clampInt } from '../utils.js';
 import { state, emit, BIKE_LABELS } from './state.js';
 import { $, $$ } from './dom.js';
 import { showRoute, replanStops, recalc } from './pipeline.js';
@@ -17,19 +17,25 @@ import { syncUi, selectBike, selectMode } from './controls.js';
 // ---------- Durchschnittsgeschwindigkeit ----------
 // Gespeichert als km/h oder null (= Standard je Fahrradtyp). Grundlage für Fahrzeit und Ankunftszeiten.
 
-const speedRange = $('#speed-range');
+// Regler und Zahlenfeld zeigen denselben Wert; das Zahlenfeld nimmt eine genaue Eingabe an (10–35).
+const speedRange = $('#speed-range'), speedNum = $('#speed-num');
 let pendingSpeed = null; // Auswahl im Dialog, null = Standard
 
 function renderSpeed() {
   const value = pendingSpeed ?? DEFAULT_SPEED[state.bike];
   speedRange.value = value;
-  $('#speed-out').textContent = pendingSpeed == null
-    ? `${value} km/h (Standard ${BIKE_LABELS[state.bike]})`
-    : `${value} km/h`;
+  speedNum.value = value;
+  speedRange.setAttribute('aria-valuetext', `${value} km/h${pendingSpeed == null ? `, Standard für ${BIKE_LABELS[state.bike]}` : ''}`);
+  $('#speed-default').textContent = `Standard ${BIKE_LABELS[state.bike]}: ${DEFAULT_SPEED[state.bike]}`;
   $('#speed-reset').hidden = pendingSpeed == null;
 }
 
 speedRange.addEventListener('input', () => { pendingSpeed = Number(speedRange.value); renderSpeed(); });
+// Erst beim Verlassen bzw. Enter übernehmen – beim Tippen von „25“ würde „2“ sonst schon auf 10 hochgesetzt
+speedNum.addEventListener('change', () => {
+  pendingSpeed = clampInt(speedNum.value, SPEED_MIN, SPEED_MAX, pendingSpeed ?? DEFAULT_SPEED[state.bike]);
+  renderSpeed();
+});
 $('#speed-reset').addEventListener('click', () => { pendingSpeed = null; renderSpeed(); });
 
 setAverageSpeed(storage.get('avgSpeed', null));
@@ -132,13 +138,38 @@ function saveVisible() {
   };
 }
 
+// ---------- Zahlenfelder mit − / + (Mehrtagestour) ----------
+// Je Klick 10 km bzw. 10 €, innerhalb der Grenzen des Felds; das Feld selbst nimmt jeden Wert an.
+
+for (const b of $$('#settings-dialog [data-step]')) {
+  b.addEventListener('click', () => {
+    const input = $(`#${b.dataset.step}`);
+    const min = Number(input.min), max = Number(input.max);
+    input.value = String(clampInt(Number(input.value || min) + Number(b.dataset.delta), min, max, min));
+  });
+}
+
+// ---------- ORS-Schlüssel anzeigen ----------
+// Zum Prüfen nach dem Einfügen; beim Öffnen ist er wieder verdeckt.
+
+const orsShow = $('#ors-show');
+function showKey(show) {
+  $('#ors-key').type = show ? 'text' : 'password';
+  orsShow.setAttribute('aria-pressed', String(show));
+  orsShow.lastChild.textContent = show ? 'Verbergen' : 'Anzeigen';
+}
+orsShow.addEventListener('click', () => showKey(orsShow.getAttribute('aria-pressed') !== 'true'));
+
 // ---------- Öffnen und Speichern ----------
 
 const dialog = $('#settings-dialog');
+// „Abbrechen“ und das Kreuz verwerfen; nur „Speichern“ schickt ab, damit Enter in einem Feld speichert
+for (const b of $$('#settings-dialog [data-close]')) b.addEventListener('click', () => dialog.close('cancel'));
 
 $('#btn-settings').addEventListener('click', () => {
   // Der ORS-Schlüssel bleibt im Browser (localStorage) und wird nie mit dem Konto abgeglichen
   $('#ors-key').value = storage.get('orsKey', '');
+  showKey(false);
   pendingTheme = savedTheme();
   renderTheme();
   pendingSpeed = storage.get('avgSpeed', null);
@@ -151,6 +182,7 @@ $('#btn-settings').addEventListener('click', () => {
   renderStaySettings();
   openHomeSettings();
   dialog.showModal();
+  dialog.querySelector('.settings-body').scrollTop = 0;
 });
 
 dialog.addEventListener('close', () => {

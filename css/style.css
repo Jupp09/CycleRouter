@@ -579,6 +579,57 @@ dialog::backdrop { background: rgba(10, 8, 20, .4); }
 dialog form { display: flex; flex-direction: column; gap: 12px; }
 dialog h2 { margin: 0; font-size: 1.125rem; }
 
+/* ---------- Einstellungen (settingsDialog.js) ----------
+   Kopf und Fuß stehen fest, dazwischen scrollt der Inhalt: „Speichern“ bleibt auch auf dem Handy erreichbar.
+   Abschnitte mit eigener Überschrift, Bedienelemente mindestens 44 px hoch (bequem mit dem Finger). */
+#settings-dialog { width: min(480px, calc(100vw - 16px)); max-height: calc(100dvh - 24px); padding: 0; overflow: hidden; }
+#settings-dialog[open] { display: flex; }
+#settings-dialog form.settings { gap: 0; width: 100%; min-height: 0; }
+.settings-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 10px 10px 20px; border-bottom: 1px solid var(--border); }
+.settings-head h2 { font-size: 1.25rem; }
+.settings-close { width: 44px; height: 44px; background: transparent; }
+.settings-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; display: flex; flex-direction: column; gap: 28px; }
+.settings-foot { display: flex; gap: 12px; padding: 12px 20px 16px; border-top: 1px solid var(--border); }
+.settings-foot button { flex: 1; }
+#settings-dialog button, #settings-dialog input[type="text"], #settings-dialog input[type="password"], #settings-dialog input[type="number"] { min-height: 44px; }
+#settings-dialog .link-btn.inline { min-height: 0; }
+.settings-section { display: flex; flex-direction: column; gap: 10px; }
+.settings-section h3 { margin: 0; font-size: 1rem; font-weight: 700; }
+.settings-section .hint { font-size: 0.875rem; }
+.settings-section.account { padding-bottom: 0; border-bottom: 0; }
+/* Gewählte Option: Akzentfläche und Häkchen – nicht allein an der Farbe erkennbar */
+.segmented.checked button[aria-checked="true"] { background: var(--accent); color: var(--on-accent); box-shadow: none; }
+.segmented.checked button[aria-checked="true"]::before { content: "✓ "; content: "✓ " / ""; }
+.nav-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; }
+.nav-row svg, .with-icon svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.with-icon { display: inline-flex; align-items: center; gap: 8px; }
+.settings-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.hint.done::before { content: "✓ "; content: "✓ " / ""; color: var(--accent-text); font-weight: 700; }
+#settings-dialog .choice-set legend { font-size: 0.875rem; font-weight: 600; color: var(--text); }
+#settings-dialog .check { min-height: 44px; padding: 0 8px; border-radius: 8px; font-size: 0.9375rem; }
+#settings-dialog .check:hover { background: var(--surface); }
+#settings-dialog .check input { width: 20px; height: 20px; flex: none; }
+.choice-set.single { display: block; }
+.choice-set.single .stay-types { grid-template-columns: 1fr; gap: 0; }
+#settings-dialog .range-row input[type="range"] { min-height: 44px; margin: 0; }
+#speed-num { width: 72px; text-align: center; font-weight: 600; }
+.unit { min-width: 1.5rem; font-size: 0.875rem; color: var(--muted); }
+/* Skala unter dem Regler; rechts frei für Zahlenfeld und Einheit, damit die Enden unter dem Regler stehen */
+.range-scale { display: flex; justify-content: space-between; margin-top: -6px; padding-right: 124px; font-size: 0.8125rem; color: var(--muted); }
+.stepper-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.stepper-row label { font-weight: 500; }
+.stepper { display: flex; align-items: center; gap: 6px; }
+.stepper button { width: 44px; padding: 0; font-size: 1.25rem; line-height: 1; }
+#settings-dialog .stepper input[type="number"] { width: 72px; text-align: center; font-weight: 600; }
+.field-label { font-weight: 500; }
+.key-row { display: flex; gap: 8px; }
+.key-row input { flex: 1; min-width: 0; }
+.danger-zone { padding: 16px; border: 1px solid var(--error-text); border-radius: 12px; background: var(--error-bg); }
+.danger-zone h3 { color: var(--error-text); }
+.danger-zone .hint { color: var(--text); }
+.danger-zone > button.danger { align-self: flex-start; }
+.hint.error { color: var(--error-text); }
+
 /* Roadbook am Bildschirm: nur in der installierten App auf iPhone/iPad, die keinen Druckdialog hat. Die Kopfzeile
    reicht über den Innenabstand des Dialogs bis an den Rand, sonst scheint beim Scrollen Text daneben durch. */
 #roadbook-dialog { width: min(760px, calc(100vw - 16px)); padding-top: 0; }

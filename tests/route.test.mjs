@@ -131,7 +131,8 @@ export default async function ({ app, page: newPage, check, step, sleep }) {
   await ev(`${q('#btn-settings')}.click(); true`); await sleep(300);
   check('Einstellungsdialog offen', await ev(`${q('#settings-dialog')}.open`));
   await ev(`{ const r = ${q('#speed-range')}; r.value = 30; r.dispatchEvent(new Event('input')); } true`);
-  check('Tempo-Anzeige', (await text('#speed-out')) === '30 km/h', await text('#speed-out'));
+  const speedShown = await ev(`${q('#speed-num')}.value + ' km/h · ' + ${q('#speed-range')}.getAttribute('aria-valuetext')`);
+  check('Tempo-Anzeige: Zahlenfeld und Regler', speedShown === '30 km/h · 30 km/h', speedShown);
   await ev(`${q('#settings-dialog')}.close('save'); true`);
   await sleep(500);
   await waitFor(`!${q('#status')}.classList.contains('loading') || ${q('#status')}.hidden`, 90000); await sleep(1000);

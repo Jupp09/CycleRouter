@@ -27,7 +27,10 @@ function renderAccount(message = '', isError = false) {
   $('#account-out').hidden = loggedIn;
   $('#account-in').hidden = !loggedIn;
   for (const id of ['#btn-delete-account', '#btn-change-password', '#btn-logout-others']) $(id).hidden = !loggedIn;
+  // „Konto löschen“ steht abgesetzt am Ende des Dialogs – nur angemeldet
+  $('#account-danger').hidden = !account.enabled || !loggedIn;
   $('#account-delete').hidden = true;
+  $('#account-delete-msg').hidden = true;
   $('#account-password').hidden = true;
   if (loggedIn) $('#account-name').textContent = account.user.username;
   if (!message && account.offline) message = 'Offline – Anmelden, Abgleich und Speichern gehen wieder, sobald das Netz da ist.';
@@ -117,6 +120,10 @@ $('#btn-delete-confirm').addEventListener('click', async () => {
     renderAccount(e.message, true);
     $('#account-delete').hidden = false;
     $('#btn-delete-account').hidden = true;
+    // Die Meldung oben im Kontobereich läge außer Sicht – hier, beim Löschfeld, noch einmal
+    const msg = $('#account-delete-msg');
+    msg.textContent = e.message;
+    msg.hidden = false;
     return;
   }
   $('#account-delete-pass').value = '';

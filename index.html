@@ -394,131 +394,177 @@
     </form>
   </dialog>
 
-  <dialog id="settings-dialog">
-    <form method="dialog">
-      <h2>Einstellungen</h2>
-      <section class="account" id="account-box" hidden>
-        <span class="label">Konto</span>
-        <div id="account-out" class="account-form">
-          <input id="account-user" type="text" placeholder="Benutzername" autocomplete="username" autocapitalize="none" spellcheck="false">
-          <input id="account-pass" type="password" placeholder="Passwort (mind. 8 Zeichen)" autocomplete="current-password">
-          <div class="actions">
-            <button type="button" id="btn-login" class="primary">Anmelden</button>
-            <button type="button" id="btn-register">Registrieren</button>
+  <!-- Einstellungen (settingsDialog.js): Kopf mit Schließen, Abschnitte mit Überschriften, unten fest „Abbrechen“ und
+       „Speichern“. Nur „Speichern“ schickt das Formular ab – Enter in einem Feld speichert also, statt zu verwerfen. -->
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <form method="dialog" class="settings">
+      <header class="settings-head">
+        <h2 id="settings-title">Einstellungen</h2>
+        <button type="button" class="icon-btn settings-close" data-close aria-label="Einstellungen schließen" title="Schließen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </header>
+      <div class="settings-body">
+        <section class="settings-section account" id="account-box" aria-labelledby="h-account" hidden>
+          <h3 id="h-account">Konto</h3>
+          <div id="account-out" class="account-form">
+            <input id="account-user" type="text" placeholder="Benutzername" aria-label="Benutzername" autocomplete="username" autocapitalize="none" spellcheck="false">
+            <input id="account-pass" type="password" placeholder="Passwort (mind. 8 Zeichen)" aria-label="Passwort" autocomplete="current-password">
+            <div class="actions">
+              <button type="button" id="btn-login" class="primary">Anmelden</button>
+              <button type="button" id="btn-register">Registrieren</button>
+            </div>
           </div>
-        </div>
-        <div id="account-in" class="account-in" hidden>
-          <span>Angemeldet als <b id="account-name"></b></span>
-          <button type="button" id="btn-logout">Abmelden</button>
-        </div>
-        <p class="hint" id="account-msg"></p>
-        <p class="hint" id="account-info">Mit Konto werden Einstellungen und gespeicherte Routen zwischen deinen Geräten abgeglichen. Der ORS-API-Key bleibt nur auf diesem Gerät.</p>
-        <button type="button" class="link-btn" id="btn-change-password" hidden>Passwort ändern …</button>
-        <div id="account-password" class="account-form" hidden>
-          <input id="account-pass-old" type="password" placeholder="Bisheriges Passwort" aria-label="Bisheriges Passwort" autocomplete="current-password">
-          <input id="account-pass-new" type="password" placeholder="Neues Passwort (mind. 8 Zeichen)" aria-label="Neues Passwort" autocomplete="new-password">
-          <div class="actions">
-            <button type="button" id="btn-password-confirm" class="primary">Passwort ändern</button>
-            <button type="button" id="btn-password-cancel">Abbrechen</button>
+          <div id="account-in" class="account-in" hidden>
+            <span>Angemeldet als <b id="account-name"></b></span>
+            <button type="button" id="btn-logout">Abmelden</button>
           </div>
-        </div>
-        <button type="button" class="link-btn" id="btn-logout-others" hidden>Auf allen anderen Geräten abmelden</button>
-        <button type="button" class="link-btn" id="btn-delete-account" hidden>Konto und alle gespeicherten Routen löschen …</button>
-        <div id="account-delete" class="account-form" hidden>
-          <input id="account-delete-pass" type="password" placeholder="Passwort zur Bestätigung" autocomplete="current-password">
-          <div class="actions">
-            <button type="button" id="btn-delete-confirm" class="danger">Endgültig löschen</button>
-            <button type="button" id="btn-delete-cancel">Abbrechen</button>
+          <p class="hint" id="account-msg"></p>
+          <p class="hint" id="account-info">Mit Konto werden Einstellungen und gespeicherte Routen zwischen deinen Geräten abgeglichen. Der ORS-API-Key bleibt nur auf diesem Gerät.</p>
+          <button type="button" class="nav-row" id="btn-change-password" hidden>Passwort ändern …<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <div id="account-password" class="account-form" hidden>
+            <input id="account-pass-old" type="password" placeholder="Bisheriges Passwort" aria-label="Bisheriges Passwort" autocomplete="current-password">
+            <input id="account-pass-new" type="password" placeholder="Neues Passwort (mind. 8 Zeichen)" aria-label="Neues Passwort" autocomplete="new-password">
+            <div class="actions">
+              <button type="button" id="btn-password-confirm" class="primary">Passwort ändern</button>
+              <button type="button" id="btn-password-cancel">Abbrechen</button>
+            </div>
           </div>
-        </div>
-      </section>
-      <div class="field">
-        <span class="label">Darstellung</span>
-        <div class="segmented" id="theme-switch" role="radiogroup" aria-label="Darstellung">
-          <button type="button" role="radio" data-value="system" title="Hell oder dunkel wie im Betriebssystem eingestellt">System</button>
-          <button type="button" role="radio" data-value="light">Hell</button>
-          <button type="button" role="radio" data-value="dark">Dunkel</button>
-        </div>
+          <button type="button" class="nav-row" id="btn-logout-others" hidden>Auf allen anderen Geräten abmelden<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+        </section>
+
+        <section class="settings-section" aria-labelledby="h-theme">
+          <h3 id="h-theme">Darstellung</h3>
+          <div class="segmented checked" id="theme-switch" role="radiogroup" aria-labelledby="h-theme">
+            <button type="button" role="radio" data-value="system" title="Hell oder dunkel wie im Betriebssystem eingestellt">System</button>
+            <button type="button" role="radio" data-value="light">Hell</button>
+            <button type="button" role="radio" data-value="dark">Dunkel</button>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="h-visible">
+          <h3 id="h-visible">Auswahl anpassen</h3>
+          <p class="hint" id="visible-hint">Nur Gewähltes erscheint in den Umschaltern; mindestens eins bleibt. Ist nur eins gewählt, entfällt der Umschalter.</p>
+          <fieldset class="choice-set" id="visible-bikes" aria-describedby="visible-hint">
+            <legend>Fahrradtypen</legend>
+            <label class="check"><input type="checkbox" value="road"> Rennrad</label>
+            <label class="check"><input type="checkbox" value="gravel"> Gravel</label>
+            <label class="check"><input type="checkbox" value="trekking"> Trekking</label>
+            <label class="check"><input type="checkbox" value="ebike"> E-Bike</label>
+          </fieldset>
+          <fieldset class="choice-set" id="visible-modes" aria-describedby="visible-hint">
+            <legend>Routenarten</legend>
+            <label class="check"><input type="checkbox" value="ab"> <span aria-hidden="true">A → B</span><span class="sr-only">Von A nach B</span></label>
+            <label class="check"><input type="checkbox" value="distance"> Distanz</label>
+            <label class="check"><input type="checkbox" value="loop"> Rundkurs</label>
+          </fieldset>
+        </section>
+
+        <section class="settings-section" aria-labelledby="h-home">
+          <h3 id="h-home">Heimatadresse</h3>
+          <p class="hint" id="home-hint">Wird beim Öffnen automatisch als Startort gesetzt.</p>
+          <div class="search">
+            <input id="home-input" type="text" placeholder="Adresse suchen" autocomplete="off" aria-labelledby="h-home" aria-describedby="home-hint">
+            <ul class="suggestions" hidden></ul>
+          </div>
+          <div class="settings-buttons">
+            <button type="button" id="btn-home-from-start" class="with-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Z"/></svg>Aktuellen Startort übernehmen</button>
+            <button type="button" id="btn-home-clear" class="with-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>Adresse entfernen</button>
+          </div>
+          <p class="hint done" id="home-warm-hint" role="status" hidden></p>
+        </section>
+
+        <section class="settings-section" aria-labelledby="h-speed">
+          <h3 id="h-speed">Durchschnittsgeschwindigkeit</h3>
+          <div class="range-row">
+            <input id="speed-range" type="range" min="10" max="35" step="1" aria-label="Durchschnittsgeschwindigkeit in km/h" aria-describedby="speed-hint">
+            <input id="speed-num" type="number" min="10" max="35" step="1" inputmode="numeric" aria-label="Durchschnittsgeschwindigkeit als Zahl in km/h">
+            <span class="unit">km/h</span>
+          </div>
+          <div class="range-scale" aria-hidden="true"><span>10</span><span id="speed-default"></span><span>35</span></div>
+          <p class="hint" id="speed-hint">Tempo in der Ebene – Anstiege werden zusätzlich berücksichtigt. Grundlage für Fahrzeit und Ankunftszeiten.
+            <button type="button" class="link-btn inline" id="speed-reset">Auf Standard zurücksetzen</button></p>
+        </section>
+
+        <section class="settings-section" aria-labelledby="loop-by-label">
+          <h3 id="loop-by-label">Rundkurs planen nach</h3>
+          <div class="segmented checked" id="loop-by-switch" role="radiogroup" aria-labelledby="loop-by-label" aria-describedby="loop-by-hint">
+            <button type="button" role="radio" data-value="distance">Distanz</button>
+            <button type="button" role="radio" data-value="time">Fahrzeit</button>
+          </div>
+          <p class="hint" id="loop-by-hint">Mit „Fahrzeit“ gibst du beim Rundkurs an, wie lange du fahren willst (z. B. 2 h), statt der Kilometer. Die Länge ergibt sich aus Tempo und Anstiegen – reine Fahrzeit ohne Pausen.</p>
+        </section>
+
+        <section class="settings-section" aria-labelledby="supply-style-label">
+          <h3 id="supply-style-label">Pausenstil bei Verpflegungsstopps</h3>
+          <div class="segmented checked" id="supply-style-switch" role="radiogroup" aria-labelledby="supply-style-label" aria-describedby="supply-style-hint">
+            <button type="button" role="radio" data-value="fast">Zügig</button>
+            <button type="button" role="radio" data-value="relaxed">Gemütlich</button>
+          </div>
+          <p class="hint" id="supply-style-hint"></p>
+        </section>
+
+        <section class="settings-section stay-settings" aria-labelledby="h-stays">
+          <h3 id="h-stays">Mehrtagestouren</h3>
+          <p class="hint">Ist eine Route länger, erscheint in den Ergebnissen „Als Mehrtagestour planen“.</p>
+          <div class="stepper-row">
+            <label for="stage-max">Max. Kilometer pro Tag</label>
+            <div class="stepper">
+              <button type="button" data-step="stage-max" data-delta="-10" aria-label="10 Kilometer weniger">−</button>
+              <input id="stage-max" type="number" min="30" max="300" step="5" inputmode="numeric">
+              <button type="button" data-step="stage-max" data-delta="10" aria-label="10 Kilometer mehr">+</button>
+              <span class="unit">km</span>
+            </div>
+          </div>
+          <div class="stepper-row">
+            <label for="night-budget">Budget pro Nacht</label>
+            <div class="stepper">
+              <button type="button" data-step="night-budget" data-delta="-10" aria-label="10 Euro weniger">−</button>
+              <input id="night-budget" type="number" min="10" max="500" step="5" inputmode="numeric">
+              <button type="button" data-step="night-budget" data-delta="10" aria-label="10 Euro mehr">+</button>
+              <span class="unit">€</span>
+            </div>
+          </div>
+          <fieldset class="choice-set single">
+            <legend>Unterkunftsarten</legend>
+            <div class="stay-types" id="stay-types"></div>
+          </fieldset>
+          <label class="check"><input type="checkbox" id="end-stay"> Bei Touren ohne Rückkehr auch am Ziel übernachten</label>
+        </section>
+
+        <section class="settings-section" aria-labelledby="h-ors">
+          <h3 id="h-ors">OpenRouteService</h3>
+          <label for="ors-key" class="field-label">API-Key</label>
+          <div class="key-row">
+            <input id="ors-key" type="password" placeholder="Key einfügen" autocomplete="off" spellcheck="false" aria-describedby="ors-hint">
+            <button type="button" id="ors-show" class="with-icon" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Anzeigen</button>
+          </div>
+          <p class="hint" id="ors-hint">Kostenlos erhältlich unter <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice.org<span class="sr-only"> (öffnet in neuem Tab)</span></a>. Der Key wird nur lokal in deinem Browser gespeichert.</p>
+        </section>
+
+        <!-- Abgesetzt am Ende: Löschen steht nicht neben Alltäglichem (accountView.js blendet es nur angemeldet ein) -->
+        <section class="settings-section danger-zone" id="account-danger" aria-labelledby="h-danger" hidden>
+          <h3 id="h-danger">Konto löschen</h3>
+          <p class="hint">Löscht dein Konto und alle gespeicherten Routen dauerhaft. Du wirst vorher noch einmal um dein Passwort gebeten.</p>
+          <button type="button" class="danger with-icon" id="btn-delete-account">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Konto und Routen löschen …</button>
+          <div id="account-delete" class="account-form" hidden>
+            <input id="account-delete-pass" type="password" placeholder="Passwort zur Bestätigung" aria-label="Passwort zur Bestätigung" autocomplete="current-password">
+            <div class="actions">
+              <button type="button" id="btn-delete-confirm" class="danger">Endgültig löschen</button>
+              <button type="button" id="btn-delete-cancel">Abbrechen</button>
+            </div>
+          </div>
+          <p class="hint error" id="account-delete-msg" hidden></p>
+        </section>
       </div>
-      <div class="field">
-        <span class="label">Auswahl anpassen</span>
-        <fieldset class="choice-set" id="visible-bikes">
-          <legend>Fahrradtypen</legend>
-          <label class="check"><input type="checkbox" value="road"> Rennrad</label>
-          <label class="check"><input type="checkbox" value="gravel"> Gravel</label>
-          <label class="check"><input type="checkbox" value="trekking"> Trekking</label>
-          <label class="check"><input type="checkbox" value="ebike"> E-Bike</label>
-        </fieldset>
-        <fieldset class="choice-set" id="visible-modes">
-          <legend>Routenarten</legend>
-          <label class="check"><input type="checkbox" value="ab"> A → B</label>
-          <label class="check"><input type="checkbox" value="distance"> Distanz</label>
-          <label class="check"><input type="checkbox" value="loop"> Rundkurs</label>
-        </fieldset>
-        <p class="hint">Nur Gewähltes erscheint in den Umschaltern; mindestens eins bleibt. Ist nur eins gewählt, entfällt der Umschalter.</p>
-      </div>
-      <div class="field">
-        <label class="label" for="home-input">Heimatadresse</label>
-        <div class="search">
-          <input id="home-input" type="text" placeholder="Adresse suchen" autocomplete="off">
-          <button type="button" id="btn-home-from-start" class="icon-btn" title="Aktuellen Startort übernehmen" aria-label="Aktuellen Startort übernehmen">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="10" r="3"/><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Z"/></svg>
-          </button>
-          <button type="button" id="btn-home-clear" class="icon-btn" title="Heimatadresse entfernen" aria-label="Heimatadresse entfernen">
-            <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
-          </button>
-          <ul class="suggestions" hidden></ul>
-        </div>
-      </div>
-      <p class="hint">Wird beim Öffnen automatisch als Startort gesetzt.</p>
-      <p class="hint" id="home-warm-hint" hidden></p>
-      <div class="field">
-        <span class="label">Durchschnittsgeschwindigkeit <output id="speed-out"></output></span>
-        <div class="range-row">
-          <input id="speed-range" type="range" min="10" max="35" step="1" aria-label="Durchschnittsgeschwindigkeit in km/h">
-        </div>
-        <p class="hint">Tempo in der Ebene – Anstiege werden zusätzlich berücksichtigt. Grundlage für Fahrzeit und Ankunftszeiten.
-          <button type="button" class="link-btn inline" id="speed-reset">Auf Standard zurücksetzen</button></p>
-      </div>
-      <div class="field">
-        <span class="label" id="loop-by-label">Rundkurs nach</span>
-        <div class="segmented" id="loop-by-switch" role="radiogroup" aria-labelledby="loop-by-label" aria-describedby="loop-by-hint">
-          <button type="button" role="radio" data-value="distance">Distanz</button>
-          <button type="button" role="radio" data-value="time">Fahrzeit</button>
-        </div>
-        <p class="hint" id="loop-by-hint">Mit „Fahrzeit“ stellst du beim Rundkurs statt der km ein, wie lange du fahren willst (z. B. 2 h). Die Länge ergibt sich aus dem Tempo oben und den Anstiegen; gemeint ist die reine Fahrzeit ohne Pausen.</p>
-      </div>
-      <div class="field">
-        <span class="label" id="supply-style-label">Pausenstil bei Verpflegungsstopps</span>
-        <div class="segmented" id="supply-style-switch" role="radiogroup" aria-labelledby="supply-style-label" aria-describedby="supply-style-hint">
-          <button type="button" role="radio" data-value="fast">Zügig</button>
-          <button type="button" role="radio" data-value="relaxed">Gemütlich</button>
-        </div>
-        <p class="hint" id="supply-style-hint"></p>
-      </div>
-      <div class="field stay-settings">
-        <span class="label">Mehrtagestouren</span>
-        <label class="field inline">
-          <span>Max. km pro Tag</span>
-          <input id="stage-max" type="number" min="30" max="300" step="5" inputmode="numeric">
-        </label>
-        <label class="field inline">
-          <span>Budget pro Nacht (€)</span>
-          <input id="night-budget" type="number" min="10" max="500" step="5" inputmode="numeric">
-        </label>
-        <div class="stay-types" id="stay-types"></div>
-        <label class="check"><input type="checkbox" id="end-stay"> Bei Touren ohne Rückkehr auch am Ziel übernachten</label>
-        <p class="hint">Ist eine Route länger, erscheint in den Ergebnissen „Als Mehrtagestour planen“.</p>
-      </div>
-      <label class="field">
-        <span class="label">OpenRouteService API-Key</span>
-        <input id="ors-key" type="password" placeholder="Key einfügen" autocomplete="off">
-      </label>
-      <p class="hint">Kostenlos erhältlich unter <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noopener">openrouteservice.org</a>. Der Key wird nur lokal in deinem Browser gespeichert.</p>
-      <div class="actions">
+      <footer class="settings-foot">
+        <button type="button" data-close>Abbrechen</button>
         <button value="save" class="primary">Speichern</button>
-        <button value="cancel">Abbrechen</button>
-      </div>
+      </footer>
     </form>
   </dialog>
 
