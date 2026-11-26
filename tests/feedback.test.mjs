@@ -1,7 +1,7 @@
 // Feedback geben (js/app/feedbackView.js → /api/feedback, hier die Attrappe aus lib/fakeAccount.mjs mit derselben
 // Prüfung wie der Server): nur mit Server-Datenbank sichtbar, freiwillige Angaben nur per Häkchen, die Vorschau
 // zeigt, was gesendet wird, Fehler bleiben im Dialog, Erfolg schließt ihn.
-import { BONN, HAS_ROUTE } from './lib/app.mjs';
+import { BONN, HAS_ROUTE, register } from './lib/app.mjs';
 
 export const title = 'Feedback geben';
 
@@ -75,4 +75,57 @@ export default async function ({ app, page: newPage, check, step, sleep, account
   check('Feedback öffnet über den Einstellungen', await ev(`document.querySelector('#feedback-dialog').open && document.querySelector('#settings-dialog').open`));
   await ev(`document.querySelector('#feedback-dialog [data-close]').click(); true`);
   check('Danach wieder in den Einstellungen', await ev(`!document.querySelector('#feedback-dialog').open && document.querySelector('#settings-dialog').open`));
+  check('Ohne Konto keine Verwaltung', await ev(`document.querySelector('#btn-feedback-admin').hidden`));
+  await ev(`document.querySelector('#settings-dialog').close(); true`);
+
+  step('Verwaltung: nur für Admins');
+  const other = await newPage({ accounts: true });
+  await other.open(app, { view: BONN });
+  check('Normales Konto angemeldet', await register(other, 'radler'));
+  check('Kein Eintrag „Feedback verwalten“', await other.ev(`document.querySelector('#btn-feedback-admin').hidden`));
+  const forbidden = await other.ev(`fetch('api/feedback/admin?status=open').then(r => r.status)`);
+  check('Schnittstelle lehnt ab (403)', forbidden === 403, String(forbidden));
+
+  const admin = await newPage({ accounts: true, height: 950 });
+  await admin.open(app, { view: BONN });
+  check('Admin angemeldet', await register(admin, 'chef'));
+  check('Eintrag mit Zahl offener Meldungen', await admin.waitFor(`!document.querySelector('#btn-feedback-admin').hidden
+    && document.querySelector('#feedback-admin-count').textContent === '(1 offen)'`, 10000), await admin.ev(`document.querySelector('#feedback-admin-count').textContent`));
+  await admin.ev(`document.querySelector('#btn-feedback-admin').click(); true`);
+  check('Liste geladen', await admin.waitFor(`document.querySelectorAll('#feedback-admin-list .feedback-item').length === 1`, 10000));
+  const shown = await admin.ev(`(() => { const li = document.querySelector('#feedback-admin-list .feedback-item');
+    return { head: li.querySelector('h3').textContent, text: li.querySelector('.feedback-text').textContent,
+      mail: li.querySelector('a[href^="mailto:"]')?.textContent, route: !!li.querySelector('a[href*="#v=1"]'), tech: !!li.querySelector('details pre'),
+      filter: document.querySelector('#feedback-admin-filter [aria-checked=true]').textContent }; })()`);
+  check('Meldung mit Art, Text, E-Mail, Route und Technik', /^#1 · Vorschlag · /.test(shown.head) && /Höhenlinien/.test(shown.text)
+    && shown.mail === 'E-Mail an test@example.org' && shown.route && shown.tech && shown.filter === 'Offen (1)', JSON.stringify(shown));
+  await admin.ev(`{ const t = document.querySelector('#feedback-admin-list textarea'); t.value = 'Danke! Höhenlinien kommen mit der nächsten Version.'; } true`);
+  await admin.ev(`document.querySelector('#feedback-admin-list .feedback-item button.primary').click(); true`);
+  check('Antwort gespeichert, Meldung erledigt', await admin.waitFor(`/gespeichert/.test(document.querySelector('#feedback-admin-msg').textContent)
+    && !document.querySelectorAll('#feedback-admin-list .feedback-item').length`, 10000), await admin.ev(`document.querySelector('#feedback-admin-msg').textContent`));
+  await admin.shot('2-verwaltung');
+
+  step('Absender sieht die Antwort (ohne Konto, über das Kennzeichen)');
+  await page.reload();
+  check('Hinweis „Neue Antwort auf dein Feedback“', await page.waitFor(`!document.querySelector('#feedback-reply-note').hidden`, 10000));
+  await ev(`document.querySelector('#btn-feedback-replies').click(); true`); await sleep(200);
+  const answer = await ev(`document.querySelector('#feedback-replies-list .feedback-reply')?.textContent`);
+  check('Antwort im Dialog', /Höhenlinien kommen/.test(answer ?? ''), answer);
+  check('Hinweis nach dem Lesen weg', await ev(`document.querySelector('#feedback-reply-note').hidden`));
+  await page.shot('3-antwort');
+  await ev(`document.querySelector('#feedback-replies-dialog').close(); true`);
+  await page.reload(); await sleep(1500);
+  check('Gelesen bleibt gelesen', await ev(`document.querySelector('#feedback-reply-note').hidden && !document.querySelector('#btn-feedback-mine').hidden`));
+  check('Fremdes Gerät sieht nichts', await other.ev(`fetch('api/feedback/replies', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items: [{ id: 1, token: 'A'.repeat(22) }] }) }).then(r => r.json()).then(d => d.replies.length)`) === 0);
+
+  step('Verwaltung: wieder öffnen und löschen');
+  await admin.ev(`document.querySelector('#feedback-admin-filter [data-value=done]').click(); true`);
+  check('Unter „Erledigt“ mit Antwort', await admin.waitFor(`document.querySelectorAll('#feedback-admin-list .feedback-item.done').length === 1`, 10000));
+  await admin.ev(`[...document.querySelectorAll('#feedback-admin-list button')].find(b => b.textContent === 'Löschen').click(); true`); await sleep(200);
+  await admin.ev(`document.querySelector('#ask-ok').click(); true`);
+  check('Gelöscht', await admin.waitFor(`!document.querySelectorAll('#feedback-admin-list .feedback-item').length`, 10000) && accounts.feedback.length === 0, String(accounts.feedback.length));
+  const adminViolations = await (async () => { await admin.ev(axe + '; true');
+    return admin.ev(`axe.run(document.querySelector('#feedback-admin-dialog'), { resultTypes: ['violations'] }).then(r => r.violations.map(v => v.id))`); })();
+  check('axe: 0 Verstöße in der Verwaltung', Array.isArray(adminViolations) && !adminViolations.length, JSON.stringify(adminViolations));
 }

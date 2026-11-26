@@ -21,7 +21,7 @@ import { randomBytes } from 'node:crypto';
 import { query, dbEnabled } from './db.mjs';
 import {
   hashPassword, verifyPassword, needsRehash, burnPasswordCheck, validateCredentials, passwordProblem,
-  createSession, destroySession, destroyOtherSessions, currentUser, limitReached, countAttempt, clientIp,
+  createSession, destroySession, destroyOtherSessions, currentUser, limitReached, countAttempt, clientIp, isAdmin,
 } from './auth.mjs';
 import { SYNC_KEYS, MODES, BIKES } from '../js/shared.js';
 import { HttpError, sendJson, readJsonStrict as readJson, checkOrigin } from './http.mjs';
@@ -213,7 +213,7 @@ async function register(req, res) {
     console.warn('Konten: Tagesgrenze für neue Konten erreicht – weitere Registrierungen werden 24 h lang abgelehnt');
   }
   await createSession(req, res, result.insertId);
-  return json(res, 201, { user: { id: result.insertId, username } });
+  return json(res, 201, { user: { id: result.insertId, username, admin: isAdmin(username) } });
 }
 
 /** Anmelden; Fehlversuche zählen je Anschluss und je Benutzername (auth.mjs). */
@@ -244,7 +244,7 @@ async function login(req, res) {
       console.warn(`Konten: Passwort-Hash nicht umgestellt (${e.message})`);
     }
   }
-  return json(res, 200, { user: { id: rows[0].id, username: rows[0].username } });
+  return json(res, 200, { user: { id: rows[0].id, username: rows[0].username, admin: isAdmin(rows[0].username) } });
 }
 
 /**

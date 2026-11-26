@@ -107,9 +107,29 @@ export async function logoutOthers() {
   return (await api('POST', 'account/logout-others', {})).count;
 }
 
-/** Rückmeldung senden (server/feedbackApi.mjs) → {ok, id}; auch ohne Anmeldung. */
+/** Rückmeldung senden (server/feedbackApi.mjs) → {ok, id, token}; auch ohne Anmeldung. */
 export function sendFeedback(body) {
   return api('POST', 'feedback', body);
+}
+
+/** Antworten auf eigene Rückmeldungen: per Kennzeichen [{id, token}] und, angemeldet, über das Konto. */
+export async function fetchFeedbackReplies(items) {
+  return (await api('POST', 'feedback/replies', { items })).replies;
+}
+
+/** Verwaltung (nur Admins): Liste nach Stand 'open' | 'done' | 'all' → {counts, items}. */
+export function adminFeedbackList(status) {
+  return api('GET', `feedback/admin?status=${encodeURIComponent(status)}`);
+}
+
+/** Verwaltung: {done?, reply?} setzen. */
+export function adminFeedbackUpdate(id, patch) {
+  return api('PATCH', `feedback/admin/${id}`, patch);
+}
+
+/** Verwaltung: Rückmeldung löschen. */
+export function adminFeedbackDelete(id) {
+  return api('DELETE', `feedback/admin/${id}`);
 }
 
 export const fetchSettings =() => api('GET', 'settings');

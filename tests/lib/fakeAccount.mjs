@@ -5,9 +5,13 @@
 //
 // Angemeldet ist eine *Seite* (ein Testgerät), nicht ein Cookie: Die Sitzung hängt an der DevTools-Sitzung
 // und übersteht so auch ein Neuladen. Alle Seiten mit demselben Store teilen sich Konten und Routen.
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { SYNC_KEYS, MODES, BIKES } from '../../js/shared.js';
-import { cleanFeedback } from '../../server/feedbackApi.mjs';
+import { cleanFeedback, cleanTokens, cleanAdminPatch } from '../../server/feedbackApi.mjs';
+
+const sha256 = s => createHash('sha256').update(s).digest('hex');
+/** Konten mit Verwaltungsrechten (auf dem Server: ADMIN_USERS). */
+const ADMINS = ['chef'];
 
 class ApiError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -42,18 +46,46 @@ export function createAccountStore() {
     return out;
   }
 
-  function handle(session, method, path, body, host) {
+  function handle(session, method, path, body, host, search = new URLSearchParams()) {
     const user = users.get(sessions.get(session)) || null;
-    const pub = u => ({ id: u.id, username: u.username });
+    // Admin wie ADMIN_USERS auf dem Server: hier das Konto „chef“
+    const pub = u => ({ id: u.id, username: u.username, admin: ADMINS.includes(u.username) });
 
     if (path === '/api/account' && method === 'GET') return [200, { enabled: true, user: user && pub(user) }];
 
-    // Rückmeldung: dieselbe Prüfung wie der Server (cleanFeedback), auch ohne Anmeldung
+    // Rückmeldungen: dieselben Prüfungen wie der Server (feedbackApi.mjs), Senden auch ohne Anmeldung
+    const serverCheck = fn => { try { return fn(); } catch (e) { throw new ApiError(e.status, e.message); } };
     if (path === '/api/feedback' && method === 'POST') {
-      let f;
-      try { f = cleanFeedback(body, host); } catch (e) { throw new ApiError(e.status, e.message); }
-      feedback.push({ ...f, id: feedback.length + 1, userId: user?.id ?? null });
-      return [201, { ok: true, id: feedback.length }];
+      const f = serverCheck(() => cleanFeedback(body, host));
+      const token = randomBytes(16).toString('base64url');
+      feedback.push({ ...f, id: feedback.length + 1, userId: user?.id ?? null, username: user?.username ?? null,
+        tokenHash: sha256(token), done: false, reply: null, repliedAt: null, createdAt: now() });
+      return [201, { ok: true, id: feedback.length, token }];
+    }
+    if (path === '/api/feedback/replies' && method === 'POST') {
+      const tokens = cleanTokens(body.items);
+      const mine = feedback.filter(f => f.reply && (tokens.some(t => t.id === f.id && t.hash === f.tokenHash) || (user && f.userId === user.id)));
+      return [200, { replies: mine.map(f => ({ id: f.id, kind: f.kind, text: f.text.slice(0, 300), reply: f.reply, repliedAt: f.repliedAt })) }];
+    }
+    const am = path.match(/^\/api\/feedback\/admin(?:\/(\d+))?$/);
+    if (am) {
+      if (!user) throw new ApiError(401, 'Bitte anmelden.');
+      if (!pub(user).admin) throw new ApiError(403, 'Kein Zugriff.');
+      if (!am[1] && method === 'GET') {
+        const status = search.get('status');
+        const list = feedback.filter(f => status === 'all' || f.done === (status === 'done')).sort((a, b) => b.id - a.id);
+        return [200, { counts: { open: feedback.filter(f => !f.done).length, done: feedback.filter(f => f.done).length },
+          items: list.map(({ tokenHash, userId, ...f }) => ({ ...f, reachable: !!userId || !!tokenHash })) }];
+      }
+      const f = feedback.find(x => x.id === Number(am[1]));
+      if (!f) throw new ApiError(404, 'Rückmeldung nicht gefunden.');
+      if (method === 'PATCH') {
+        const p = serverCheck(() => cleanAdminPatch(body));
+        if ('done' in p) f.done = p.done;
+        if ('reply' in p) Object.assign(f, { reply: p.reply, repliedAt: p.reply ? now() : null });
+        return [200, { ok: true }];
+      }
+      if (method === 'DELETE') { feedback.splice(feedback.indexOf(f), 1); return [200, { ok: true }]; }
     }
 
     let m = path.match(/^\/api\/shared\/([A-Za-z0-9_-]{22})$/);
@@ -158,7 +190,7 @@ export function createAccountStore() {
         }
         let status, data;
         try {
-          [status, data] = handle(page.sessionId, verb, new URL(url).pathname, raw ? JSON.parse(raw) : {}, new URL(url).host);
+          [status, data] = handle(page.sessionId, verb, new URL(url).pathname, raw ? JSON.parse(raw) : {}, new URL(url).host, new URL(url).searchParams);
         } catch (e) {
           if (!(e instanceof ApiError)) throw e;
           [status, data] = [e.status, { error: e.message }];

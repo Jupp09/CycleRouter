@@ -582,17 +582,17 @@ dialog h2 { margin: 0; font-size: 1.125rem; }
 /* ---------- Einstellungen (settingsDialog.js) ----------
    Kopf und Fuß stehen fest, dazwischen scrollt der Inhalt: „Speichern“ bleibt auch auf dem Handy erreichbar.
    Abschnitte mit eigener Überschrift, Bedienelemente mindestens 44 px hoch (bequem mit dem Finger). */
-:is(#settings-dialog, #feedback-dialog) { width: min(480px, calc(100vw - 16px)); max-height: calc(100dvh - 24px); padding: 0; overflow: hidden; }
-:is(#settings-dialog, #feedback-dialog)[open] { display: flex; }
-:is(#settings-dialog, #feedback-dialog) form.settings { gap: 0; width: 100%; min-height: 0; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) { width: min(480px, calc(100vw - 16px)); max-height: calc(100dvh - 24px); padding: 0; overflow: hidden; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog)[open] { display: flex; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) form.settings { gap: 0; width: 100%; min-height: 0; }
 .settings-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 10px 10px 20px; border-bottom: 1px solid var(--border); }
 .settings-head h2 { font-size: 1.25rem; }
 .settings-close { width: 44px; height: 44px; background: transparent; }
 .settings-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; display: flex; flex-direction: column; gap: 28px; }
 .settings-foot { display: flex; gap: 12px; padding: 12px 20px 16px; border-top: 1px solid var(--border); }
 .settings-foot button { flex: 1; }
-:is(#settings-dialog, #feedback-dialog) button, :is(#settings-dialog, #feedback-dialog) input[type="text"], :is(#settings-dialog, #feedback-dialog) input[type="password"], :is(#settings-dialog, #feedback-dialog) input[type="number"] { min-height: 44px; }
-:is(#settings-dialog, #feedback-dialog) .link-btn.inline { min-height: 0; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) button, :is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) input[type="text"], :is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) input[type="password"], :is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) input[type="number"] { min-height: 44px; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) .link-btn.inline { min-height: 0; }
 .settings-section { display: flex; flex-direction: column; gap: 10px; }
 .settings-section h3 { margin: 0; font-size: 1rem; font-weight: 700; }
 .settings-section .hint { font-size: 0.875rem; }
@@ -606,9 +606,9 @@ dialog h2 { margin: 0; font-size: 1.125rem; }
 .settings-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 .hint.done::before { content: "✓ "; content: "✓ " / ""; color: var(--accent-text); font-weight: 700; }
 #settings-dialog .choice-set legend { font-size: 0.875rem; font-weight: 600; color: var(--text); }
-:is(#settings-dialog, #feedback-dialog) .check { min-height: 44px; padding: 0 8px; border-radius: 8px; font-size: 0.9375rem; }
-:is(#settings-dialog, #feedback-dialog) .check:hover { background: var(--surface); }
-:is(#settings-dialog, #feedback-dialog) .check input { width: 20px; height: 20px; flex: none; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) .check { min-height: 44px; padding: 0 8px; border-radius: 8px; font-size: 0.9375rem; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) .check:hover { background: var(--surface); }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) .check input { width: 20px; height: 20px; flex: none; }
 .settings-section textarea, .settings-section input[type="email"] { font: inherit; color: inherit; }
 .settings-section input[type="email"] { width: 100%; min-height: 44px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--field-border); border-radius: 8px; outline: none; }
 .settings-section input[type="email"]:focus { border-color: var(--accent); }
@@ -619,6 +619,28 @@ dialog h2 { margin: 0; font-size: 1.125rem; }
 /* Feedback am Ende des Panels: leise, aber immer zu finden */
 .panel-foot { margin: 4px 0 0; padding-top: 10px; border-top: 1px solid var(--border); }
 .panel-foot .link-btn { min-height: 1.5rem; }
+/* Neue Antwort auf eigenes Feedback (feedbackView.js): oben im Panel, hervorgehoben */
+.reply-note { margin: 0; padding: 8px 12px; border-radius: var(--radius); background: var(--accent-soft); }
+.reply-note .link-btn { font-weight: 600; min-height: 1.5rem; }
+.reply-note svg, .panel-foot svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+/* Rückmeldungen als Liste (Antworten für Nutzer, Verwaltung für Admins) */
+#feedback-admin-dialog { width: min(760px, calc(100vw - 16px)); }
+.feedback-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.feedback-item { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); }
+.feedback-item.done { background: var(--surface); }
+.feedback-head { margin: 0; font-size: 0.9375rem; }
+.feedback-meta { margin: 0; font-size: 0.8125rem; color: var(--muted); }
+.feedback-text, .feedback-reply { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.feedback-text { padding: 8px 12px; border-left: 3px solid var(--field-border); background: var(--surface); border-radius: 0 8px 8px 0; }
+.feedback-reply { padding: 8px 12px; border-left: 3px solid var(--accent); }
+.feedback-links { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.875rem; }
+.feedback-links a { color: var(--accent-text); }
+.feedback-item textarea { width: 100%; padding: 8px 10px; background: var(--surface); border: 1px solid var(--field-border); border-radius: 8px; font: inherit; color: inherit; resize: vertical; }
+.feedback-item textarea:focus { border-color: var(--accent); outline: none; }
+.feedback-item textarea:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 1px; }
+.feedback-item pre { margin: 6px 0 0; padding: 8px 10px; background: var(--surface); border-radius: 8px; font-size: 0.8125rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+#feedback-admin-filter { flex: none; }
+#settings-dialog .nav-row .count { color: var(--muted); font-weight: 400; }
 .choice-set.single { display: block; }
 .choice-set.single .stay-types { grid-template-columns: 1fr; gap: 0; }
 #settings-dialog .range-row input[type="range"] { min-height: 44px; margin: 0; }

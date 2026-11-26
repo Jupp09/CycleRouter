@@ -73,6 +73,11 @@
     </header>
     <!-- Für neue Besucher: worum es geht. Nur ohne Route (CSS), danach braucht das Ergebnis den Platz -->
     <p class="tagline" id="tagline">Radrouten planen – mit Verpflegungsstopps, Wetter und GPX-Export.</p>
+    <!-- Antwort der Betreiber auf eigenes Feedback (feedbackView.js) – oben, damit man sie beim Öffnen sieht -->
+    <p class="reply-note" id="feedback-reply-note" hidden>
+      <button type="button" class="link-btn with-icon" id="btn-feedback-replies">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg><span id="feedback-reply-text">Neue Antwort auf dein Feedback</span></button>
+    </p>
 
     <!-- Nach dem Berechnen eingeklappt (planView.js): eine Zeile statt des ganzen Formulars -->
     <div class="plan-summary" id="plan-summary" hidden>
@@ -555,6 +560,9 @@
           <h3 id="h-feedback">Feedback</h3>
           <p class="hint">Fehler gefunden, eine Idee oder Kritik? Wir freuen uns über jede Rückmeldung.</p>
           <button type="button" class="nav-row" id="btn-feedback-settings">Feedback geben …<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button type="button" class="nav-row" id="btn-feedback-mine" hidden>Antworten auf mein Feedback<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <!-- Nur für Konten in ADMIN_USERS (server/auth.mjs isAdmin; feedbackAdminView.js) -->
+          <button type="button" class="nav-row" id="btn-feedback-admin" hidden><span>Feedback verwalten <span class="count" id="feedback-admin-count"></span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
         </section>
 
         <!-- Abgesetzt am Ende: Löschen steht nicht neben Alltäglichem (accountView.js blendet es nur angemeldet ein) -->
@@ -617,13 +625,55 @@
             <summary>Was wird gesendet?</summary>
             <pre id="feedback-preview-text"></pre>
           </details>
-          <p class="hint">Deine Rückmeldung wird auf dem CycloRouter-Server gespeichert und nur zur Verbesserung der App gelesen.<span id="feedback-account-note"></span></p>
+          <p class="hint">Deine Rückmeldung wird auf dem CycloRouter-Server gespeichert und nur zur Verbesserung der App gelesen. Eine Antwort siehst du hier in CycloRouter – angemeldet auf allen Geräten, sonst in diesem Browser.<span id="feedback-account-note"></span></p>
         </section>
         <p class="hint error" id="feedback-msg" role="alert" hidden></p>
       </div>
       <footer class="settings-foot">
         <button type="button" data-close>Abbrechen</button>
         <button value="send" class="primary" id="btn-feedback-send">Senden</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Antworten auf eigenes Feedback (feedbackView.js) -->
+  <dialog id="feedback-replies-dialog" aria-labelledby="feedback-replies-title">
+    <form method="dialog" class="settings">
+      <header class="settings-head">
+        <h2 id="feedback-replies-title">Antworten auf dein Feedback</h2>
+        <button type="button" class="icon-btn settings-close" data-close aria-label="Schließen" title="Schließen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </header>
+      <div class="settings-body">
+        <ul class="feedback-list" id="feedback-replies-list"></ul>
+      </div>
+      <footer class="settings-foot">
+        <button type="button" data-close class="primary">Schließen</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Feedback verwalten (feedbackAdminView.js; nur Admins): lesen, antworten, erledigt markieren, löschen -->
+  <dialog id="feedback-admin-dialog" aria-labelledby="feedback-admin-title">
+    <form method="dialog" class="settings">
+      <header class="settings-head">
+        <h2 id="feedback-admin-title">Feedback verwalten</h2>
+        <button type="button" class="icon-btn settings-close" data-close aria-label="Schließen" title="Schließen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </header>
+      <div class="settings-body">
+        <div class="segmented checked" id="feedback-admin-filter" role="radiogroup" aria-label="Rückmeldungen anzeigen">
+          <button type="button" role="radio" data-value="open">Offen</button>
+          <button type="button" role="radio" data-value="done">Erledigt</button>
+          <button type="button" role="radio" data-value="all">Alle</button>
+        </div>
+        <p class="hint" id="feedback-admin-msg" role="status"></p>
+        <ul class="feedback-list" id="feedback-admin-list"></ul>
+      </div>
+      <footer class="settings-foot">
+        <button type="button" data-close>Schließen</button>
       </footer>
     </form>
   </dialog>

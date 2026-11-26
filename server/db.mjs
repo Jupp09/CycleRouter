@@ -69,10 +69,35 @@ const SCHEMA = [
     user_id INT UNSIGNED NULL,
     done TINYINT(1) NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    token_hash CHAR(64) NULL,
+    reply TEXT NULL,
+    replied_at DATETIME NULL,
     KEY ix_created (created_at),
+    KEY ix_user (user_id),
     CONSTRAINT fk_feedback_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 ];
+
+/**
+ * Spalten, die nach dem ersten Anlegen einer Tabelle dazugekommen sind: CREATE TABLE IF NOT EXISTS lässt eine
+ * bestehende Tabelle unverändert, also werden fehlende hier ergänzt. Abgefragt über INFORMATION_SCHEMA, weil
+ * MySQL (anders als MariaDB) kein ADD COLUMN IF NOT EXISTS kennt. Neue Spalten gehören in SCHEMA *und* hierher.
+ * [Tabelle, Spalte, Typ] – feste Namen aus dem Code, nie aus einer Anfrage.
+ */
+const ADDED_COLUMNS = [
+  ['feedback', 'token_hash', 'CHAR(64) NULL'], // Antwort ohne Konto abholen (feedbackApi.mjs)
+  ['feedback', 'reply', 'TEXT NULL'],
+  ['feedback', 'replied_at', 'DATETIME NULL'],
+];
+
+async function addMissingColumns(p) {
+  for (const [table, column, type] of ADDED_COLUMNS) {
+    const rows = await p.query(
+      'SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+      [table, column]);
+    if (!rows.length) await p.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+}
 
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '::1'];
 const flag = v => (v == null ? null : /^(1|true|yes|ja|on)$/i.test(v));
@@ -142,6 +167,7 @@ export async function initDb(log = console.log) {
   const p = mariadb.createPool({ ...opts, connectionLimit: 5, insertIdAsNumber: true, bigIntAsNumber: true });
   try {
     for (const sql of SCHEMA) await p.query(sql);
+    await addMissingColumns(p);
     await p.query('DELETE FROM sessions WHERE expires_at < NOW()');
   } catch (e) {
     log(`Konten: Tabellen konnten nicht angelegt werden – ${explain(e)}. Konten sind deaktiviert.`);

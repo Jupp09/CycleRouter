@@ -6,10 +6,11 @@
  * Orte). „Was wird gesendet?“ zeigt vorher wörtlich, was mitgeht. Das Formular sendet selbst (submit wird
  * abgefangen): Der Dialog bleibt offen, bis der Server die Meldung angenommen hat, und ein Fehler steht darin.
  */
-import { account, sendFeedback } from '../account.js';
+import { account, sendFeedback, fetchFeedbackReplies } from '../account.js';
 import { recentProblems } from '../errorReport.js';
+import { storage, formatDate } from '../utils.js';
 import { state, on } from './state.js';
-import { $, $$, flashStatus } from './dom.js';
+import { $, $$, el, flashStatus } from './dom.js';
 import { isTrackRoute } from './linkView.js';
 
 const TEXT_MIN = 10, TEXT_MAX = 4000; // wie server/feedbackApi.mjs
@@ -27,7 +28,53 @@ let sending = false;
 on('account', () => {
   $('#feedback-entry').hidden = !account.enabled;
   $('#feedback-settings').hidden = !account.enabled;
+  if (account.enabled && !account.offline) checkReplies();
 });
+
+// ---------- Antworten der Betreiber ----------
+// Ohne Konto: Der Server gibt beim Senden ein Kennzeichen zurück; damit holt dieser Browser die Antwort ab
+// (nur dieses Gerät, nur dieser Browser – deshalb der Hinweis im Dialog). Angemeldet kommt sie über das Konto.
+// Gelesen = „id@Antwortzeit“ gemerkt; eine geänderte Antwort gilt wieder als neu.
+
+const TOKENS = 'feedbackTokens', SEEN = 'feedbackSeen', MAX_TOKENS = 50;
+let replies = [];
+const replyKey = r => `${r.id}@${r.repliedAt}`;
+
+async function checkReplies() {
+  const items = storage.get(TOKENS, []);
+  if (!items.length && !account.user) return;
+  try {
+    replies = await fetchFeedbackReplies(items);
+  } catch {
+    return; // nicht wichtig genug für eine Meldung; beim nächsten Start erneut
+  }
+  renderReplyNote();
+}
+
+function renderReplyNote() {
+  const seen = new Set(storage.get(SEEN, []));
+  const fresh = replies.filter(r => !seen.has(replyKey(r))).length;
+  $('#feedback-reply-note').hidden = !fresh;
+  $('#feedback-reply-text').textContent = fresh === 1 ? 'Neue Antwort auf dein Feedback' : `${fresh} neue Antworten auf dein Feedback`;
+  $('#btn-feedback-mine').hidden = !replies.length;
+}
+
+function openReplies() {
+  $('#feedback-replies-list').replaceChildren(...replies.map(r => {
+    const li = el('li', 'feedback-item');
+    const mine = el('blockquote', 'feedback-text', r.text);
+    li.append(el('p', 'feedback-meta', `Deine Rückmeldung #${r.id}`), mine,
+      el('p', 'feedback-meta', `Antwort vom ${formatDate(new Date(r.repliedAt))}`), el('p', 'feedback-reply', r.reply));
+    return li;
+  }));
+  storage.set(SEEN, replies.map(replyKey));
+  renderReplyNote();
+  $('#feedback-replies-dialog').showModal();
+}
+
+$('#btn-feedback-replies').addEventListener('click', openReplies);
+$('#btn-feedback-mine').addEventListener('click', openReplies);
+for (const b of $$('#feedback-replies-dialog [data-close]')) b.addEventListener('click', () => $('#feedback-replies-dialog').close());
 // Aus den Einstellungen: Feedback öffnet sich über dem Einstellungsdialog, der danach offen bleibt
 $('#btn-feedback-settings').addEventListener('click', () => $('#btn-feedback').click());
 
@@ -133,7 +180,9 @@ dialog.querySelector('form').addEventListener('submit', async e => {
   send.disabled = true;
   send.textContent = 'Wird gesendet …';
   try {
-    await sendFeedback(b);
+    const { id, token } = await sendFeedback(b);
+    // Für die Antwort merken (die ältesten fallen weg, der Server fragt höchstens MAX_TOKENS ab)
+    if (token) storage.set(TOKENS, [...storage.get(TOKENS, []), { id, token }].slice(-MAX_TOKENS));
   } catch (err) {
     showMessage(err.status === 0 ? 'Gerade keine Verbindung zum Server – bitte später noch einmal senden.' : err.message);
     return;

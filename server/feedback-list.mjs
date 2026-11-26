@@ -38,6 +38,7 @@ for (const f of rows.reverse()) {
     + `${f.username ? ` · Konto ${f.username}` : ''}${f.email ? ` · ${f.email}` : ''}`);
   console.log(f.text.replace(/^/gm, '  '));
   if (f.route) console.log(`  Route: ${f.route}`);
+  if (f.reply) console.log(`  Antwort (${new Date(f.replied_at).toLocaleDateString('de-DE')}): ${f.reply.replace(/\n/g, '\n    ')}`);
   if (f.tech) {
     const t = typeof f.tech === 'string' ? JSON.parse(f.tech) : f.tech;
     console.log(`  Technik: ${[t.browser, t.screen, t.language, t.standalone ? 'installierte App' : ''].filter(Boolean).join(' · ')}`);

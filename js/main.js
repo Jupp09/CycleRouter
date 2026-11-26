@@ -47,6 +47,7 @@ import { initAccount } from './app/accountView.js';
 import { initHome } from './app/homeView.js';
 import './app/settingsDialog.js';
 import './app/feedbackView.js';
+import './app/feedbackAdminView.js';
 
 syncUi();
 

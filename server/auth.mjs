@@ -249,7 +249,18 @@ export async function currentUser(req) {
   if (rows[0].renew) {
     await query('UPDATE sessions SET expires_at = NOW() + INTERVAL ? DAY WHERE token_hash = ?', [SESSION_DAYS, sha256(token)]);
   }
-  return { id: rows[0].id, username: rows[0].username };
+  return { id: rows[0].id, username: rows[0].username, admin: isAdmin(rows[0].username) };
+}
+
+/**
+ * Darf dieses Konto die Rückmeldungen verwalten (server/feedbackApi.mjs)? ADMIN_USERS in .env: Benutzernamen,
+ * durch Kommas getrennt, Groß/Klein egal. Bei jedem Aufruf gelesen, damit eine Änderung nach dem Neustart gilt
+ * und Tests ihn setzen können. Ohne ADMIN_USERS gibt es keine Verwaltung.
+ * @param {string} username
+ */
+export function isAdmin(username) {
+  const admins = String(process.env.ADMIN_USERS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  return typeof username === 'string' && admins.includes(username.toLowerCase());
 }
 
 // ---------- Begrenzungen ----------
