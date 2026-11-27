@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { profileSource, ownSearch } from '../../js/routing/brouter.js';
+import { ferryCrossings } from '../../js/surfaces.js';
 
 const brf = name => readFileSync(new URL(`../../profiles/${name}.brf`, import.meta.url), 'utf8');
 const ferryLine = src => src.split('\n').find(l => /highway=\s+switch\s+not\s+route=ferry/.test(l));
@@ -30,6 +31,24 @@ test('Andere Profile: Fähren unverändert, ohne EuroVelo gar nicht angepasst', 
 
 test('Unbekannte Gravel-Fassung: Fehler statt stillem Hochladen ohne Korrektur', () => {
   assert.throws(() => profileSource('assign costfactor 1\n', 'gravel'), /Fähren/);
+});
+
+test('Fähren meiden: hochgeladenes Profil sperrt Fähren, auch zusammen mit EuroVelo', () => {
+  const solo = profileSource(brf('fastbike-verylowtraffic'), 'fastbike-verylowtraffic', undefined, true);
+  assert.match(solo, /^assign costfactor = switch route=ferry 10000 costfactor_base$/m);
+  assert.match(solo, /^assign costfactor_base\b/m);
+  const both = profileSource(brf('gravel'), 'gravel', 1.5, true);
+  assert.match(both, /^assign costfactor = switch route=ferry 10000 multiply costfactor_base switch route_bicycle_icn=yes 1 /m);
+  assert.equal(both.match(/^assign costfactor\b/gm).length, 1, 'genau eine neue Zuweisung');
+});
+
+test('ferryCrossings: aneinandergrenzende Fährabschnitte sind eine Überfahrt', () => {
+  const cum = [0, 1000, 3000, 5000, 6000, 9000];
+  const seg = (from, to, waytype) => ({ from, to, surface: 'paved', waytype });
+  const route = { cum, segments: [seg(0, 1, 'road'), seg(1, 2, 'ferry'), seg(2, 3, 'ferry'), seg(3, 4, 'track'), seg(4, 5, 'ferry')] };
+  assert.deepEqual(ferryCrossings(route), [{ from: 1000, to: 5000 }, { from: 6000, to: 9000 }]);
+  assert.deepEqual(ferryCrossings({ cum, segments: [] }), []);
+  assert.deepEqual(ferryCrossings({ cum }), [], 'ohne Abschnitte (GPX)');
 });
 
 test('Eigener Server: lange Teilstücke suchen zielstrebiger, Gravel bleibt bei 2', () => {

@@ -52,20 +52,23 @@ function parseExtras(extras, count) {
   return mergeSegments(surface.map((s, i) => ({ from: i, to: i + 1, surface: s, waytype: waytype[i], estimated: false })));
 }
 
+/** „Fähren meiden“: bei ORS gesperrt, nicht nur gemieden */
+const AVOID_FERRIES = { avoid_features: ['ferries'] };
+
 export const ors = {
   id: 'ors',
   name: 'OpenRouteService',
   supportsTraffic: false,
 
-  route(points, { bike }, signal) {
-    return request(bike, { coordinates: points.map(p => [p.lon, p.lat]) }, signal);
+  route(points, { bike, avoidFerries = false }, signal) {
+    return request(bike, { coordinates: points.map(p => [p.lon, p.lat]), ...(avoidFerries && { options: AVOID_FERRIES }) }, signal);
   },
 
   /** Nativer Rundkurs: ORS wählt die Schleife selbst. */
-  roundTrip(start, length, seed, { bike }, signal) {
+  roundTrip(start, length, seed, { bike, avoidFerries = false }, signal) {
     return request(bike, {
       coordinates: [[start.lon, start.lat]],
-      options: { round_trip: { length: Math.round(length), points: 4, seed } },
+      options: { round_trip: { length: Math.round(length), points: 4, seed }, ...(avoidFerries && AVOID_FERRIES) },
     }, signal);
   },
 };

@@ -41,6 +41,7 @@ export function syncUi() {
   $('#traffic').value = state.traffic;
   $('#eurovelo-field').hidden = !provider().supportsEurovelo;
   $('#eurovelo').value = state.eurovelo;
+  $('#avoid-ferries').checked = state.avoidFerries;
   $('#provider').value = state.provider;
   $('#direction').value = state.direction;
   ui.range.value = state.distanceKm;
@@ -55,6 +56,7 @@ export function syncUi() {
   const active = [
     !$('#traffic-field').hidden && state.traffic !== 'normal' && `Verkehr meiden: ${$('#traffic').selectedOptions[0].textContent}`,
     !$('#eurovelo-field').hidden && state.eurovelo !== 'off' && `EuroVelo ${state.eurovelo === 'strong' ? 'stark bevorzugt' : 'bevorzugt'}`,
+    state.avoidFerries && 'Fähren meiden',
     state.provider !== 'brouter' && $('#provider').selectedOptions[0].textContent,
   ].filter(Boolean);
   $('#more-options-active').textContent = active.length ? ` · ${active.join(' · ')}` : '';
@@ -95,7 +97,7 @@ export function selectMode(mode) {
  * ohne neu zu berechnen. Fehlende Werte (undefined, null, '') bleiben, wie sie sind.
  */
 export function applyRouteSettings(settings) {
-  for (const key of ['mode', 'bike', 'traffic', 'eurovelo', 'provider']) {
+  for (const key of ['mode', 'bike', 'traffic', 'eurovelo', 'avoidFerries', 'provider']) {
     const value = settings[key];
     if (value == null || value === '') continue;
     state[key] = value;
@@ -116,6 +118,7 @@ $('#bike-switch').addEventListener('click', e => selectBike(e.target.closest('bu
 $('#traffic').addEventListener('change', e => setRoutingOption('traffic', e.target.value));
 $('#eurovelo').addEventListener('change', e => setRoutingOption('eurovelo', e.target.value));
 $('#provider').addEventListener('change', e => setRoutingOption('provider', e.target.value));
+$('#avoid-ferries').addEventListener('change', e => setRoutingOption('avoidFerries', e.target.checked));
 
 $('#mode-tabs').addEventListener('click', e => selectMode(e.target.closest('button')?.dataset.mode));
 

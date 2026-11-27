@@ -8,7 +8,7 @@
  * Einstellungen, die zwischen Geräten abgeglichen werden. Der Server verwirft alle anderen Schlüssel.
  * Der ORS-API-Key gehört bewusst nicht dazu – er bleibt nur im Browser.
  */
-export const SYNC_KEYS = ['home', 'bike', 'traffic', 'eurovelo', 'provider', 'breakdown', 'colorRoute',
+export const SYNC_KEYS = ['home', 'bike', 'traffic', 'eurovelo', 'avoidFerries', 'provider', 'breakdown', 'colorRoute',
   'supplyEnabled', 'supplyInterval', 'supplyStyle', 'avgSpeed', 'mode', 'distanceKm', 'loopBy', 'durationMin', 'visibleBikes', 'visibleModes',
   'stageMaxKm', 'nightBudget', 'stayTypes', 'endStay', 'hiddenStays'];
 

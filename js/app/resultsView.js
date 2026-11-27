@@ -3,7 +3,7 @@
  * Höhenprofil und die Aufschlüsselung nach Untergrund, Wegtyp bzw. Steigung (samt Einfärbung der Routenlinie)
  * mit der Liste der größten Anstiege.
  */
-import { summarize, estimatedShare, longDistanceShare } from '../surfaces.js';
+import { summarize, estimatedShare, longDistanceShare, ferryCrossings } from '../surfaces.js';
 import { findClimbs, hasElevation } from '../climbs.js';
 import {
   storage, estimateTime, averageSpeed, haversine, indexAtDistance, formatKm, formatM, formatDuration, formatNumber, formatClock, formatWeekday,
@@ -93,6 +93,24 @@ function renderServer(r) {
   }
 }
 
+/**
+ * Fähren auf der Route offen nennen: Wer Rad fahren will, soll nicht erst in der Aufschlüsselung nach Wegtyp
+ * entdecken, dass ein Stück mit dem Schiff geht. Mit „Fähren meiden“ bleibt eine Fähre nur, wenn das Ziel ohne
+ * sie nicht erreichbar ist (Valhalla meidet sie nur; BRouter und ORS sperren sie).
+ */
+function renderFerries(r) {
+  const el = $('#ferry-share');
+  const ferries = ferryCrossings(r);
+  el.hidden = !ferries.length;
+  if (!ferries.length) return;
+  const total = ferries.reduce((sum, f) => sum + f.to - f.from, 0);
+  const what = ferries.length === 1
+    ? `eine Fährüberfahrt (${formatKm(total)} ab km ${formatNumber(Math.round(ferries[0].from / 1000))})`
+    : `${ferries.length} Fährüberfahrten (zusammen ${formatKm(total)})`;
+  el.textContent = `Enthält ${what}`
+    + (state.avoidFerries ? ' – trotz „Fähren meiden“: Ohne Fähre ist das Ziel nicht erreichbar.' : ' – vermeiden lässt sich das unter „Mehr Optionen“: Fähren meiden.');
+}
+
 function renderStats(r) {
   // Teilstücke vom Ausweichdienst (routing/index.js): offen sagen, dass die Route anders bewertet wurde
   const fb = $('#routing-fallback');
@@ -102,6 +120,7 @@ function renderStats(r) {
       + 'Valhalla bewertet Wege etwas anders, eine EuroVelo-Bevorzugung gibt es dort nicht. Spätere Berechnungen versuchen es wieder mit BRouter.';
   }
   renderServer(r);
+  renderFerries(r);
   $('#stat-dist').textContent = formatKm(r.distance);
   $('#stat-up').textContent = heightText(r.ascent, r);
   $('#stat-down').textContent = heightText(r.descent, r);

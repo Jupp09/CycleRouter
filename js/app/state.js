@@ -43,6 +43,7 @@ export const state = {
   bike: storage.get('bike', 'road'),              // 'road' | 'gravel' | 'trekking' | 'ebike'
   traffic: storage.get('traffic', 'normal'),      // nur Rennrad mit BRouter
   eurovelo: storage.get('eurovelo', 'off'),       // 'off' | 'prefer' | 'strong'
+  avoidFerries: storage.get('avoidFerries', false) === true, // Fähren meiden (alle Dienste)
   provider: storage.get('provider', 'brouter'),   // Schlüssel in providers
   mode: storage.get('mode', 'ab'),                // 'ab' | 'distance' | 'loop'
   distanceKm: storage.get('distanceKm', 60),      // Wunschdistanz für Distanz/Rundkurs
@@ -121,11 +122,12 @@ export function provider() {
   return providers[state.provider];
 }
 
-/** Optionen für provider.route(): Fahrradtyp, Verkehr, EuroVelo (nur wo der Dienst es kann). */
+/** Optionen für provider.route(): Fahrradtyp, Verkehr, EuroVelo (nur wo der Dienst es kann), Fähren meiden. */
 export function routeOpts() {
   return {
     bike: state.bike, traffic: state.traffic,
     eurovelo: provider().supportsEurovelo ? state.eurovelo : 'off',
+    avoidFerries: state.avoidFerries,
   };
 }
 

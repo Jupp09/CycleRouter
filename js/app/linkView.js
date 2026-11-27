@@ -43,6 +43,7 @@ function encodeLink() {
   const q = new URLSearchParams({ v: VERSION, m: state.mode, b: state.bike });
   if (state.traffic !== 'normal') q.set('t', state.traffic);
   if (state.eurovelo !== 'off') q.set('e', state.eurovelo);
+  if (state.avoidFerries) q.set('nf', '1');
   q.set('s', point(state.start));
   if (state.mode === 'ab') {
     if (!state.end) return null;
@@ -93,7 +94,8 @@ export function openLinkFromUrl() {
     if (end) delete end.food;
     const vias = mode === 'ab' ? q.getAll('w').map(parsePoint).map(({ food, ...p }) => ({ label: '', ...p, manual: true, ...(food && { food: true }) })) : [];
 
-    applyRouteSettings({ mode, bike, traffic: TRAFFIC.includes(q.get('t')) ? q.get('t') : 'normal', eurovelo: EUROVELO.includes(q.get('e')) ? q.get('e') : 'off' });
+    applyRouteSettings({ mode, bike, traffic: TRAFFIC.includes(q.get('t')) ? q.get('t') : 'normal', eurovelo: EUROVELO.includes(q.get('e')) ? q.get('e') : 'off',
+      avoidFerries: q.get('nf') === '1' });
     if (mode !== 'ab') {
       state.distanceKm = clampInt(q.get('d'), 5, 400, state.distanceKm);
       // Nur für diese Route, nicht als eigene Einstellung gespeichert (wie die Verpflegung unten)

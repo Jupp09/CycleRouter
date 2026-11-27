@@ -22,7 +22,7 @@ let justTaken = false;
 function snapshot() {
   const s = state;
   return {
-    mode: s.mode, bike: s.bike, traffic: s.traffic, eurovelo: s.eurovelo, provider: s.provider,
+    mode: s.mode, bike: s.bike, traffic: s.traffic, eurovelo: s.eurovelo, avoidFerries: s.avoidFerries, provider: s.provider,
     distanceKm: s.distanceKm, durationMin: s.durationMin, direction: s.direction, seed: s.seed,
     start: s.start, end: s.end, vias: [...s.vias],
     // Ein Zwischenstopp ohne Route wird beim Verschieben selbst verändert – seine Werte deshalb mitmerken

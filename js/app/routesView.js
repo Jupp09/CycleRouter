@@ -49,6 +49,7 @@ function serializeRoute(name) {
     name, mode: state.mode, bike: state.bike, distance: Math.round(r.distance), ascent: Math.round(r.ascent),
     data: {
       v: 1, traffic: state.traffic, eurovelo: state.eurovelo, provider: state.provider,
+      ...(state.avoidFerries && { avoidFerries: true }),
       coords: r.coords.map(([lat, lon, ele]) => [round5(lat), round5(lon), ele == null ? null : Math.round(ele * 10) / 10]),
       segments: r.segments || [],
       waypoints: r.waypoints.filter(p => !p.stop && !p.stay && !p.anchor).map(wp),
@@ -66,7 +67,7 @@ function restoreRoute(saved, { own }) {
   abortCalculation();
   searchAlong(null);
   applyRouteSettings({
-    mode: saved.mode, bike: saved.bike, traffic: d.traffic, eurovelo: d.eurovelo,
+    mode: saved.mode, bike: saved.bike, traffic: d.traffic, eurovelo: d.eurovelo, avoidFerries: d.avoidFerries === true,
     provider: providers[d.provider] ? d.provider : null,
   });
 

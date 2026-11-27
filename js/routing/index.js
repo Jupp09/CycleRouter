@@ -2,7 +2,7 @@ import { brouter } from './brouter.js';
 import { ors } from './ors.js';
 import { valhalla } from './valhalla.js';
 import { routingNotice } from './notice.js';
-import { computeStats } from '../utils.js';
+import { computeStats, haversine, formatKm } from '../utils.js';
 import { mergeSegments } from '../surfaces.js';
 
 export { onRoutingNotice } from './notice.js';
@@ -12,6 +12,16 @@ export const providers = { brouter, ors };
 
 /** Ausweichdienst, wenn ein Dienst ausgelastet ist (nach dessen eigenen neuen Versuchen). */
 const FALLBACK = { brouter: valhalla };
+
+/**
+ * Lange Teilstücke scheitern nicht an Überlastung, sondern an der Länge: Der eigene Server bricht nach dem
+ * Proxy-Timeout ab, brouter.de nach wenigen Sekunden (Watchdog), und Valhalla rechnet höchstens 150 km am
+ * Stück. Dann hilft kein neuer Versuch, nur Zwischenstopps – das soll die Meldung sagen.
+ */
+const FALLBACK_MAX = 150_000;
+const tooLongError = (a, b) => Object.assign(new Error(
+  `Diese Strecke ist zu lang, um sie am Stück zu berechnen (${formatKm(haversine(a, b))} Luftlinie). `
+  + 'Setze einen oder mehrere Zwischenstopps (etwa alle 200–300 km), dann wird die Route in Teilen berechnet.'), { tooLong: true });
 
 /**
  * Einheitliches Routenergebnis aller Provider:
@@ -113,8 +123,8 @@ const inflight = new Map();              // schlüssel → {promise, ctrl, waite
 const busyUntil = new Map();             // dienst-id → Zeitpunkt
 
 const pointKey = p => `${p.lat.toFixed(6)},${p.lon.toFixed(6)}`;
-const legKey = (provider, a, b, { bike, traffic, eurovelo }) =>
-  `${provider.id}|${bike}|${traffic}|${eurovelo}|${pointKey(a)}|${pointKey(b)}`;
+const legKey = (provider, a, b, { bike, traffic, eurovelo, avoidFerries }) =>
+  `${provider.id}|${bike}|${traffic}|${eurovelo}|${avoidFerries ? 'ohne Fähren' : ''}|${pointKey(a)}|${pointKey(b)}`;
 
 function cacheGet(key) {
   const hit = legCache.get(key);
@@ -188,6 +198,7 @@ async function leg(provider, a, b, opts, signal) {
       value = { ...await shared(fkey, s => fallback.route([a, b], opts, s), signal), fallback: fallback.name };
     } catch (fe) {
       if (fe.name === 'AbortError') throw fe;
+      if (fe.tooLong || haversine(a, b) > FALLBACK_MAX) throw tooLongError(a, b);
       throw e; // Ausweichdienst geht auch nicht → die ursprüngliche Meldung („BRouter ausgelastet“) zeigen
     }
     cacheSet(fkey, value, FALLBACK_TTL);

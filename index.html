@@ -198,6 +198,9 @@
               <option value="strong">Stark bevorzugen</option>
             </select>
           </label>
+          <label class="check" id="avoid-ferries-field" title="Fähren nur nehmen, wenn das Ziel anders nicht erreichbar ist (BRouter und OpenRouteService: gar nicht).">
+            <input type="checkbox" id="avoid-ferries"> Fähren meiden
+          </label>
           <p class="hint" id="provider-hint" hidden></p>
           <label class="field inline">
             <span>Routing</span>
@@ -259,6 +262,7 @@
         <li class="hint" id="eurovelo-share" hidden></li>
         <li class="hint warn" id="routing-fallback" hidden></li>
         <li class="hint" id="routing-server" hidden></li>
+        <li class="hint" id="ferry-share" hidden></li>
         <li class="hint" id="station-hint" hidden></li>
         <li class="weather" id="weather" hidden>
           <div id="weather-summary"></div>

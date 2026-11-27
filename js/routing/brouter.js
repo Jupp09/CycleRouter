@@ -99,7 +99,11 @@ const RETRY_DELAYS = [2000, 5000];
 /** Punkt liegt abseits befahrbarer Wege – andere Server kämen zum selben Ergebnis. */
 const NOT_ROUTABLE = /not mapped|no track found|position not/i;
 
-function translateError(text) {
+function translateError(text, avoidFerries = false) {
+  // Mit gesperrten Fähren heißt „kein Weg“ meist: Das Ziel (oder der Start) liegt auf einer Insel
+  if (avoidFerries && /no track found/i.test(text)) {
+    return 'Ohne Fähre wurde kein Weg gefunden – liegt ein Punkt auf einer Insel? Dann unter „Mehr Optionen“ „Fähren meiden“ ausschalten.';
+  }
   if (NOT_ROUTABLE.test(text)) {
     return 'Ein Punkt liegt zu weit von einem befahrbaren Weg entfernt.';
   }
@@ -132,10 +136,20 @@ function patchFerries(src) {
   return out;
 }
 
-/** Quelltext des hochzuladenden Profils: Fähren korrigiert (nur `CHEAP_FERRIES`), EuroVelo bevorzugt (mit `penalty`). */
-export function profileSource(src, name, penalty) {
+/**
+ * „Fähren meiden“: Diese Profile haben dafür den Parameter `allow_ferries` (geht als URL-Parameter, ohne
+ * Hochladen). Gravel und fastbike-verylowtraffic kennen ihn nicht – dort sperrt das hochgeladene Profil Fähren
+ * (Kostenfaktor 10000 = nicht befahrbar).
+ */
+const FERRY_PARAM = new Set(['trekking', 'fastbike', 'fastbike-lowtraffic']);
+
+/**
+ * Quelltext des hochzuladenden Profils: Fähren korrigiert (nur `CHEAP_FERRIES`), EuroVelo bevorzugt (mit
+ * `penalty`), Fähren gesperrt (`noFerries`).
+ */
+export function profileSource(src, name, penalty, noFerries = false) {
   if (CHEAP_FERRIES.has(name)) src = patchFerries(src);
-  return penalty ? patchProfile(src, penalty) : src;
+  return penalty || noFerries ? patchProfile(src, penalty, noFerries) : src;
 }
 
 /** Aufschlag für Wege abseits von EuroVelo-Routen. Gemessen Köln→Koblenz: 1,5 → 80 %, 3 → 98 % auf EuroVelo. */
@@ -149,7 +163,7 @@ const NCN_SHARE = 0.15;
 const PROFILE_TTL = 6 * 3600 * 1000; // hochgeladene Profile werden serverseitig irgendwann gelöscht
 
 const sources = new Map();
-const uploaded = new Map(); // `${server}|${profil}|${faktor}` → {id, t} (Profil-IDs gelten nur auf ihrem Server)
+const uploaded = new Map(); // `${server}|${profil}|${faktor}|${fähren}` → {id, t} (Profil-IDs gelten nur auf ihrem Server)
 
 function loadSource(name) {
   if (!sources.has(name)) {
@@ -164,32 +178,42 @@ function loadSource(name) {
 }
 
 /**
- * Benennt `costfactor` um und multipliziert ihn abseits internationaler Radrouten mit `penalty`,
- * auf nationalen Radfernwegen nur mit einem kleinen Teil davon.
+ * Benennt `costfactor` um und legt einen neuen darüber: abseits internationaler Radrouten mal `penalty`
+ * (auf nationalen Radfernwegen nur ein kleiner Teil davon), mit `noFerries` Fähren gesperrt.
  */
-function patchProfile(src, penalty) {
-  const ncn = (1 + (penalty - 1) * NCN_SHARE).toFixed(3);
+function patchProfile(src, penalty, noFerries = false) {
+  let expr = 'costfactor_base';
+  const note = [];
+  if (penalty) {
+    const ncn = (1 + (penalty - 1) * NCN_SHARE).toFixed(3);
+    expr = `multiply costfactor_base switch route_bicycle_icn=yes 1 switch route_bicycle_ncn=yes ${ncn} ${penalty}`;
+    note.push('EuroVelo (internationale Radrouten) bevorzugen');
+  }
+  if (noFerries) {
+    expr = `switch route=ferry 10000 ${expr}`;
+    note.push('Fähren meiden');
+  }
   const start = src.search(/^assign costfactor\b/m);
   if (start < 0) throw new Error('Profil lässt sich nicht anpassen');
   const offset = src.slice(start + 1).search(/^(assign |---context)/m);
   const end = offset < 0 ? src.length : start + 1 + offset;
   return src.slice(0, start)
     + src.slice(start, end).replace(/^assign costfactor\b/m, 'assign costfactor_base')
-    + `# CycloRouter: EuroVelo (internationale Radrouten) bevorzugen\n`
-    + `assign costfactor = multiply costfactor_base switch route_bicycle_icn=yes 1 switch route_bicycle_ncn=yes ${ncn} ${penalty}\n\n`
+    + `# CycloRouter: ${note.join(', ')}\n`
+    + `assign costfactor = ${expr}\n\n`
     + src.slice(end);
 }
 
-const uploading = new Map(); // `${server}|${profil}|${faktor}` → laufender Upload (Teilstücke fragen gleichzeitig an)
+const uploading = new Map(); // `${server}|${profil}|${faktor}|${fähren}` → laufender Upload (Teilstücke fragen gleichzeitig an)
 
-async function customProfile(endpoint, name, penalty, signal, force = false) {
-  const key = `${endpoint}|${name}|${penalty ?? 1}`;
+async function customProfile(endpoint, name, penalty, noFerries, signal, force = false) {
+  const key = `${endpoint}|${name}|${penalty ?? 1}|${noFerries ? 'ohne Fähren' : ''}`;
   const hit = uploaded.get(key);
   if (!force && hit && Date.now() - hit.t < PROFILE_TTL) return hit.id;
   if (!uploading.has(key)) {
     // Ohne signal: Der Upload gehört allen wartenden Teilstücken, nicht nur dem ersten
     const p = (async () => {
-      const text = profileSource(await loadSource(name), name, penalty);
+      const text = profileSource(await loadSource(name), name, penalty, noFerries);
       let res;
       try {
         res = await fetch(`${endpoint}/profile`, { method: 'POST', body: text, signal: withTimeout(null, UPLOAD_TIMEOUT) });
@@ -254,20 +278,21 @@ export const brouter = {
    * points: [{lat, lon}, ...] → {coords: [[lat, lon, ele], ...], segments, server}.
    * Fehler tragen `busy: true`, wenn BRouter ausgelastet bzw. nicht erreichbar war.
    */
-  async route(points, { bike, traffic, eurovelo = 'off', retries = true }, signal) {
+  async route(points, { bike, traffic, eurovelo = 'off', avoidFerries = false, retries = true }, signal) {
     const base = PROFILES[bike][traffic] || PROFILES[bike].normal;
     const penalty = EUROVELO_PENALTY[eurovelo];
-    const custom = !!penalty || CHEAP_FERRIES.has(base);
-    const params = PARAMS[bike] || {};
+    const noFerries = avoidFerries && !FERRY_PARAM.has(base); // sonst als URL-Parameter (s. u.)
+    const custom = !!penalty || noFerries || CHEAP_FERRIES.has(base);
+    const params = { ...PARAMS[bike], ...(avoidFerries && FERRY_PARAM.has(base) && { allow_ferries: 0 }) };
     /** Profil (ggf. hochgeladen) und Anfrage bei einem Server */
     const attempt = async (endpoint, retry) => {
       let profile = base;
       if (custom) {
         try {
-          profile = await customProfile(endpoint, base, penalty, signal);
+          profile = await customProfile(endpoint, base, penalty, noFerries, signal);
         } catch (e) {
           // Nur die Fähren-Korrektur: Scheitert der Upload, lieber das Standardprofil als gar keine Route
-          if (penalty || e.name === 'AbortError' || e.busy) throw e;
+          if (penalty || noFerries || e.name === 'AbortError' || e.busy) throw e;
           console.info(`BRouter: ${e.message} – rechne mit dem Standardprofil`);
         }
       }
@@ -275,7 +300,7 @@ export const brouter = {
       let r = await request(endpoint, points, profile, signal, retry, p);
       // Abgelaufenes hochgeladenes Profil → einmal neu hochladen
       if (!r.ok && !r.busy && profile !== base && /profile/i.test(r.text)) {
-        profile = await customProfile(endpoint, base, penalty, signal, true);
+        profile = await customProfile(endpoint, base, penalty, noFerries, signal, true);
         r = await request(endpoint, points, profile, signal, retry, p);
       }
       return r;
@@ -292,7 +317,7 @@ export const brouter = {
         r = { ok: false, busy: true, text: e.message }; // Upload gescheitert
       }
       if (!r.ok) {
-        if (NOT_ROUTABLE.test(r.text)) throw new Error(translateError(r.text));
+        if (NOT_ROUTABLE.test(r.text)) throw new Error(translateError(r.text, avoidFerries));
         if (r.busy) ownPausedUntil = Date.now() + OWN_PAUSE;
         if (r.status === 404) ownCheck = Promise.resolve(false); // Weg abgeschaltet (BRouter selbst antwortet mit 400)
         // Sonst z. B. fehlende Kartendaten oder ein fehlendes Profil auf dem eigenen Server
@@ -303,7 +328,7 @@ export const brouter = {
     }
     r ??= await attempt(PUBLIC, retries);
     const { ok, text, busy } = r;
-    if (!ok) throw Object.assign(new Error(translateError(text)), { busy });
+    if (!ok) throw Object.assign(new Error(translateError(text, avoidFerries)), { busy });
 
     const feature = JSON.parse(text).features[0];
     const coords = feature.geometry.coordinates.map(([lon, lat, ele]) => [lat, lon, ele ?? null]);

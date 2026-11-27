@@ -45,6 +45,8 @@ async function post(path, body, signal) {
     // 171: kein Weg in der Nähe eines Punkts; 442: keine Verbindung
     if (data.error_code === 171) throw new Error('Ein Punkt liegt zu weit von einem befahrbaren Weg entfernt.');
     if (data.error_code === 442) throw new Error('Zwischen den Punkten wurde kein befahrbarer Weg gefunden.');
+    // Der FOSSGIS-Server rechnet höchstens 150 km am Stück – routing/index.js macht daraus einen Rat
+    if (data.error_code === 154) throw Object.assign(new Error('Valhalla: Strecke zu lang'), { tooLong: true });
     throw Object.assign(new Error(`Valhalla-Fehler: ${data.error || res.status}`), { busy: res.status === 429 || res.status >= 500 });
   }
   return data;
@@ -130,10 +132,12 @@ export const valhalla = {
   supportsTraffic: true,
   perLeg: true,
 
-  async route(points, { bike, traffic }, signal) {
+  async route(points, { bike, traffic, avoidFerries = false }, signal) {
     const costing = 'bicycle';
     const costingOptions = { bicycle: {
       bicycle_type: BICYCLE_TYPE[bike] || 'Hybrid', use_roads: USE_ROADS[traffic] ?? 0.5,
+      // „Fähren meiden“: 0 meidet sie stark, sperrt sie aber nicht (ohne Fähre unerreichbare Ziele gehen weiter)
+      ...(avoidFerries && { use_ferry: 0 }),
       ...(USE_HILLS[bike] != null && { use_hills: USE_HILLS[bike] }),
     } };
     const data = await post('route', {

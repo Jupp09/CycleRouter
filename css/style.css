@@ -279,6 +279,7 @@ body:has(#results:not([hidden])) .tagline { display: none; }
 #eurovelo-share::before { content: "🚲"; content: "🚲" / ""; }
 #routing-fallback::before { content: "⚠️"; content: "⚠️" / ""; }
 #routing-server::before { content: "🖥️"; content: "🖥️" / ""; }
+#ferry-share::before { content: "⛴️"; content: "⛴️" / ""; }
 #daylight::before { content: "☀️"; content: "☀️" / ""; }
 #daylight.warn::before { content: "🌙"; content: "🌙" / ""; }
 #station-hint::before { content: "🚆"; content: "🚆" / ""; }

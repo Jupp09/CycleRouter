@@ -169,6 +169,22 @@ export function longDistanceShare(route) {
   return { eurovelo, longDistance };
 }
 
+/**
+ * Fährüberfahrten der Route (Wegtyp `ferry`): aneinandergrenzende Abschnitte zählen als eine Überfahrt.
+ * → [{from, to}] in Metern ab Start (leer ohne Abschnitte, z. B. GPX-Datei)
+ */
+export function ferryCrossings(route) {
+  const out = [];
+  for (const s of route.segments || []) {
+    if (s.waytype !== 'ferry') continue;
+    const from = route.cum[s.from], to = route.cum[s.to];
+    const last = out.at(-1);
+    if (last && from - last.to < 1) last.to = to;
+    else out.push({ from, to });
+  }
+  return out;
+}
+
 /** Anteil der Strecke, deren Untergrund nur abgeleitet (nicht explizit getaggt) ist. */
 export function estimatedShare(route) {
   let d = 0;
