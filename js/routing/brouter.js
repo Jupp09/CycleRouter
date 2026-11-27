@@ -88,11 +88,34 @@ function translateError(text) {
   return 'BRouter-Fehler: ' + text.slice(0, 200);
 }
 
-// ---------- EuroVelo-Bevorzugung über ein eigenes Profil ----------
+// ---------- Angepasste Profile (EuroVelo-Bevorzugung, Fähren) ----------
 // BRouter-Profile werten Radrouten-Relationen aus (`route_bicycle_icn` = international, d. h. EuroVelo).
 // Die Standardprofile behandeln alle Radrouten gleich; für die Bevorzugung wird das Standardprofil
 // angepasst – Wege abseits internationaler Radrouten werden um den Faktor teurer – und bei BRouter
 // hochgeladen. Die Profil-Quelltexte liegen im Ordner /profiles, da brouter.de sie nicht per CORS ausliefert.
+
+/**
+ * Profile, in denen Fähren billiger sind als Straßen und die deshalb immer angepasst hochgeladen werden.
+ * Gravel bewertet einen Meter Fähre mit 2, Haupt- und Nebenstraßen mit 3,6–4,8 (dazu Aufschläge für Verkehr
+ * usw.): Triest → Durrës wurde so 739 km Fähre durch die Adria statt rund 900 km an der Küste entlang.
+ * Trekking und Rennrad setzen 5,67 an (fastbike-verylowtraffic 11) und fahren dort über Land.
+ */
+const CHEAP_FERRIES = new Set(['gravel']);
+/** Kostenfaktor für Fähren wie im Trekking-Profil: kurze Überfahrten bleiben möglich, lange nur bei sehr weitem Landweg. */
+const FERRY_COST = 5.67;
+
+/** Fähren im Gravel-Profil so teuer wie im Trekking-Profil machen. */
+function patchFerries(src) {
+  const out = src.replace(/^(\s*switch\s+highway=\s+switch\s+not\s+route=ferry\s+10000\s+)2\b/m, `$1${FERRY_COST}`);
+  if (out === src) throw new Error('Profil lässt sich nicht anpassen (Fähren)');
+  return out;
+}
+
+/** Quelltext des hochzuladenden Profils: Fähren korrigiert (nur `CHEAP_FERRIES`), EuroVelo bevorzugt (mit `penalty`). */
+export function profileSource(src, name, penalty) {
+  if (CHEAP_FERRIES.has(name)) src = patchFerries(src);
+  return penalty ? patchProfile(src, penalty) : src;
+}
 
 /** Aufschlag für Wege abseits von EuroVelo-Routen. Gemessen Köln→Koblenz: 1,5 → 80 %, 3 → 98 % auf EuroVelo. */
 const EUROVELO_PENALTY = { prefer: 1.5, strong: 3 };
@@ -139,13 +162,13 @@ function patchProfile(src, penalty) {
 const uploading = new Map(); // `${server}|${profil}|${faktor}` → laufender Upload (Teilstücke fragen gleichzeitig an)
 
 async function customProfile(endpoint, name, penalty, signal, force = false) {
-  const key = `${endpoint}|${name}|${penalty}`;
+  const key = `${endpoint}|${name}|${penalty ?? 1}`;
   const hit = uploaded.get(key);
   if (!force && hit && Date.now() - hit.t < PROFILE_TTL) return hit.id;
   if (!uploading.has(key)) {
     // Ohne signal: Der Upload gehört allen wartenden Teilstücken, nicht nur dem ersten
     const p = (async () => {
-      const text = patchProfile(await loadSource(name), penalty);
+      const text = profileSource(await loadSource(name), name, penalty);
       let res;
       try {
         res = await fetch(`${endpoint}/profile`, { method: 'POST', body: text, signal: withTimeout(null, UPLOAD_TIMEOUT) });
@@ -154,7 +177,7 @@ async function customProfile(endpoint, name, penalty, signal, force = false) {
       }
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.profileid) {
-        throw Object.assign(new Error('BRouter: EuroVelo-Profil konnte nicht hochgeladen werden' + (data.error ? ` (${data.error})` : '')),
+        throw Object.assign(new Error('BRouter: Profil konnte nicht hochgeladen werden' + (data.error ? ` (${data.error})` : '')),
           { busy: BUSY_STATUS.has(res.status) || BUSY_TEXT.test(String(data.error || '')) });
       }
       uploaded.set(key, { id: data.profileid, t: Date.now() });
@@ -213,14 +236,24 @@ export const brouter = {
   async route(points, { bike, traffic, eurovelo = 'off', retries = true }, signal) {
     const base = PROFILES[bike][traffic] || PROFILES[bike].normal;
     const penalty = EUROVELO_PENALTY[eurovelo];
+    const custom = !!penalty || CHEAP_FERRIES.has(base);
     const params = PARAMS[bike] || {};
     /** Profil (ggf. hochgeladen) und Anfrage bei einem Server */
     const attempt = async (endpoint, retry) => {
-      let profile = penalty ? await customProfile(endpoint, base, penalty, signal) : base;
+      let profile = base;
+      if (custom) {
+        try {
+          profile = await customProfile(endpoint, base, penalty, signal);
+        } catch (e) {
+          // Nur die Fähren-Korrektur: Scheitert der Upload, lieber das Standardprofil als gar keine Route
+          if (penalty || e.name === 'AbortError' || e.busy) throw e;
+          console.info(`BRouter: ${e.message} – rechne mit dem Standardprofil`);
+        }
+      }
       const p = endpoint === OWN ? { ...params, ...OWN_SEARCH } : params;
       let r = await request(endpoint, points, profile, signal, retry, p);
       // Abgelaufenes hochgeladenes Profil → einmal neu hochladen
-      if (!r.ok && !r.busy && penalty && /profile/i.test(r.text)) {
+      if (!r.ok && !r.busy && profile !== base && /profile/i.test(r.text)) {
         profile = await customProfile(endpoint, base, penalty, signal, true);
         r = await request(endpoint, points, profile, signal, retry, p);
       }
