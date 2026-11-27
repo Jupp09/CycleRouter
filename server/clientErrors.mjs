@@ -1,7 +1,8 @@
 // Fehlerberichte aus dem Browser: POST /api/client-error (gesendet von js/errorReport.js).
 //
 // Die Berichte landen nur im Server-Log (bei Plesk im Passenger-Log der App), Zeile „Browserfehler: …“.
-// Gespeichert wird nichts, auch nicht die IP. Gleiche Fehler stehen je Stunde nur einmal im Log, mit der Zahl
+// Gespeichert wird nichts, auch nicht die IP; die Statusseite der Admins zählt sie seit dem Start im Speicher
+// (server/status.mjs). Gleiche Fehler stehen je Stunde nur einmal im Log, mit der Zahl
 // der Wiederholungen beim nächsten Mal – sonst schriebe ein Fehler, der bei jedem Aufruf auftritt, das Log voll.
 //
 // Ortsangaben werden noch einmal entfernt (der Browser tut es schon, aber auf ihn ist kein Verlass):
@@ -10,6 +11,7 @@ import { HttpError, readJson, sendJson } from './http.mjs';
 import { clientIp } from './auth.mjs';
 import { createLimiter } from './rateLimit.mjs';
 import { scrub } from '../js/shared.js';
+import { noteClientError } from './status.mjs';
 
 /** Berichte je Anschluss und Stunde – der Browser schickt höchstens 5 je Seitenaufruf. */
 const perClient = createLimiter({ windowMs: 60 * 60 * 1000, max: 30 });
@@ -52,6 +54,8 @@ export async function handleClientError(req, res) {
     const where = source ? ` @ ${source}${int(body.line) ? `:${int(body.line)}:${int(body.column) ?? 0}` : ''}` : '';
     const key = `${kind}|${message}|${where}`;
     const now = Date.now();
+    const name = typeof body.name === 'string' && body.name !== 'Error' ? `${scrub(body.name, 60)}: ` : '';
+    noteClientError({ kind, message: `${name}${message}`, where: where.replace(/^ @ /, ''), browser: browserOf(req.headers['user-agent']) }, now);
     const hit = seen.get(key);
     if (hit && now - hit.at < DEDUPE_MS) {
       hit.repeats++;
@@ -61,7 +65,6 @@ export async function handleClientError(req, res) {
       seen.set(key, { at: now, repeats: 0 });
       const repeats = hit?.repeats ? ` (in der Stunde davor ${hit.repeats}× wiederholt)` : '';
       const app = body.standalone === true ? ', installierte App' : '';
-      const name = typeof body.name === 'string' && body.name !== 'Error' ? `${scrub(body.name, 60)}: ` : '';
       // Chrome beginnt den Stack mit der Meldung, Firefox/Safari direkt mit der ersten Fundstelle
       const lines = scrub(body.stack, 2000).split('\n').map(l => l.trim()).filter(Boolean);
       if (lines[0]?.includes(message.slice(0, 40))) lines.shift();

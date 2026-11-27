@@ -13,6 +13,7 @@
 // POST /api/brouter/profile        → Profil hochladen (EuroVelo-Bevorzugung)
 //
 // Fällt der eigene Server aus, antwortet der Weg mit 503; der Browser rechnet dann mit brouter.de.
+import { noteBrouter, registerStatus } from './status.mjs';
 import { brotliCompress, gzip, constants as zlibConstants } from 'node:zlib';
 import { promisify } from 'node:util';
 import { HttpError, readBody, sendJson } from './http.mjs';
@@ -43,6 +44,10 @@ let downUntil = 0;
 
 let active = 0;
 const waiting = [];
+
+// Statusseite (server/status.mjs): eingerichtet?, gerade in Arbeit und wartend
+registerStatus('brouter', () => ({ enabled: brouterEnabled, parallel: PARALLEL, active, waiting: waiting.length,
+  downUntil: downUntil > Date.now() ? downUntil : null }));
 
 /** Auf einen freien Platz warten; bei Abbruch (Nutzer weg) die Anfrage aus der Schlange nehmen. */
 function acquire(signal) {
@@ -100,26 +105,28 @@ function clientGone(res) {
   return ctrl.signal;
 }
 
+/** Anfrage weiterreichen → Status der Antwort von BRouter, undefined wenn der Browser nicht mehr wartet. */
 async function forward(req, res, url, init, timeout) {
   let upstream;
   try {
     upstream = await fetch(url, { ...init, signal: AbortSignal.any([init.signal, AbortSignal.timeout(timeout)]) });
   } catch (e) {
-    if (init.signal.aborted) return; // Browser ist weg – niemand wartet auf die Antwort
+    if (init.signal.aborted) return undefined; // Browser ist weg – niemand wartet auf die Antwort
     downUntil = Date.now() + DOWN_MS;
     console.warn(`/api/brouter: eigener BRouter nicht erreichbar (${e.cause?.code || e.message})`);
     throw new HttpError(503, 'BRouter nicht erreichbar, retry later');
   }
   const text = await upstream.text(); // fetch entpackt eine komprimierte Antwort von BRouter/Caddy selbst
-  if (res.writableEnded || res.destroyed) return;
+  if (res.writableEnded || res.destroyed) return undefined;
   const { body, encoding } = await compress(text, req.headers['accept-encoding']);
-  if (res.writableEnded || res.destroyed) return;
+  if (res.writableEnded || res.destroyed) return undefined;
   res.writeHead(upstream.status, {
     'Content-Type': upstream.headers.get('content-type') || 'text/plain; charset=utf-8',
     'Cache-Control': 'no-store',
     Vary: 'Accept-Encoding',
     ...(encoding && { 'Content-Encoding': encoding }),
   }).end(body);
+  return upstream.status;
 }
 
 const brotli = promisify(brotliCompress), gzipAsync = promisify(gzip);
@@ -166,11 +173,23 @@ export async function handleBrouter(req, res, url) {
     }
     if (req.method !== 'GET') throw new HttpError(405, 'Nur GET');
     const query = upstreamQuery(url.searchParams);
-    await acquire(signal);
+    // Für die Statusseite: Dauer samt Warten in der Schlange, Ergebnis (noteBrouter in server/status.mjs)
+    const t0 = Date.now();
+    let outcome = 'gone';
     try {
-      await forward(req, res, `${BASE}/brouter?${query}`, { signal }, TIMEOUT);
+      await acquire(signal);
+      try {
+        const status = await forward(req, res, `${BASE}/brouter?${query}`, { signal }, TIMEOUT);
+        if (status) outcome = status < 400 ? 'ok' : status < 500 ? 'rejected' : 'error';
+      } finally {
+        release();
+      }
+    } catch (e) {
+      if (e instanceof HttpError) outcome = /Warteschlange/.test(e.message) ? 'full' : 'unreachable';
+      else if (e.name !== 'AbortError') outcome = 'error';
+      throw e;
     } finally {
-      release();
+      noteBrouter(Date.now() - t0, outcome);
     }
   } catch (e) {
     if (e.name === 'AbortError' || res.writableEnded || res.destroyed) return true;

@@ -127,6 +127,11 @@ export function adminFeedbackUpdate(id, patch) {
   return api('PATCH', `feedback/admin/${id}`, patch);
 }
 
+/** Verwaltung: Betriebszahlen des Servers (Statusseite, server/statusApi.mjs). */
+export function adminStatus() {
+  return api('GET', 'admin/status');
+}
+
 /** Verwaltung: Rückmeldung löschen. */
 export function adminFeedbackDelete(id) {
   return api('DELETE', `feedback/admin/${id}`);

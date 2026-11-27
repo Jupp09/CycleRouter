@@ -5,6 +5,7 @@
 // /api/brouter – Weiterleitung an einen eigenen BRouter-Server (server/brouterProxy.mjs, BROUTER_URL),
 // /api/client-error – Fehlerberichte aus dem Browser ins Log (server/clientErrors.mjs),
 // /api/feedback – Rückmeldungen der Nutzer in die Datenbank (server/feedbackApi.mjs),
+// /api/admin/status, /api/route-stats – Statusseite der Admins, Routen-Zählung (server/statusApi.mjs),
 // /api/account|settings|routes|shared – Konten (server/accountApi.mjs).
 import './server/env.mjs'; // muss der erste Import bleiben (.env laden, bevor andere Module Werte lesen)
 import { createServer } from 'node:http';
@@ -25,6 +26,8 @@ import { getRegions, isRegionKey } from './server/regions.mjs';
 import { handleBrouter, brouterEnabled } from './server/brouterProxy.mjs';
 import { handleClientError } from './server/clientErrors.mjs';
 import { handleFeedback } from './server/feedbackApi.mjs';
+import { handleStatus } from './server/statusApi.mjs';
+import { initStatusStore } from './server/status.mjs';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 8000;
@@ -188,6 +191,7 @@ createServer(async (req, res) => {
   if (await handleBrouter(req, res, url)) return;
   if (await handleAccountApi(req, res, url)) return;
   if (await handleFeedback(req, res, url)) return;
+  if (await handleStatus(req, res, url)) return;
   if (path === '/') path = '/index.html';
   const file = normalize(join(ROOT, path));
   if (!PUBLIC.some(re => re.test(path)) || path.includes('..') || !file.startsWith(ROOT.endsWith(sep) ? ROOT : ROOT + sep)) {
@@ -211,4 +215,5 @@ createServer(async (req, res) => {
     .catch(e => console.warn(`Datenauszug: ${e.message}`))
     .finally(() => initWarmQueue(msg => console.log(msg)));
   initDb(msg => console.log(msg));
+  initStatusStore(join(ROOT, 'cache', 'status.json'), msg => console.log(msg));
 });

@@ -1,5 +1,6 @@
 // Konto-API im Speicher – nur für die Browsertests, damit sie ohne MariaDB laufen.
-// Fängt im Testbrowser die Aufrufe an /api/account…, /api/settings, /api/routes…, /api/shared/… und /api/feedback ab
+// Fängt im Testbrowser die Aufrufe an /api/account…, /api/settings, /api/routes…, /api/shared/…, /api/feedback und
+// /api/admin/status ab
 // (DevTools Fetch.requestPaused) und beantwortet sie wie server/accountApi.mjs. Getestet wird so die
 // Oberfläche; die echte Server-API mit SQL deckt das nicht ab.
 //
@@ -8,6 +9,7 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { SYNC_KEYS, MODES, BIKES } from '../../js/shared.js';
 import { cleanFeedback, cleanTokens, cleanAdminPatch } from '../../server/feedbackApi.mjs';
+import { statusReport } from '../../server/status.mjs';
 
 const sha256 = s => createHash('sha256').update(s).digest('hex');
 /** Konten mit Verwaltungsrechten (auf dem Server: ADMIN_USERS). */
@@ -86,6 +88,13 @@ export function createAccountStore() {
         return [200, { ok: true }];
       }
       if (method === 'DELETE') { feedback.splice(feedback.indexOf(f), 1); return [200, { ok: true }]; }
+    }
+
+    // Statusseite: die Zahlen dieses Testprozesses (server/status.mjs; der Test kann dort Einträge anlegen)
+    if (path === '/api/admin/status' && method === 'GET') {
+      if (!user) throw new ApiError(401, 'Bitte anmelden.');
+      if (!pub(user).admin) throw new ApiError(403, 'Kein Zugriff.');
+      return [200, statusReport()];
     }
 
     let m = path.match(/^\/api\/shared\/([A-Za-z0-9_-]{22})$/);
@@ -203,7 +212,7 @@ export function createAccountStore() {
       });
       await page.send('Network.enable');
       await page.send('Fetch.enable', {
-        patterns: ['account', 'settings', 'routes', 'shared', 'feedback'].map(p => ({ urlPattern: `*/api/${p}*`, requestStage: 'Request' })),
+        patterns: ['account', 'settings', 'routes', 'shared', 'feedback', 'admin'].map(p => ({ urlPattern: `*/api/${p}*`, requestStage: 'Request' })),
       });
     },
     get userCount() { return users.size; },

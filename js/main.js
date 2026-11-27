@@ -48,6 +48,7 @@ import { initHome } from './app/homeView.js';
 import './app/settingsDialog.js';
 import './app/feedbackView.js';
 import './app/feedbackAdminView.js';
+import './app/statusView.js';
 
 syncUi();
 

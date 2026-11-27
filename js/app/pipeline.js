@@ -46,6 +46,29 @@ function stopwatch() {
   };
 }
 
+/**
+ * Grundroute für die Statusseite der Admins melden (POST /api/route-stats, server/statusApi.mjs): welcher Dienst
+ * gerechnet hat, wie lange es dauerte bzw. woran es scheiterte – keine Orte, keine Länge. Daraus sieht der
+ * Betreiber den Anteil der Ausweichrouten (Valhalla) und der zu langen Strecken. Ohne Server oder ohne Netz
+ * geht die Meldung still verloren; sie bremst nie die Berechnung.
+ * @param {Route | null} r @param {number} ms @param {any} [error]
+ */
+function reportRoute(r, ms, error) {
+  let body;
+  if (error) {
+    const kind = error.tooLong ? 'tooLong' : error.busy ? 'busy'
+      : /befahrbare|kein Weg/.test(error.message) ? 'notRoutable' : 'other';
+    body = { ms, error: kind };
+  } else {
+    const servers = [...Object.keys(r.servers || {}), ...(r.fallback ? ['valhalla'] : []), ...(state.provider === 'ors' ? ['ors'] : [])];
+    if (!servers.length) return; // z. B. importierte GPX-Strecke: nichts berechnet
+    body = { ms, servers };
+  }
+  fetch(new URL('../../api/route-stats', import.meta.url), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive: true,
+  }).catch(() => {});
+}
+
 // Hinweise der Routing-Schicht (z. B. „BRouter ist ausgelastet – neuer Versuch in 2 s …“) während einer Berechnung zeigen
 onRoutingNotice(text => { if (controller && !controller.signal.aborted) setStatus(text, 'loading'); });
 
@@ -104,10 +127,14 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
   state.staysLoading = false; // eine abgebrochene Unterkunftssuche darf den Knopf nicht gesperrt lassen
   setStatus(loadingText, 'loading');
   const watch = stopwatch();
+  const t0 = performance.now();
+  let based = false;
   try {
     let r = await task(signal);
     if (signal.aborted) return;
     watch.mark('Grundroute');
+    based = true;
+    reportRoute(r, performance.now() - t0);
     setStatus(null);
     showRoute(r, { fit });
     watch.mark('Anzeige');
@@ -123,6 +150,7 @@ export async function run(task, { loadingText = 'Route wird berechnet …', fit 
   } catch (e) {
     if (e.name === 'AbortError') return;
     if (!offline()) console.error(e); // ohne Netz erwartet
+    if (!based && !offline()) reportRoute(null, performance.now() - t0, e);
     setStatus(offline() ? 'Ohne Netz lassen sich keine neuen Routen berechnen.' : e.message, 'error');
   }
 }

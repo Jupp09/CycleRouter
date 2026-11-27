@@ -565,8 +565,13 @@
           <p class="hint">Fehler gefunden, eine Idee oder Kritik? Wir freuen uns über jede Rückmeldung.</p>
           <button type="button" class="nav-row" id="btn-feedback-settings">Feedback geben …<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
           <button type="button" class="nav-row" id="btn-feedback-mine" hidden>Antworten auf mein Feedback<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
-          <!-- Nur für Konten in ADMIN_USERS (server/auth.mjs isAdmin; feedbackAdminView.js) -->
+        </section>
+
+        <!-- Nur für Konten in ADMIN_USERS (server/auth.mjs isAdmin; feedbackAdminView.js, statusView.js) -->
+        <section class="settings-section" id="admin-settings" aria-labelledby="h-admin" hidden>
+          <h3 id="h-admin">Verwaltung</h3>
           <button type="button" class="nav-row" id="btn-feedback-admin" hidden><span>Feedback verwalten <span class="count" id="feedback-admin-count"></span></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+          <button type="button" class="nav-row" id="btn-status">Serverstatus<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
         </section>
 
         <!-- Abgesetzt am Ende: Löschen steht nicht neben Alltäglichem (accountView.js blendet es nur angemeldet ein) -->
@@ -659,6 +664,26 @@
   </dialog>
 
   <!-- Feedback verwalten (feedbackAdminView.js; nur Admins): lesen, antworten, erledigt markieren, löschen -->
+  <dialog id="status-dialog" aria-labelledby="status-title">
+    <form method="dialog" class="settings">
+      <header class="settings-head">
+        <h2 id="status-title">Serverstatus</h2>
+        <button type="button" class="icon-btn settings-close" data-close aria-label="Schließen" title="Schließen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </header>
+      <!-- tabindex: Der Inhalt hat keine Bedienelemente, scrollen muss trotzdem per Tastatur gehen -->
+      <div class="settings-body" tabindex="0" role="region" aria-label="Kennzahlen">
+        <p class="hint" id="status-msg" role="status"></p>
+        <div id="status-content"></div>
+      </div>
+      <footer class="settings-foot">
+        <button type="button" id="btn-status-refresh">Aktualisieren</button>
+        <button type="button" data-close>Schließen</button>
+      </footer>
+    </form>
+  </dialog>
+
   <dialog id="feedback-admin-dialog" aria-labelledby="feedback-admin-title">
     <form method="dialog" class="settings">
       <header class="settings-head">

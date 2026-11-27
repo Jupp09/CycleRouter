@@ -583,17 +583,17 @@ dialog h2 { margin: 0; font-size: 1.125rem; }
 /* ---------- Einstellungen (settingsDialog.js) ----------
    Kopf und Fuß stehen fest, dazwischen scrollt der Inhalt: „Speichern“ bleibt auch auf dem Handy erreichbar.
    Abschnitte mit eigener Überschrift, Bedienelemente mindestens 44 px hoch (bequem mit dem Finger). */
-:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) { width: min(480px, calc(100vw - 16px)); max-height: calc(100dvh - 24px); padding: 0; overflow: hidden; }
-:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog)[open] { display: flex; }
-:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) form.settings { gap: 0; width: 100%; min-height: 0; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog, #status-dialog) { width: min(480px, calc(100vw - 16px)); max-height: calc(100dvh - 24px); padding: 0; overflow: hidden; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog, #status-dialog)[open] { display: flex; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog, #status-dialog) form.settings { gap: 0; width: 100%; min-height: 0; }
 .settings-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 10px 10px 20px; border-bottom: 1px solid var(--border); }
 .settings-head h2 { font-size: 1.25rem; }
 .settings-close { width: 44px; height: 44px; background: transparent; }
 .settings-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; display: flex; flex-direction: column; gap: 28px; }
 .settings-foot { display: flex; gap: 12px; padding: 12px 20px 16px; border-top: 1px solid var(--border); }
 .settings-foot button { flex: 1; }
-:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) button, :is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) input[type="text"], :is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) input[type="password"], :is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) input[type="number"] { min-height: 44px; }
-:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) .link-btn.inline { min-height: 0; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog, #status-dialog) button, :is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog, #status-dialog) input[type="text"], :is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog, #status-dialog) input[type="password"], :is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog, #status-dialog) input[type="number"] { min-height: 44px; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog, #status-dialog) .link-btn.inline { min-height: 0; }
 .settings-section { display: flex; flex-direction: column; gap: 10px; }
 .settings-section h3 { margin: 0; font-size: 1rem; font-weight: 700; }
 .settings-section .hint { font-size: 0.875rem; }
@@ -607,9 +607,9 @@ dialog h2 { margin: 0; font-size: 1.125rem; }
 .settings-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 .hint.done::before { content: "✓ "; content: "✓ " / ""; color: var(--accent-text); font-weight: 700; }
 #settings-dialog .choice-set legend { font-size: 0.875rem; font-weight: 600; color: var(--text); }
-:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) .check { min-height: 44px; padding: 0 8px; border-radius: 8px; font-size: 0.9375rem; }
-:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) .check:hover { background: var(--surface); }
-:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog) .check input { width: 20px; height: 20px; flex: none; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog, #status-dialog) .check { min-height: 44px; padding: 0 8px; border-radius: 8px; font-size: 0.9375rem; }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog, #status-dialog) .check:hover { background: var(--surface); }
+:is(#settings-dialog, #feedback-dialog, #feedback-replies-dialog, #feedback-admin-dialog, #status-dialog) .check input { width: 20px; height: 20px; flex: none; }
 .settings-section textarea, .settings-section input[type="email"] { font: inherit; color: inherit; }
 .settings-section input[type="email"] { width: 100%; min-height: 44px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--field-border); border-radius: 8px; outline: none; }
 .settings-section input[type="email"]:focus { border-color: var(--accent); }
@@ -801,6 +801,20 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
 
 /* Roadbook drucken (js/app/roadbookView.js): Solange html.print-roadbook gesetzt ist, zeigt der Druck nur die
    Übersicht – schwarz auf weiß, unabhängig von der Darstellung. Ohne die Klasse druckt die Seite wie am Bildschirm. */
+/* Serverstatus (statusView.js): Abschnitte mit Kennzahlen-Tabellen */
+.status-section { margin: 0 0 20px; }
+.status-section h3 { font-size: 1rem; margin: 0 0 6px; }
+.status-section p { margin: 4px 0; font-size: 0.875rem; }
+.status-section .warn { color: var(--warn-text, var(--text)); font-weight: 600; }
+.status-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.status-table th, .status-table td { padding: 4px 6px; border-bottom: 1px solid var(--line, var(--field-border)); text-align: right; }
+.status-table th:first-child, .status-table td:first-child { text-align: left; }
+.status-table thead th { font-weight: 600; }
+.status-errors { list-style: none; margin: 0; padding: 0; }
+.status-errors li { padding: 6px 0; border-bottom: 1px solid var(--line, var(--field-border)); font-size: 0.8125rem; }
+.status-errors code { display: block; white-space: pre-wrap; word-break: break-word; font-size: 0.8125rem; }
+.status-errors .hint { margin: 2px 0 0; }
+
 @media print {
   html.print-roadbook, html.print-roadbook body { height: auto !important; overflow: visible !important; background: #fff !important; color: #000 !important; }
   html.print-roadbook body { display: block !important; }

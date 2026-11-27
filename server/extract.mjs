@@ -8,6 +8,7 @@
 // Nur Zellen, die vollständig im Auszug liegen, sind enthalten; fehlt eine Kachel in einer vorhandenen Zelle,
 // gibt es dort keine Orte. Gegenden außerhalb (oder neue Ebenen, die das Paket noch nicht kennt) lädt der
 // POI-Cache weiter bei Overpass. Abschalten mit POI_EXTRACT_URL=off.
+import { registerStatus } from './status.mjs';
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -39,6 +40,14 @@ const memo = new Map();     // zelle → Promise<{layers}> (zuletzt benutzte zul
 /** @type {LogFn} */
 let log = () => {};
 let updating = false;
+/** Letzte Prüfung auf ein neues Paket (für die Statusseite): {at, ok, note} */
+let lastCheck = null;
+
+registerStatus('extract', () => ({
+  enabled: (process.env.POI_EXTRACT_URL ?? DEFAULT_URL) !== 'off',
+  t: meta?.t ?? null, cells: covered.size, layers: [...layersInExtract], counts: meta?.counts ?? null,
+  regions: meta?.regions?.length ?? null, updating, lastCheck,
+}));
 
 const isCellKey = k => /^-?\d{1,4}_-?\d{1,4}$/.test(k);
 
@@ -160,13 +169,16 @@ async function update() {
   const tmp = join(DIR, 'cells.new');
   try {
     const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(MANIFEST_TIMEOUT) });
-    if (res.status === 404) { log('Datenauszug: noch kein Paket veröffentlicht'); return true; }
+    if (res.status === 404) { log('Datenauszug: noch kein Paket veröffentlicht'); lastCheck = { at: Date.now(), ok: true, note: 'noch kein Paket veröffentlicht' }; return true; }
     if (!res.ok) throw new Error(`Beschreibung: HTTP ${res.status}`);
     const manifest = await res.json();
     if (!Number.isFinite(manifest.t) || typeof manifest.file !== 'string' || !/^[0-9a-f]{64}$/.test(manifest.sha256)) {
       throw new Error('Beschreibung unvollständig');
     }
-    if (meta?.sha256 === manifest.sha256 && meta.counts) return true; // schon aktuell (und gezählt)
+    if (meta?.sha256 === manifest.sha256 && meta.counts) { // schon aktuell (und gezählt)
+      lastCheck = { at: Date.now(), ok: true, note: 'aktuell' };
+      return true;
+    }
 
     log(`Datenauszug: neuer Stand vom ${new Date(manifest.t).toLocaleDateString('de-DE')} wird geladen (${(manifest.bytes / 1e6).toFixed(0)} MB) …`);
     const t0 = Date.now();
@@ -179,12 +191,14 @@ async function update() {
     log(`Datenauszug: ${count} Zellen (${head.regions?.length ?? '?'} Regionen) in ${Math.round((Date.now() - t0) / 1000)} s übernommen – ${summary}`);
     const unused = head.layers.filter(l => !counts[l]);
     if (unused.length) log(`Datenauszug: Ebene ohne Orte wird nicht genutzt: ${unused.join(', ')}`);
+    lastCheck = { at: Date.now(), ok: true, note: 'neuer Stand übernommen' };
     return true;
   } catch (e) {
     // fetch meldet Netzwerkfehler nur als „fetch failed“/„terminated“ – der Grund steckt in `cause`
     const reason = e.name === 'TimeoutError' ? 'Zeitüberschreitung'
       : e.message + (e.cause ? ` (${e.cause.code || e.cause.message})` : '');
     log(`Datenauszug: Aktualisierung fehlgeschlagen – ${reason}`);
+    lastCheck = { at: Date.now(), ok: false, note: reason };
     await rm(tmp, { recursive: true, force: true }).catch(() => {});
     return false;
   } finally {
