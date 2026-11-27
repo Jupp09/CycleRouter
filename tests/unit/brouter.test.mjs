@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { profileSource } from '../../js/routing/brouter.js';
+import { profileSource, ownSearch } from '../../js/routing/brouter.js';
 
 const brf = name => readFileSync(new URL(`../../profiles/${name}.brf`, import.meta.url), 'utf8');
 const ferryLine = src => src.split('\n').find(l => /highway=\s+switch\s+not\s+route=ferry/.test(l));
@@ -30,4 +30,12 @@ test('Andere Profile: Fähren unverändert, ohne EuroVelo gar nicht angepasst', 
 
 test('Unbekannte Gravel-Fassung: Fehler statt stillem Hochladen ohne Korrektur', () => {
   assert.throws(() => profileSource('assign costfactor 1\n', 'gravel'), /Fähren/);
+});
+
+test('Eigener Server: lange Teilstücke suchen zielstrebiger, Gravel bleibt bei 2', () => {
+  const koeln = { lat: 50.9375, lon: 6.9583 }, koblenz = { lat: 50.3569, lon: 7.5983 }, frankfurt = { lat: 50.1109, lon: 8.6821 };
+  assert.deepEqual(ownSearch('trekking', [koeln, koblenz]), { pass1coefficient: 1.2, pass2coefficient: -1 });
+  assert.deepEqual(ownSearch('fastbike', [koeln, frankfurt]), { pass1coefficient: 1.4, pass2coefficient: -1 });
+  assert.deepEqual(ownSearch('gravel', [koeln, frankfurt]), { pass1coefficient: 2, pass2coefficient: -1 });
+  assert.deepEqual(ownSearch('gravel', [koeln, koblenz]), { pass1coefficient: 2, pass2coefficient: -1 });
 });

@@ -73,6 +73,21 @@ const OWN_SEARCH = { pass1coefficient: 1.2, pass2coefficient: -1 };
  * ~30 % schneller, Kosten +0,1–0,5 % (Bremen → Hamburg, München → Augsburg, 11/2026).
  */
 const OWN_SEARCH_BY_PROFILE = { gravel: { pass1coefficient: 2 } };
+/**
+ * Lange Teilstücke (eine lange A→B-Route ist ein einziges) sucht der eigene Server mit 1,4 statt 1,2: Eine Suche
+ * läuft auf einem Kern, und die Breite der Suche wächst mit der Länge. Gemessen 11/2026 (2 vCPU, Kosten zu 1,2):
+ * Bremen → München Trekking 34,9 → 10,4 s (+1,0 %), Rennrad 51,9 → 24,7 s (+0,6 %); Köln → Frankfurt Trekking
+ * 7,0 → 4,2 s (+0,7 %), Rennrad 8,0 → 5,5 s (+0,2 %). 1,5 wäre noch schneller, aber bis +2,8 %; 2 ergab
+ * bis zu 40 % mehr Anstieg. Unter 100 km Luftlinie dauert die Suche ohnehin nur wenige Sekunden.
+ */
+const LONG_LEG = 100_000;
+const LONG_SEARCH = { pass1coefficient: 1.4 };
+
+/** Suchparameter für den eigenen Server je Profil und Luftlinie des Teilstücks (erster bis letzter Punkt). */
+export function ownSearch(profile, points) {
+  const long = points.length > 1 && haversine(points[0], points.at(-1)) >= LONG_LEG;
+  return { ...OWN_SEARCH, ...(long && LONG_SEARCH), ...OWN_SEARCH_BY_PROFILE[profile] };
+}
 
 /** Antwort, die nur „zu viel los“ bedeutet – ein neuer Versuch oder ein anderer Dienst kann helfen. */
 const BUSY_TEXT = /retry later|watchdog|timeout|timed out|too many|busy|overload/i;
@@ -256,7 +271,7 @@ export const brouter = {
           console.info(`BRouter: ${e.message} – rechne mit dem Standardprofil`);
         }
       }
-      const p = endpoint === OWN ? { ...params, ...OWN_SEARCH, ...OWN_SEARCH_BY_PROFILE[base] } : params;
+      const p = endpoint === OWN ? { ...params, ...ownSearch(base, points) } : params;
       let r = await request(endpoint, points, profile, signal, retry, p);
       // Abgelaufenes hochgeladenes Profil → einmal neu hochladen
       if (!r.ok && !r.busy && profile !== base && /profile/i.test(r.text)) {
