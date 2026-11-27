@@ -67,6 +67,12 @@ const PARAMS = { ebike: { consider_elevation: 0 } };
  * Wirkt auch auf hochgeladene EuroVelo-Profile: URL-Parameter gehen der ersten Zuweisung im Profil vor.
  */
 const OWN_SEARCH = { pass1coefficient: 1.2, pass2coefficient: -1 };
+/**
+ * Gravel sucht mit 1,2 auf langen Strecken zu breit (das Profil selbst setzt 4): Triest → Durrës (1070 km)
+ * lief über 180 s in den Proxy-Timeout, mit 2 sind es 104 s, Triest → Split 33 s. Auf kurzen Strecken
+ * ~30 % schneller, Kosten +0,1–0,5 % (Bremen → Hamburg, München → Augsburg, 11/2026).
+ */
+const OWN_SEARCH_BY_PROFILE = { gravel: { pass1coefficient: 2 } };
 
 /** Antwort, die nur „zu viel los“ bedeutet – ein neuer Versuch oder ein anderer Dienst kann helfen. */
 const BUSY_TEXT = /retry later|watchdog|timeout|timed out|too many|busy|overload/i;
@@ -250,7 +256,7 @@ export const brouter = {
           console.info(`BRouter: ${e.message} – rechne mit dem Standardprofil`);
         }
       }
-      const p = endpoint === OWN ? { ...params, ...OWN_SEARCH } : params;
+      const p = endpoint === OWN ? { ...params, ...OWN_SEARCH, ...OWN_SEARCH_BY_PROFILE[base] } : params;
       let r = await request(endpoint, points, profile, signal, retry, p);
       // Abgelaufenes hochgeladenes Profil → einmal neu hochladen
       if (!r.ok && !r.busy && profile !== base && /profile/i.test(r.text)) {
