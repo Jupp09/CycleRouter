@@ -33,7 +33,7 @@ export default async function ({ app, page: newPage, check, step }) {
     && !document.querySelector('#btn-feedback-admin').hidden && document.querySelector('#btn-status').closest('#admin-settings')`, 10000));
   await admin.ev(`document.querySelector('#btn-status').click(); true`);
   check('Dialog geladen', await admin.waitFor(`document.querySelector('#status-dialog').open
-    && document.querySelectorAll('#status-content .status-section').length === 5`, 10000));
+    && document.querySelectorAll('#status-content .status-section').length === 6`, 10000));
   const shown = await admin.ev(`(() => {
     const sec = t => [...document.querySelectorAll('#status-content .status-section')].find(s => s.querySelector('h3').textContent.startsWith(t));
     const cell = (t, row, col) => [...sec(t).querySelectorAll('tbody tr')].find(r => r.querySelector('th').textContent === row)?.children[col]?.textContent;
@@ -44,10 +44,11 @@ export default async function ({ app, page: newPage, check, step }) {
       requests: cell('Eigener BRouter', 'Anfragen', 1), gone: cell('Eigener BRouter', 'abgebrochen (Browser wartete nicht mehr)', 1),
       longest: cell('Eigener BRouter', 'längste', 2),
       valhalla: cell('Routen', 'mit Valhalla (Ausweich)', 2), tooLong: cell('Routen', 'gescheitert: zu lang', 2),
-      error: sec('Browserfehler').textContent,
+      error: sec('Browserfehler').textContent, mail: sec('E-Mail').textContent,
     };
   })()`);
-  check('Fünf Abschnitte', shown.heads.join('|') === 'Server|Datenauszug Europa|Eigener BRouter|Routen|Browserfehler (zuletzt gesehene zuerst)', shown.heads.join('|'));
+  check('Sechs Abschnitte', shown.heads.join('|') === 'Server|E-Mail bei neuer Rückmeldung|Datenauszug Europa|Eigener BRouter|Routen|Browserfehler (zuletzt gesehene zuerst)', shown.heads.join('|'));
+  check('Mail: ohne SMTP-Angaben „nicht eingerichtet“ mit Hinweis', shown.mail.includes('Nicht eingerichtet') && shown.mail.includes('mail:test'), shown.mail);
   check('Auszug: Stand, Zellen, letzte Prüfung', /vor 3 Tagen/.test(shown.extract) && shown.extract.includes('4.321 Zellen aus 52 Regionen')
     && shown.extract.includes('aktuell'), shown.extract);
   check('BRouter live: belegt und wartend', shown.live === 'Gerade 1 von 1 Platz belegt, 2 wartend.', shown.live);

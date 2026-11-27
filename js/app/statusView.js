@@ -91,6 +91,19 @@ function extractPart(x, now) {
   return section('Datenauszug Europa', ...parts);
 }
 
+function mailPart(m) {
+  const title = 'E-Mail bei neuer Rückmeldung';
+  if (!m?.enabled) {
+    return section(title, el('p', '', 'Nicht eingerichtet (SMTP_HOST und FEEDBACK_NOTIFY in der .env, prüfen mit npm run mail:test) – '
+      + 'neue Rückmeldungen siehst du nur hier in der App.'));
+  }
+  const parts = [el('p', '', `An ${m.recipients} Empfänger · `
+    + (m.lastSent ? `zuletzt gesendet ${when(m.lastSent)}` : 'seit dem Start noch keine gesendet'))];
+  if (m.lastError) parts.push(el('p', 'warn', `Fehler ${when(m.lastError.at)}: ${m.lastError.message}`));
+  if (m.skipped) parts.push(el('p', 'hint', `${m.skipped} Mails ausgelassen (höchstens 20 je Stunde).`));
+  return section(title, ...parts);
+}
+
 function brouterPart(b, stats) {
   if (!b?.enabled) return section('Eigener BRouter', el('p', '', 'Nicht eingerichtet (BROUTER_URL) – alle Routen rechnet brouter.de.'));
   const live = el('p', b.downUntil ? 'warn' : '', b.downUntil
@@ -154,7 +167,7 @@ async function load() {
   msg.classList.remove('error');
   try {
     const s = await adminStatus();
-    $('#status-content').replaceChildren(serverPart(s.server, s.now), extractPart(s.extract, s.now),
+    $('#status-content').replaceChildren(serverPart(s.server, s.now), mailPart(s.mail), extractPart(s.extract, s.now),
       brouterPart(s.brouter, s.brouterStats), routesPart(s.routes), errorsPart(s.clientErrors));
     msg.textContent = `Stand ${formatClock(new Date(s.now))}`;
   } catch (e) {

@@ -28,6 +28,8 @@ import { clientIp, currentUser } from './auth.mjs';
 import { HttpError, sendJson, readJsonStrict, checkOrigin, requestHost } from './http.mjs';
 import { createLimiter } from './rateLimit.mjs';
 import { scrub } from '../js/shared.js';
+import { mailConfig, sendMail } from './mail.mjs';
+import { registerStatus } from './status.mjs';
 
 /** Arten einer Rückmeldung → Bezeichnung (für Log und Liste). */
 export const FEEDBACK_KINDS = { bug: 'Fehler', idea: 'Vorschlag', critique: 'Kritik' };
@@ -40,6 +42,47 @@ const perClient = createLimiter({ windowMs: 3600 * 1000, max: PER_CLIENT });
 const perDay = createLimiter({ windowMs: 24 * 3600 * 1000, max: PER_DAY });
 // Antworten abholen: einmal je App-Start; die Grenze bremst nur das Durchprobieren von Kennzeichen
 const replyChecks = createLimiter({ windowMs: 3600 * 1000, max: 120 });
+
+// ---------- Benachrichtigung der Betreiber ----------
+// Je neuer Rückmeldung eine Mail an FEEDBACK_NOTIFY (server/mail.mjs), nur mit Nummer und Art – Text, E-Mail und
+// Route des Nutzers bleiben in der Datenbank. Höchstens NOTIFY_PER_HOUR Mails; was darüber liegt, zeigt die
+// Verwaltung ohnehin (und die Statusseite zählt es). Der Link kommt nur aus PUBLIC_URL, nie aus dem Host der
+// Anfrage: Den bestimmt der Absender, und eine Mail an die Betreiber soll keinen fremden Link tragen können.
+const NOTIFY_PER_HOUR = 20;
+const notifyLimit = createLimiter({ windowMs: 3600 * 1000, max: NOTIFY_PER_HOUR });
+const mailState = { lastSent: null, lastError: null, skipped: 0 };
+registerStatus('mail', () => {
+  const config = mailConfig();
+  return { enabled: !!config, recipients: config?.to.length ?? 0, ...mailState };
+});
+
+/** Text der Benachrichtigung (ohne Inhalt der Rückmeldung) */
+export function notifyText(id, kind, publicUrl = process.env.PUBLIC_URL) {
+  const base = String(publicUrl || '').trim().replace(/\/+$/, '');
+  return {
+    subject: `CycloRouter: neue Rückmeldung #${id} (${FEEDBACK_KINDS[kind] ?? kind})`,
+    text: [
+      `Neue Rückmeldung #${id} (${FEEDBACK_KINDS[kind] ?? kind}) bei CycloRouter.`,
+      '',
+      /^https?:\/\//.test(base) ? `Lesen und beantworten: ${base}/#feedback-verwalten`
+        : 'Lesen und beantworten: in der App unter Einstellungen → Verwaltung → „Feedback verwalten“.',
+      '',
+      'Diese Mail enthält bewusst nichts aus der Rückmeldung selbst – Text und Angaben stehen nur in der Datenbank.',
+    ].join('\n'),
+  };
+}
+
+function notify(id, kind) {
+  const config = mailConfig();
+  if (!config) return;
+  if (!notifyLimit.take('all')) { mailState.skipped++; return; }
+  sendMail(notifyText(id, kind), config)
+    .then(() => { mailState.lastSent = Date.now(); mailState.lastError = null; })
+    .catch(e => {
+      mailState.lastError = { at: Date.now(), message: e.message };
+      console.warn(`Benachrichtigung zu Rückmeldung #${id} nicht gesendet: ${e.message}`);
+    });
+}
 
 // Steuerzeichen raus, Zeilenumbrüche und Tabulatoren bleiben (mehrzeilige Beschreibungen)
 // eslint-disable-next-line no-control-regex
@@ -125,6 +168,7 @@ async function create(req, json) {
   perClient.add(ip);
   perDay.add('all');
   console.log(`Rückmeldung #${result.insertId} (${FEEDBACK_KINDS[f.kind]})`);
+  notify(result.insertId, f.kind); // wartet nicht – der Nutzer bekommt seine Bestätigung sofort
   json(201, { ok: true, id: result.insertId, token });
 }
 

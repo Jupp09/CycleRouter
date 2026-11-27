@@ -128,4 +128,16 @@ export default async function ({ app, page: newPage, check, step, sleep, account
   const adminViolations = await (async () => { await admin.ev(axe + '; true');
     return admin.ev(`axe.run(document.querySelector('#feedback-admin-dialog'), { resultTypes: ['violations'] }).then(r => r.violations.map(v => v.id))`); })();
   check('axe: 0 Verstöße in der Verwaltung', Array.isArray(adminViolations) && !adminViolations.length, JSON.stringify(adminViolations));
+
+  step('Link aus der Benachrichtigungs-Mail');
+  // notifyText (server/feedbackApi.mjs) verlinkt …/#feedback-verwalten: nach der Anmeldung öffnet sich die Verwaltung
+  const linked = await newPage({ accounts: true, height: 950 });
+  await linked.open(`${app}#feedback-verwalten`, { view: BONN });
+  check('Vor der Anmeldung: Link bleibt, kein Dialog', await linked.ev(`location.hash === '#feedback-verwalten' && !document.querySelector('#feedback-admin-dialog').open`));
+  await linked.ev(`document.querySelector('#btn-settings').click();
+    document.querySelector('#account-user').value = 'chef'; document.querySelector('#account-pass').value = 'geheim1234';
+    document.querySelector('#btn-login').click(); true`);
+  check('Nach der Anmeldung: Verwaltung offen, Link aus der Adresse entfernt',
+    await linked.waitFor(`document.querySelector('#feedback-admin-dialog').open && location.hash === ''`, 10000),
+    await linked.ev(`location.hash`));
 }

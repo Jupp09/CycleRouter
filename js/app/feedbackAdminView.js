@@ -15,10 +15,18 @@ const KIND = { bug: 'Fehler', idea: 'Vorschlag', critique: 'Kritik' };
 const dialog = $('#feedback-admin-dialog');
 let filter = 'open';
 
+/** Link aus der Benachrichtigungs-Mail (server/feedbackApi.mjs notifyText): öffnet die Verwaltung nach der Anmeldung */
+const DEEP_LINK = '#feedback-verwalten';
+
 on('account', () => {
   const admin = !!account.user?.admin && !account.offline;
   $('#btn-feedback-admin').hidden = !admin;
   if (admin) refreshCount();
+  // Noch nicht angemeldet: den Link stehen lassen, die Anmeldung löst dieses Ereignis erneut aus
+  if (location.hash === DEEP_LINK && account.user) {
+    history.replaceState(null, '', location.pathname + location.search);
+    if (admin) openAdmin();
+  }
 });
 
 /** Zahl offener Meldungen am Eintrag in den Einstellungen. */
@@ -134,7 +142,10 @@ $('#feedback-admin-filter').addEventListener('click', e => {
   load().catch(err => message(err.message, true));
 });
 
-$('#btn-feedback-admin').addEventListener('click', async () => {
+$('#btn-feedback-admin').addEventListener('click', openAdmin);
+
+async function openAdmin() {
+  if (dialog.open) return;
   filter = 'open';
   message('Wird geladen …');
   dialog.showModal();
@@ -144,5 +155,5 @@ $('#btn-feedback-admin').addEventListener('click', async () => {
   } catch (e) {
     message(e.message, true);
   }
-});
+}
 for (const b of $$('#feedback-admin-dialog [data-close]')) b.addEventListener('click', () => dialog.close());
