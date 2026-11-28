@@ -43,6 +43,14 @@ interface Waypoint {
   id?: string;
 }
 
+/** Abbiegehinweis von BRouter (js/routing/brouter.js parseTurns): Punkt in `coords`, Befehl, Ausfahrt im Kreisel, Winkel */
+interface Turn {
+  i: number;
+  cmd: number;
+  exit?: number;
+  angle?: number;
+}
+
 interface Route {
   coords: Coord[];
   /** zurückgelegte Meter je Koordinate */
@@ -57,6 +65,8 @@ interface Route {
   fallback?: string;
   /** Meter je BRouter-Server ({own, 'brouter.de'}) */
   servers?: Record<string, number>;
+  /** Abbiegehinweise (nur BRouter), für den FIT-Kurs */
+  turns?: Turn[];
   /** importierter GPX-Weg (trackRoute) */
   track?: boolean;
   /** Route ohne Übernachtungen und Stopps */

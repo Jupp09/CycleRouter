@@ -99,16 +99,16 @@ async function stagesAndStays({ app, page: newPage, check, step, sleep }) {
     HTMLAnchorElement.prototype.click = function () { if (this.download) window.__dl.push({ name: this.download, blob: window.__blobs.get(this.href) }); };
     true`);
   const days = await ev(`document.querySelectorAll('#stage-list > li').length`);
-  check('„Als GPX“ in jeder Tageszeile', await ev(`document.querySelectorAll('#stage-list .day-links button:not(.length-edit)').length`) === days);
+  check('„Als GPX“ in jeder Tageszeile', await ev(`document.querySelectorAll('#stage-list .day-links button[aria-label$="als GPX exportieren"]').length`) === days);
   const suns = await ev(`[...document.querySelectorAll('#stage-list .sun')].map(e => e.textContent)`);
   check('Tageslicht-Hinweis in jeder Tageszeile', suns.length === days && suns.every(x => /Sonnen(auf|unter)gang/.test(x)), suns[0]);
   // Bis die Mehrtagestour geladen ist, steht noch das Wetter der Route davor (eine Zeile) da
   await waitFor(`document.querySelector('#weather-summary').children.length === ${days}`, 20000);
   const weather = await ev(`[...document.querySelector('#weather-summary').children].map(e => e.textContent)`);
   check('Wetter je Tag', weather.length === days && weather.every((x, i) => x.startsWith('Tag ' + (i + 1) + ' · ') && x.includes(' °C · ')), JSON.stringify(weather));
-  const label = await ev(`document.querySelectorAll('#stage-list .day-links button:not(.length-edit)')[1].getAttribute('aria-label')`);
+  const label = await ev(`document.querySelectorAll('#stage-list .day-links button[aria-label$="als GPX exportieren"]')[1].getAttribute('aria-label')`);
   check('Name für Screenreader', label === 'Tag 2 als GPX exportieren', label);
-  await ev(`document.querySelectorAll('#stage-list .day-links button:not(.length-edit)')[1].click(); true`);
+  await ev(`document.querySelectorAll('#stage-list .day-links button[aria-label$="als GPX exportieren"]')[1].click(); true`);
   check('Tag 2 einzeln exportiert', await waitFor(`window.__dl.length === 1`, 5000) && /_Tag_2\.gpx$/.test(await ev(`window.__dl[0].name`)),
     await ev(`window.__dl[0]?.name`));
   await ev(`window.__dl = []; document.querySelector('#btn-stages-gpx').click(); true`);
@@ -139,6 +139,16 @@ async function stagesAndStays({ app, page: newPage, check, step, sleep }) {
   check('Tage zusammen = Gesamtlänge', Math.abs(gpx.total - gpx.distance) < 50, `${gpx.total} m / ${gpx.distance} m`);
   check('Unterkunft am Ende von Tag 1 und am Anfang von Tag 2', /^Nacht 1/.test(gpx.nights[0]) && /^Nacht 1/.test(gpx.nights[1]), JSON.stringify(gpx.nights));
   check('Tag 1 ohne Unterkunft von Nacht 2', !gpx.nights[0].includes('Nacht 2'), gpx.nights[0]);
+  // FIT-Kurs je Tag (js/fit.js): Download mit FIT-Kopf, Kurspunkt der Unterkunft am Ende von Tag 1
+  check('„Als FIT“ in jeder Tageszeile', await ev(`document.querySelectorAll('#stage-list .day-links button[aria-label$="als FIT-Kurs exportieren"]').length`) === days);
+  await ev(`window.__dl = []; document.querySelector('#stage-list .day-links button[aria-label="Tag 1 als FIT-Kurs exportieren"]').click(); true`);
+  check('Tag 1 als FIT', await waitFor(`window.__dl.length === 1`, 5000) && /_Tag_1\.fit$/.test(await ev(`window.__dl[0].name`)), await ev(`window.__dl[0]?.name`));
+  const fitDay = await ev(`window.__dl[0].blob.arrayBuffer().then(b => { const t = new TextDecoder('latin1').decode(new Uint8Array(b));
+    return { sig: t.slice(8, 12), night: t.includes('Nacht 1') }; })`);
+  check('FIT-Datei mit Kopf und der Unterkunft als Kurspunkt', fitDay.sig === '.FIT' && fitDay.night, JSON.stringify(fitDay));
+  await ev(`window.__dl = []; document.querySelector('#btn-stages-fit').click(); true`);
+  check('„als FIT“: eine Datei je Tag', await waitFor(`window.__dl.length === ${days}`, 10000) && await ev(`window.__dl.every(d => d.name.endsWith('.fit'))`),
+    await ev(`window.__dl.map(d => d.name).join(', ')`));
 
   step('Länge von Tag 2 im Fenster ändern');
   // Länge eines Tages auf der Route ohne Übernachtungen (darauf bezieht sich der Regler), dazu die Anpassung

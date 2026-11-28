@@ -278,6 +278,7 @@ body:has(#results:not([hidden])) .tagline { display: none; }
 .facts > li > * { grid-column: 2; }
 #eurovelo-share::before { content: "🚲"; content: "🚲" / ""; }
 #routing-fallback::before { content: "⚠️"; content: "⚠️" / ""; }
+.export-more { margin: 6px 0 0; font-size: 0.875rem; }
 #routing-server::before { content: "🖥️"; content: "🖥️" / ""; }
 #ferry-share::before { content: "⛴️"; content: "⛴️" / ""; }
 #daylight::before { content: "☀️"; content: "☀️" / ""; }

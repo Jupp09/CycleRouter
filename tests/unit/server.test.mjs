@@ -111,6 +111,9 @@ test('BRouter-Weiterleitung: nur bekannte Parameter, Profilschlüssel unkodiert'
   assert.ok(q.includes('profile:ebike=1'), q);
   assert.ok(!q.includes('evil'), q);
   assert.ok(q.includes('alternativeidx=0') && q.includes('format=geojson'), q);
+  // Abbiegehinweise für den FIT-Kurs: timode geht durch, aber nur als Ziffer
+  assert.ok(upstreamQuery(new URLSearchParams('lonlats=8.8,53.07|8.9,53.1&profile=trekking&timode=1')).endsWith('&timode=1'));
+  assert.ok(!upstreamQuery(new URLSearchParams('lonlats=8.8,53.07|8.9,53.1&profile=trekking&timode=x')).includes('timode'));
   assert.throws(() => upstreamQuery(new URLSearchParams('lonlats=1,2&profile=trekking')), { status: 400 });
   assert.throws(() => upstreamQuery(new URLSearchParams('lonlats=8.8,53.07|8.9,53.1&profile=../x')), { status: 400 });
   assert.throws(() => upstreamQuery(new URLSearchParams('lonlats=8.8,53.07|8.9,53.1&profile=t&profile:a=1%262')), { status: 400 });

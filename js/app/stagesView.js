@@ -22,7 +22,7 @@ import { $, $$, el, textLines, externalLink, linkButton, flashStatus, osmLinks, 
 import { map } from './mapView.js';
 import { replanStops } from './pipeline.js';
 import { setDeparture } from './supplyView.js';
-import { exportGpx, gpxName } from './exportView.js';
+import { exportGpx, exportFit, gpxName } from './exportView.js';
 import { setSheet } from './sheetView.js';
 import { checkpoint } from './history.js';
 
@@ -33,6 +33,9 @@ on('stages', renderStages);
 const dayFile = s => ({ name: `${gpxName()} – Tag ${s.day}`, range: { from: s.from, to: s.to } });
 $('#btn-stages-gpx').addEventListener('click', () => {
   if (state.route?.stays) exportGpx(stageStats(state.route, state.bike).map(dayFile));
+});
+$('#btn-stages-fit').addEventListener('click', () => {
+  if (state.route?.stays) exportFit(stageStats(state.route, state.bike).map(dayFile));
 });
 
 const FIT_LABEL = { ok: 'im Budget', maybe: 'evtl. im Budget', over: 'über Budget' };
@@ -103,7 +106,7 @@ function renderMultiDayButton(origin, gpx) {
 }
 
 /**
- * Eine Tageszeile: Datum, Kennzahlen, Tageslicht, „Als GPX“, „Länge ändern“ und die Nacht danach.
+ * Eine Tageszeile: Datum, Kennzahlen, Tageslicht, „Als GPX“, „Als FIT“, „Länge ändern“ und die Nacht danach.
  * @param {Route} r @param {any} plan @param {any} s Tag aus stageStats @param {number} i
  * @param {Date} start Abfahrt am ersten Tag @param {{start: Date, end: Date}} time Abfahrt und Ankunft dieses Tages
  */
@@ -119,8 +122,10 @@ function dayRow(r, plan, s, i, start, time) {
     + (plan.fixed[i] ? ' · fest' : '');
   const gpx = linkButton('Als GPX', () => exportGpx([dayFile(s)]));
   gpx.setAttribute('aria-label', `Tag ${s.day} als GPX exportieren`);
+  const fit = linkButton('Als FIT', () => exportFit([dayFile(s)]));
+  fit.setAttribute('aria-label', `Tag ${s.day} als FIT-Kurs exportieren`);
   const actions = el('div', 'day-links');
-  actions.append(gpx);
+  actions.append(gpx, fit);
   // Der letzte Tag ist immer der Rest der Strecke – seine Länge ergibt sich aus den anderen
   if (i < plan.days - 1) {
     const edit = linkButton('Länge ändern', () => openStageDialog(plan, i));

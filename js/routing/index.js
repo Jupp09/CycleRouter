@@ -28,7 +28,7 @@ const tooLongError = (a, b) => Object.assign(new Error(
  * { coords: [[lat, lon, ele]], cum: [m], distance, ascent, descent, waypoints, fallback?, servers? }
  * `fallback`: Name des Ausweichdiensts, falls Teilstücke nicht mit dem gewählten Dienst berechnet wurden.
  * `servers`: Meter je BRouter-Server ({own, 'brouter.de'}), siehe `serverShares`.
- * @param {{coords: Coord[], segments?: Segment[], fallback?: string, servers?: Record<string, number>}} result
+ * @param {{coords: Coord[], segments?: Segment[], fallback?: string, servers?: Record<string, number>, turns?: Turn[]}} result
  * @param {Waypoint[]} waypoints
  * @returns {Route}
  */
@@ -208,13 +208,14 @@ async function leg(provider, a, b, opts, signal) {
 
 /** Teilstücke aneinanderhängen; Abschnitte (Indizes in coords) werden verschoben und an den Nähten verbunden. */
 function joinLegs(legs) {
-  const coords = [], segments = [];
+  const coords = [], segments = [], turns = [];
   for (const l of legs) {
     const offset = coords.length ? coords.length - 1 : 0;
+    for (const t of l.turns || []) turns.push({ ...t, i: t.i + offset }); // Abbiegehinweise (BRouter) mitverschieben
     for (let i = coords.length ? 1 : 0; i < l.coords.length; i++) coords.push(l.coords[i]);
     for (const s of l.segments || []) segments.push({ ...s, from: s.from + offset, to: s.to + offset });
   }
-  return { coords, segments: mergeSegments(segments) };
+  return { coords, segments: mergeSegments(segments), ...(turns.length && { turns }) };
 }
 
 /** `fn` für alle Elemente, höchstens `limit` gleichzeitig; Ergebnis in Eingabereihenfolge. */

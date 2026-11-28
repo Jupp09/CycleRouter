@@ -90,6 +90,8 @@ export function upstreamQuery(params) {
     ['alternativeidx', /^[0-3]$/.test(params.get('alternativeidx') ?? '') ? params.get('alternativeidx') : '0'],
     ['format', 'geojson'],
   ]);
+  // Abbiegehinweise für den FIT-Kurs (js/routing/brouter.js)
+  if (/^[0-9]$/.test(params.get('timode') ?? '')) out.set('timode', params.get('timode'));
   for (const [key, value] of params) {
     if (!PARAM.test(key)) continue;
     if (!VALUE.test(value)) throw new HttpError(400, 'Ungültiger Profilparameter');

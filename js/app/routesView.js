@@ -52,6 +52,8 @@ function serializeRoute(name) {
       ...(state.avoidFerries && { avoidFerries: true }),
       coords: r.coords.map(([lat, lon, ele]) => [round5(lat), round5(lon), ele == null ? null : Math.round(ele * 10) / 10]),
       segments: r.segments || [],
+      // Abbiegehinweise für den FIT-Kurs, kompakt als [punkt, befehl, ausfahrt, winkel]
+      ...(r.turns?.length && { turns: r.turns.map(t => [t.i, t.cmd, t.exit || 0, t.angle || 0]) }),
       waypoints: r.waypoints.filter(p => !p.stop && !p.stay && !p.anchor).map(wp),
       // Importierter Weg (auch mit Abstechern): beim Öffnen wieder als solcher behandeln, Stützpunkte entstehen neu
       ...((r.track || r.waypoints.some(p => p.trackAt)) && { track: true }),
@@ -84,7 +86,11 @@ function restoreRoute(saved, { own }) {
   state.stayChoices = d.stayChoices || [];
   // Angepasste Tageslängen (km je Tag): nur Zahlen übernehmen, die Daten kommen vom Server
   state.stageKm = Array.isArray(d.stageKm) ? d.stageKm.map(v => (Number.isFinite(v) && v > 0 ? v : null)) : [];
-  const r = d.track ? trackRoute(d.coords, wps, d.segments) : withStats({ coords: d.coords, segments: d.segments }, wps);
+  // Abbiegehinweise nur übernehmen, wenn sie zu den Punkten passen (Daten vom Server)
+  const turns = Array.isArray(d.turns) ? d.turns.filter(t => Array.isArray(t) && Number.isInteger(t[0]) && t[0] > 0 && t[0] < d.coords.length - 1)
+    .map(([i, cmd, exit, angle]) => ({ i, cmd: Number(cmd), exit: Number(exit) || 0, angle: Number(angle) || 0 })) : [];
+  const r = d.track ? trackRoute(d.coords, wps, d.segments)
+    : withStats({ coords: d.coords, segments: d.segments, ...(turns.length && { turns }) }, wps);
   state.track = d.track ? r : null;
   showRoute(r);
   // Übernachtungen (mit den gespeicherten Unterkünften) und Stopps auf die gespeicherte Route aufsetzen

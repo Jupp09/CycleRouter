@@ -238,7 +238,8 @@ async function customProfile(endpoint, name, penalty, noFerries, signal, force =
 async function requestOnce(endpoint, points, profile, signal, params = {}) {
   const lonlats = points.map(p => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`).join('|');
   const extra = Object.entries(params).map(([k, v]) => `&profile:${k}=${encodeURIComponent(v)}`).join('');
-  const url = `${endpoint}?lonlats=${encodeURIComponent(lonlats)}&profile=${profile}${extra}&alternativeidx=0&format=geojson`;
+  // timode=1: Abbiegehinweise (voicehints) für den FIT-Kurs (js/fit.js); kostet BRouter kaum etwas
+  const url = `${endpoint}?lonlats=${encodeURIComponent(lonlats)}&profile=${profile}${extra}&alternativeidx=0&format=geojson&timode=1`;
   let res;
   try {
     res = await fetch(url, { signal });
@@ -333,9 +334,29 @@ export const brouter = {
     const feature = JSON.parse(text).features[0];
     const coords = feature.geometry.coordinates.map(([lon, lat, ele]) => [lat, lon, ele ?? null]);
     // `server`: wer gerechnet hat – 'own' (eigener Server über /api/brouter) oder 'brouter.de' (resultsView zeigt es)
-    return { coords, segments: parseSegments(feature.properties.messages, coords), server };
+    const turns = parseTurns(feature.properties.voicehints, coords.length);
+    return { coords, segments: parseSegments(feature.properties.messages, coords), server, ...(turns.length && { turns }) };
   },
 };
+
+/**
+ * Befehle der BRouter-Abbiegehinweise (VoiceHint.java), die der FIT-Kurs zeigt: 1 geradeaus, 2 links,
+ * 3 leicht links, 4 scharf links, 5 rechts, 6 leicht rechts, 7 scharf rechts, 8 links halten, 9 rechts halten,
+ * 10–12 wenden, 14/15 Kreisverkehr (rechts-/linksherum), 17/18 Ausfahrt links/rechts. Nicht: 13 abseits der
+ * Route, 16 Luftlinie, 100 Ziel.
+ */
+const TURN_COMMANDS = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 17, 18]);
+
+/**
+ * voicehints ([punktindex, befehl, ausfahrt, abstand, winkel], mit timode=1) → [{i, cmd, exit, angle}];
+ * nur Hinweise auf Punkten zwischen Anfang und Ende des Teilstücks.
+ * @returns {Turn[]}
+ */
+export function parseTurns(hints, count) {
+  if (!Array.isArray(hints)) return [];
+  return hints.filter(h => Array.isArray(h) && Number.isInteger(h[0]) && h[0] > 0 && h[0] < count - 1 && TURN_COMMANDS.has(h[1]))
+    .map(([i, cmd, exit, , angle]) => ({ i, cmd, exit: Number(exit) || 0, angle: Math.round(Number(angle) || 0) }));
+}
 
 /**
  * BRouter-Messages: je Zeile der Endpunkt eines Abschnitts (Mikrograd), seine Länge und die OSM-Tags.
