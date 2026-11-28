@@ -619,6 +619,9 @@ dialog h2 { margin: 0; font-size: 1.125rem; }
 .settings-section textarea:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 1px; }
 #feedback-preview pre { margin: 6px 0 0; padding: 8px 10px; background: var(--surface); border-radius: 8px; font-size: 0.8125rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 /* Feedback am Ende des Panels: leise, aber immer zu finden */
+/* Impressum · Datenschutz am Ende des Panels */
+.legal-links { margin: 10px 0 0; font-size: 0.8125rem; color: var(--muted); }
+.legal-links a { display: inline-block; min-height: 1.5rem; padding: 2px 0; color: var(--accent-text); }
 .panel-foot { margin: 4px 0 0; padding-top: 10px; border-top: 1px solid var(--border); }
 .panel-foot .link-btn { min-height: 1.5rem; }
 /* Neue Antwort auf eigenes Feedback (feedbackView.js): oben im Panel, hervorgehoben */
@@ -794,7 +797,7 @@ button, input, select, summary, .leaflet-container { touch-action: manipulation;
   .sheet-actions[hidden], .panel:has(#plan:not([hidden])) .sheet-actions { display: none; }
   /* „Route erstellen“ klebt nur innerhalb des Formulars fest – stünde danach noch die Feedback-Zeile, reichte die
      Leiste nicht bis an den Rand des Blatts. Solange sie zu sehen ist: Feedback nur über die Einstellungen. */
-  .panel:has(#plan:not([hidden]) .plan-actions:not([hidden])) .panel-foot { display: none; }
+  .panel:has(#plan:not([hidden]) .plan-actions:not([hidden])) :is(.panel-foot, .legal-links) { display: none; }
   .sheet-actions button { min-height: 44px; font-weight: 600; }
   #btn-sheet-gpx { flex: none; }
   #btn-sheet-gpx.primary, #btn-sheet-multiday { flex: 1; }

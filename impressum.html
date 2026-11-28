@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Impressum – CycloRouter</title>
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="css/legal.css">
+</head>
+<body>
+<!-- Name, Anschrift und Kontakt setzt der Server beim Ausliefern aus der .env ein (IMPRESSUM_*, server/static.mjs
+     fillTemplate) – das Repo ist öffentlich, die Anschrift soll nicht darin stehen. -->
+<main>
+  <p class="back"><a href="./">← Zurück zu CycloRouter</a></p>
+  <h1>Impressum</h1>
+
+  <h2>Anbieter</h2>
+  <p>Angaben gemäß § 5 Digitale-Dienste-Gesetz (DDG)</p>
+  <p>{{IMPRESSUM_NAME}}<br>{{IMPRESSUM_ADDRESS}}</p>
+
+  <h2>Kontakt</h2>
+  <p>E-Mail: <a href="mailto:{{IMPRESSUM_EMAIL}}">{{IMPRESSUM_EMAIL}}</a><!--wenn IMPRESSUM_PHONE--><br>
+    Telefon: {{IMPRESSUM_PHONE}}<!--/wenn--></p>
+  <p>Fehler, Ideen und Kritik zur App am einfachsten über „Feedback geben“ in der App.</p>
+
+  <h2>Verantwortlich für den Inhalt</h2>
+  <p>{{IMPRESSUM_NAME}} (Anschrift wie oben)</p>
+
+  <h2>Über CycloRouter</h2>
+  <p>CycloRouter ist ein privates, nicht kommerzielles Projekt: keine Werbung, keine Bezahlfunktionen, kein Tracking.
+    Der Quelltext ist öffentlich auf <a href="https://github.com/Jupp09/CycleRouter">GitHub</a>.</p>
+
+  <h2>Kartendaten und Dienste</h2>
+  <p>Karten- und Ortsdaten © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap-Mitwirkende</a>
+    (Open Database License). Routen berechnen <a href="https://brouter.de">BRouter</a> und als Ausweich
+    <a href="https://valhalla1.openstreetmap.de">Valhalla</a> (FOSSGIS e.&nbsp;V.), Wetter kommt von
+    <a href="https://open-meteo.com">Open-Meteo</a>. Welche Daten dabei wohin gehen, steht in der
+    <a href="datenschutz.html">Datenschutzerklärung</a>.</p>
+
+  <h2>Haftung</h2>
+  <p>Die Routen werden automatisch aus OpenStreetMap-Daten berechnet. Sie können Fehler enthalten, Wege können gesperrt,
+    nicht befahrbar oder gefährlich sein, Öffnungszeiten und Unterkünfte veraltet. Vor Ort gelten die Beschilderung und
+    die Straßenverkehrsordnung. Für Inhalte verlinkter fremder Seiten sind deren Betreiber verantwortlich.</p>
+</main>
+</body>
+</html>

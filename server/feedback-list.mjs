@@ -23,7 +23,7 @@ const done = idAfter('--done'), remove = idAfter('--delete');
 if (done || remove) {
   const id = done || remove;
   const r = done
-    ? await query('UPDATE feedback SET done = 1 WHERE id = ?', [id])
+    ? await query('UPDATE feedback SET done = 1, done_at = COALESCE(done_at, NOW()) WHERE id = ?', [id])
     : await query('DELETE FROM feedback WHERE id = ?', [id]);
   console.log(r.affectedRows ? `Rückmeldung #${id} ${done ? 'als erledigt markiert' : 'gelöscht'}.` : `Keine Rückmeldung #${id}.`);
   process.exit(0);

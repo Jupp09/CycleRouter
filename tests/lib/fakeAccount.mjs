@@ -61,7 +61,7 @@ export function createAccountStore() {
       const f = serverCheck(() => cleanFeedback(body, host));
       const token = randomBytes(16).toString('base64url');
       feedback.push({ ...f, id: feedback.length + 1, userId: user?.id ?? null, username: user?.username ?? null,
-        tokenHash: sha256(token), done: false, reply: null, repliedAt: null, createdAt: now() });
+        tokenHash: sha256(token), done: false, doneAt: null, reply: null, repliedAt: null, createdAt: now() });
       return [201, { ok: true, id: feedback.length, token }];
     }
     if (path === '/api/feedback/replies' && method === 'POST') {
@@ -83,7 +83,7 @@ export function createAccountStore() {
       if (!f) throw new ApiError(404, 'Rückmeldung nicht gefunden.');
       if (method === 'PATCH') {
         const p = serverCheck(() => cleanAdminPatch(body));
-        if ('done' in p) f.done = p.done;
+        if ('done' in p) { f.doneAt = p.done ? (f.doneAt ?? now()) : null; f.done = p.done; }
         if ('reply' in p) Object.assign(f, { reply: p.reply, repliedAt: p.reply ? now() : null });
         return [200, { ok: true }];
       }
@@ -130,6 +130,7 @@ export function createAccountStore() {
       if (body.password !== user.password) throw new ApiError(401, 'Passwort falsch.');
       users.delete(user.username);
       for (const [id, r] of routes) if (r.userId === user.id) routes.delete(id);
+      for (let i = feedback.length - 1; i >= 0; i--) if (feedback[i].userId === user.id) feedback.splice(i, 1); // wie accountApi.mjs
       for (const [s, n] of sessions) if (n === user.username) sessions.delete(s);
       return [200, { ok: true }];
     }

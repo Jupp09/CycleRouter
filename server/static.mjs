@@ -85,13 +85,56 @@ async function indexHtml(root, file) {
   return entry;
 }
 
+// ---------- Impressum und Datenschutz ----------
+
+/**
+ * Seiten mit Platzhaltern aus der Umgebung: Name, Anschrift und Kontakt stehen in der .env, nicht in den Dateien –
+ * das Repo ist öffentlich, und die Anschrift soll nicht darin (und in seinem Verlauf) stehen.
+ */
+const TEMPLATES = new Set(['impressum.html', 'datenschutz.html']);
+/** Angaben, die in den Seiten vorkommen; IMPRESSUM_PHONE ist freiwillig (Block <!--wenn …-->…<!--/wenn-->) */
+export const TEMPLATE_VARS = ['IMPRESSUM_NAME', 'IMPRESSUM_ADDRESS', 'IMPRESSUM_EMAIL', 'IMPRESSUM_PHONE', 'HOSTER_LOG_DAYS'];
+
+const escapeHtml = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/**
+ * Platzhalter {{NAME}} durch Werte aus `env` ersetzen (HTML-maskiert; in IMPRESSUM_ADDRESS trennt „|“ die Zeilen).
+ * Ein Block <!--wenn NAME-->…<!--/wenn--> bleibt nur, wenn NAME gesetzt ist. Fehlt eine Pflichtangabe, steht dort
+ * ein markierter Hinweis – die Seite soll nie mit leeren Stellen live gehen, ohne dass es auffällt.
+ */
+export function fillTemplate(html, env = process.env) {
+  const value = name => String(env[name] ?? '').trim();
+  return html
+    .replace(/<!--wenn (\w+)-->([\s\S]*?)<!--\/wenn-->/g, (_, name, inner) => (value(name) ? inner : ''))
+    // In Attributen (href="mailto:…") nur den Wert, nie den Hinweis – der ist Markup
+    .replace(/="([^"]*?)\{\{(\w+)\}\}([^"]*)"/g, (_, before, name, after) => `="${before}${escapeHtml(value(name))}${after}"`)
+    .replace(/\{\{(\w+)\}\}/g, (_, name) => {
+      const v = value(name);
+      if (!v) return `<mark class="missing">[in der .env eintragen: ${name}]</mark>`;
+      const safe = escapeHtml(v);
+      return name === 'IMPRESSUM_ADDRESS' ? safe.split('|').map(l => l.trim()).join('<br>') : safe;
+    });
+}
+
+/** Seite mit eingesetzten Angaben; neu nur, wenn sich die Datei ändert (die .env gilt ab dem Start des Servers). */
+const filled = new WeakMap(); // Eintrag aus loadFile → {body, etag} mit eingesetzten Angaben
+async function templatePage(file) {
+  const raw = await loadFile(file);
+  if (!filled.has(raw)) {
+    const body = Buffer.from(fillTemplate(raw.body.toString('utf8')));
+    filled.set(raw, { body, etag: etagOf(body) });
+  }
+  return filled.get(raw);
+}
+
 /**
  * Datei ausliefern. `extraHeaders(html)` liefert zusätzliche Kopfzeilen für HTML (die CSP).
  * Wirft bei fehlender Datei (Aufrufer antwortet 404).
  */
 export async function serveStatic(req, res, { root, file, type, extraHeaders }) {
-  const isIndex = relative(root, file).split(sep).join('/') === 'index.html';
-  const entry = isIndex ? await indexHtml(root, file) : await loadFile(file);
+  const rel = relative(root, file).split(sep).join('/');
+  const isIndex = rel === 'index.html';
+  const entry = isIndex ? await indexHtml(root, file) : TEMPLATES.has(rel) ? await templatePage(file) : await loadFile(file);
   const headers = { 'Content-Type': type, 'Cache-Control': 'no-cache', ETag: entry.etag };
   if (extname(file) === '.html') Object.assign(headers, extraHeaders?.(entry.html ?? entry.body.toString('utf8')));
   if (matches(req.headers['if-none-match'], entry.etag)) {

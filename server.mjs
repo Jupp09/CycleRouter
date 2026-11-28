@@ -25,7 +25,7 @@ import { serveStatic } from './server/static.mjs';
 import { getRegions, isRegionKey } from './server/regions.mjs';
 import { handleBrouter, brouterEnabled } from './server/brouterProxy.mjs';
 import { handleClientError } from './server/clientErrors.mjs';
-import { handleFeedback } from './server/feedbackApi.mjs';
+import { handleFeedback, scheduleFeedbackPurge } from './server/feedbackApi.mjs';
 import { handleStatus } from './server/statusApi.mjs';
 import { initStatusStore } from './server/status.mjs';
 
@@ -176,7 +176,8 @@ async function handleWarmRoute(req, res) {
  */
 // Bilder liegen unter assets/ statt icons/: Apache leitet /icons/ auf seine eigenen Symbole um (z. B. bei Plesk)
 // sw.js liegt im Stamm, weil ein Service Worker nur Pfade unterhalb seines eigenen Ordners erfassen darf
-const PUBLIC = [/^\/index\.html$/, /^\/manifest\.webmanifest$/, /^\/sw\.js$/, /^\/(js|css|profiles|assets)\/[\w./-]+$/];
+// impressum.html, datenschutz.html: Angaben aus der .env (server/static.mjs fillTemplate)
+const PUBLIC = [/^\/index\.html$/, /^\/(impressum|datenschutz)\.html$/, /^\/manifest\.webmanifest$/, /^\/sw\.js$/, /^\/(js|css|profiles|assets)\/[\w./-]+$/];
 
 createServer(async (req, res) => {
   setSecurityHeaders(req, res);
@@ -214,6 +215,6 @@ createServer(async (req, res) => {
   initExtract(msg => console.log(msg))
     .catch(e => console.warn(`Datenauszug: ${e.message}`))
     .finally(() => initWarmQueue(msg => console.log(msg)));
-  initDb(msg => console.log(msg));
+  initDb(msg => console.log(msg)).then(ok => ok && scheduleFeedbackPurge(msg => console.log(msg)));
   initStatusStore(join(ROOT, 'cache', 'status.json'), msg => console.log(msg));
 });

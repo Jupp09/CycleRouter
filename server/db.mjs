@@ -57,8 +57,9 @@ const SCHEMA = [
     CONSTRAINT fk_routes_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-  // Rückmeldungen (server/feedbackApi.mjs). Wird ein Konto gelöscht, bleibt die Meldung ohne Bezug zum Konto
-  // stehen (SET NULL); eine angegebene E-Mail steht in der Meldung selbst und lässt sich mit ihr löschen.
+  // Rückmeldungen (server/feedbackApi.mjs). Beim Löschen eines Kontos löscht accountApi.mjs dessen Rückmeldungen
+  // ausdrücklich (Datenschutzerklärung); SET NULL bleibt nur als Rückfall. Erledigte werden 12 Monate nach dem
+  // Erledigen gelöscht (done_at, purgeOldFeedback).
   `CREATE TABLE IF NOT EXISTS feedback (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     kind VARCHAR(10) NOT NULL,
@@ -72,6 +73,7 @@ const SCHEMA = [
     token_hash CHAR(64) NULL,
     reply TEXT NULL,
     replied_at DATETIME NULL,
+    done_at DATETIME NULL,
     KEY ix_created (created_at),
     KEY ix_user (user_id),
     CONSTRAINT fk_feedback_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
@@ -88,6 +90,7 @@ const ADDED_COLUMNS = [
   ['feedback', 'token_hash', 'CHAR(64) NULL'], // Antwort ohne Konto abholen (feedbackApi.mjs)
   ['feedback', 'reply', 'TEXT NULL'],
   ['feedback', 'replied_at', 'DATETIME NULL'],
+  ['feedback', 'done_at', 'DATETIME NULL'], // Löschfrist erledigter Rückmeldungen
 ];
 
 async function addMissingColumns(p) {

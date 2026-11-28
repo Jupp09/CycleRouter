@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Datenschutz – CycloRouter</title>
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="css/legal.css">
+</head>
+<body>
+<!-- Angaben zum Verantwortlichen und die Aufbewahrung der Webserver-Protokolle setzt der Server aus der .env ein
+     (IMPRESSUM_*, HOSTER_LOG_DAYS; server/static.mjs fillTemplate). Bei neuen Daten, Diensten oder Speicherorten
+     diese Seite mitziehen (CLAUDE.md, „Things to keep in sync“). -->
+<main>
+  <p class="back"><a href="./">← Zurück zu CycloRouter</a></p>
+  <h1>Datenschutzerklärung</h1>
+  <p class="lead">CycloRouter ist ein privates, nicht kommerzielles Projekt. Es gibt keine Werbung, kein Tracking, keine
+    Analyse-Dienste und keine Profilbildung. Ein Konto ist freiwillig; ohne Konto bleibt alles, was du einstellst, in
+    deinem Browser. Diese Seite erklärt, welche Daten trotzdem anfallen – vor allem, weil Karten, Routen und Ortssuche von
+    Diensten im Internet kommen.</p>
+
+  <nav aria-label="Inhalt">
+    <ol>
+      <li><a href="#verantwortlich">Verantwortlicher</a></li>
+      <li><a href="#hosting">Hosting und Server-Protokolle</a></li>
+      <li><a href="#browser">Was in deinem Browser gespeichert wird</a></li>
+      <li><a href="#dienste">Karten, Routen, Suche: Dienste, die dein Browser direkt anfragt</a></li>
+      <li><a href="#server">Was unser Server für dich anfragt</a></li>
+      <li><a href="#konto">Konto, Einstellungen und gespeicherte Routen</a></li>
+      <li><a href="#feedback">Feedback</a></li>
+      <li><a href="#fehler">Fehlerberichte und Betriebszahlen</a></li>
+      <li><a href="#rechte">Deine Rechte</a></li>
+    </ol>
+  </nav>
+
+  <h2 id="verantwortlich">1. Verantwortlicher</h2>
+  <p>{{IMPRESSUM_NAME}}<br>{{IMPRESSUM_ADDRESS}}<br>
+    E-Mail: <a href="mailto:{{IMPRESSUM_EMAIL}}">{{IMPRESSUM_EMAIL}}</a></p>
+  <p>Ein Datenschutzbeauftragter ist für dieses private Projekt nicht vorgeschrieben. Fragen zum Datenschutz bitte an die
+    E-Mail-Adresse oben.</p>
+
+  <h2 id="hosting">2. Hosting und Server-Protokolle</h2>
+  <p>CycloRouter läuft bei der <strong>netcup GmbH</strong>, Daimlerstraße 25, 76185 Karlsruhe: die Webseite mit ihrem
+    Server und der Datenbank im Webhosting, der eigene Routenserver (BRouter) auf einem eigenen virtuellen Server.
+    netcup verarbeitet die Daten in unserem Auftrag (Auftragsverarbeitungsvertrag nach Art. 28 DSGVO).</p>
+  <p>Bei jedem Aufruf schreibt der Webserver des Hostings ein Protokoll: deine IP-Adresse, Datum und Uhrzeit, die
+    aufgerufene Adresse, den Statuscode, die übertragene Menge und die Angabe deines Browsers (User-Agent). Bei der
+    Routenberechnung über unseren Routenserver enthält die aufgerufene Adresse die Wegpunkte der Route; sie stehen deshalb
+    ebenfalls in diesen Protokollen. Die Protokolle dienen dem Betrieb und der Abwehr von Missbrauch und werden nach
+    {{HOSTER_LOG_DAYS}} Tagen gelöscht. Rechtsgrundlage ist unser berechtigtes Interesse an einem sicheren Betrieb
+    (Art. 6 Abs. 1 lit. f DSGVO).</p>
+  <p>Die App selbst schreibt keine IP-Adressen in ihr Protokoll. Um Missbrauch zu begrenzen (z. B. zu viele Anmeldeversuche
+    oder Anfragen), zählt sie Anfragen je Anschluss nur im Arbeitsspeicher; diese Zähler verfallen nach höchstens 24 Stunden.
+    Der Teil der Adresse nach „#“, in dem der Routen-Link deine Wegpunkte trägt, wird von Browsern nie an Server
+    gesendet.</p>
+
+  <h2 id="browser">3. Was in deinem Browser gespeichert wird</h2>
+  <p>Damit die App sich deine Wahl merkt und schnell startet, speichert sie in deinem Browser (Local Storage, IndexedDB,
+    Cache des Service Workers):</p>
+  <ul>
+    <li>deine Einstellungen (Fahrrad, Tempo, Darstellung, Heimatadresse, falls angegeben, u. a.) und den zuletzt
+      angesehenen Kartenausschnitt,</li>
+    <li>den API-Schlüssel für OpenRouteService, falls du einen einträgst – er verlässt deinen Browser nur in Richtung
+      OpenRouteService,</li>
+    <li>geladene Orte entlang der Routen (Läden, Wasser, Unterkünfte; bis zu 7 Tage), damit sie nicht erneut geladen
+      werden müssen,</li>
+    <li>angemeldet: deine Routenliste und zuletzt geöffnete Routen für die Nutzung ohne Netz – beim Abmelden gelöscht,</li>
+    <li>nach dem Senden von Feedback ein zufälliges Kennzeichen, mit dem dein Browser eine Antwort abholen kann,</li>
+    <li>die Dateien der App selbst, damit sie auch ohne Netz startet.</li>
+  </ul>
+  <p>Ein Cookie gibt es nur mit Konto: <code>cr_session</code> hält dich angemeldet (bis zur Abmeldung, höchstens
+    30 Tage ohne Nutzung). Alles hier ist für Funktionen nötig, die du selbst nutzt, und braucht deshalb keine Einwilligung
+    (§ 25 Abs. 2 Nr. 2 TDDDG). Du kannst es jederzeit in den Einstellungen deines Browsers löschen („Websitedaten
+    löschen“).</p>
+
+  <h2 id="dienste">4. Karten, Routen, Suche: Dienste, die dein Browser direkt anfragt</h2>
+  <p>Karten, Routen und die Ortssuche kommen von spezialisierten, meist gemeinnützigen Diensten aus dem
+    OpenStreetMap-Umfeld. Dein Browser fragt sie direkt an; dabei erhalten sie technisch zwingend deine IP-Adresse, die
+    Angabe deines Browsers und – als Herkunft – nur die Domain von CycloRouter, nicht die ganze Adresse. Was darüber hinaus
+    übertragen wird:</p>
+  <ul>
+    <li><strong>Kartenbilder</strong> (der Ausschnitt, den du ansiehst): CyclOSM von OpenStreetMap France
+      (tile-cyclosm.openstreetmap.fr, Standard), je nach gewählter Kartenart OpenStreetMap (OpenStreetMap Foundation,
+      Vereinigtes Königreich), OpenTopoMap (opentopomap.org), Waymarked Trails (Radrouten-Ebene) und – nur bei der Kartenart
+      „Satellit“ – Esri (server.arcgisonline.com, USA).</li>
+    <li><strong>Routenberechnung</strong> (Start, Ziel und Zwischenpunkte): zuerst unser eigener Routenserver (siehe
+      Abschnitt 2); ist er ausgelastet oder fehlt ihm etwas, der öffentliche Server brouter.de und als letzter Ausweich
+      Valhalla des FOSSGIS e. V. (valhalla1.openstreetmap.de). Nur wenn du in den Einstellungen OpenRouteService wählst und
+      einen eigenen Schlüssel einträgst: OpenRouteService der HeiGIT gGmbH, Heidelberg.</li>
+    <li><strong>Ortssuche</strong> (dein Suchtext und als Hinweis der ungefähre Kartenbereich) und
+      <strong>Ortsnamen</strong> für Punkte, die du auf der Karte setzt (deren Koordinaten): Photon der komoot GmbH
+      (photon.komoot.io), ersatzweise Nominatim der OpenStreetMap Foundation.</li>
+    <li><strong>Wetter</strong> entlang der Route: Open-Meteo (open-meteo.com) erhält nur auf etwa 10 km gerundete
+      Koordinaten und die Tage der Fahrt.</li>
+    <li><strong>Feiertage</strong>: date.nager.at erhält nur Land und Jahr.</li>
+    <li><strong>Orte entlang der Route und Regionen</strong> holt normalerweise unser Server (Abschnitt 5). Nur wenn er nicht
+      erreichbar oder ausgelastet ist, fragt dein Browser direkt bei Overpass (overpass-api.de, overpass.kumi.systems) bzw.
+      Nominatim nach – dann mit Kartenkacheln entlang der Route bzw. einzelnen Punkten der Route.</li>
+    <li><strong>Programmbibliothek Leaflet</strong> (für die Karte): bei jedem Aufruf von cdnjs der Cloudflare, Inc.
+      (USA).</li>
+  </ul>
+  <p>Bei Esri und Cloudflare können Daten in die USA gelangen. Cloudflare ist nach dem EU-US Data Privacy Framework
+    zertifiziert; die Satellitenkarte kannst du einfach nicht wählen. Rechtsgrundlage für alle Anfragen dieses Abschnitts ist
+    unser berechtigtes Interesse, dir die Funktionen anzubieten, die du gerade nutzt (Art. 6 Abs. 1 lit. f DSGVO). Wie
+    die Dienste mit den Daten umgehen, steht in ihren eigenen Datenschutzhinweisen.</p>
+
+  <h2 id="server">5. Was unser Server für dich anfragt</h2>
+  <p>Damit nicht jeder Browser einzeln öffentliche Dienste belastet, holt unser Server einiges selbst und hält es vor – mit
+    seiner eigenen Adresse, nicht mit deiner: Orte entlang der Route (Läden, Wasser, Unterkünfte, Bahnhöfe) bei Overpass in
+    Kacheln von etwa 10 × 10 km, Land und Bundesland für die Feiertagsprüfung bei Nominatim (auf etwa 1 km gerundete Punkte)
+    und vorab die Orte rund um deine Heimatadresse, wenn du eine angibst (auf etwa 10 km gerundet). Diese Daten sind
+    gemeinsam für alle Nutzer gespeichert und enthalten keinen Bezug zu dir.</p>
+
+  <h2 id="konto">6. Konto, Einstellungen und gespeicherte Routen</h2>
+  <p>Ein Konto ist freiwillig. Gespeichert werden in unserer Datenbank: dein Benutzername, dein Passwort nur als
+    nicht umkehrbarer Hash (scrypt), deine Anmeldesitzungen (als Hash, mit Ablaufdatum), deine Einstellungen zum Abgleich
+    zwischen deinen Geräten (darunter deine Heimatadresse, falls angegeben; nie der OpenRouteService-Schlüssel) und deine
+    gespeicherten Routen mit ihren Wegpunkten. Eine E-Mail-Adresse brauchst du nicht. Teilst du eine Route per Link, kann
+    jeder mit dem Link sie sehen, bis du ihn zurückziehst.</p>
+  <p>Rechtsgrundlage ist die Bereitstellung des Kontos, das du anlegst (Art. 6 Abs. 1 lit. b DSGVO). Mit „Konto löschen“
+    in den Einstellungen löschst du sofort und endgültig dein Konto, alle Routen, Einstellungen, Sitzungen und dein
+    Feedback (Abschnitt 7).</p>
+
+  <h2 id="feedback">7. Feedback</h2>
+  <p>Über „Feedback geben“ kannst du Fehler melden, Ideen vorschlagen oder Kritik äußern. Gespeichert werden die Art der
+    Meldung, dein Text und – angemeldet – dein Konto. Nur wenn du es ausdrücklich ankreuzt bzw. angibst, kommen hinzu:
+    eine E-Mail-Adresse für Rückfragen, technische Angaben (Browser, Bildschirmgröße, Sprache, die letzten Fehlermeldungen
+    der App, ohne Ortsangaben) und der Link zu deiner aktuellen Route (er enthält deren Wegpunkte). „Was wird gesendet?“
+    im Formular zeigt dir vorher genau den Inhalt.</p>
+  <p>Wir nutzen das nur, um die Meldung zu bearbeiten und dir zu antworten; die Antwort erscheint in der App (über dein
+    Konto oder über ein zufälliges Kennzeichen in deinem Browser, von dem wir nur einen Hash speichern). Über eine neue
+    Meldung benachrichtigt uns eine E-Mail, die nur deren Nummer und Art enthält, nicht deinen Text.</p>
+  <p>Rechtsgrundlage ist dein Anliegen (Art. 6 Abs. 1 lit. f DSGVO), für die freiwilligen Angaben deine Einwilligung
+    (Art. 6 Abs. 1 lit. a DSGVO), die du jederzeit per E-Mail widerrufen kannst. Erledigte Meldungen werden 12 Monate nach
+    dem Erledigen automatisch gelöscht, mit deinem Konto sofort, auf Wunsch jederzeit.</p>
+
+  <h2 id="fehler">8. Fehlerberichte und Betriebszahlen</h2>
+  <p>Tritt in der App ein Programmfehler auf, schickt dein Browser eine Fehlermeldung an unseren Server: Fehlertext, Stelle
+    im Programm, Browser und Betriebssystem (grob, z. B. „Chrome 131, Windows“) – vorher bereinigt um Ortsangaben und
+    Adressteile. Sie landet im Protokoll der App, ohne IP-Adresse, und wird mit den Server-Protokollen gelöscht
+    (Abschnitt 2).</p>
+  <p>Für die Betriebsübersicht des Betreibers meldet dein Browser nach jeder berechneten Route, welcher Routendienst gerechnet
+    hat und wie lange es dauerte, bzw. woran es scheiterte – ohne Orte, Länge oder Bezug zu dir. Diese Zahlen und eine
+    Zählung der Fehlerberichte werden 7 Tage aufbewahrt. Rechtsgrundlage ist unser berechtigtes Interesse an einer funktionierenden App
+    (Art. 6 Abs. 1 lit. f DSGVO).</p>
+
+  <h2 id="rechte">9. Deine Rechte</h2>
+  <p>Du hast das Recht auf Auskunft über deine Daten (Art. 15 DSGVO), auf Berichtigung (Art. 16), Löschung (Art. 17),
+    Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) und auf Widerspruch gegen Verarbeitungen
+    aufgrund berechtigter Interessen (Art. 21). Eine Einwilligung kannst du jederzeit mit Wirkung für die Zukunft
+    widerrufen. Schreib dazu einfach an die E-Mail-Adresse in Abschnitt 1. Vieles kannst du auch selbst tun: Routen und
+    Konto in der App löschen, Browserdaten in deinem Browser.</p>
+  <p>Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren (Art. 77 DSGVO), insbesondere in dem
+    Bundesland bzw. Mitgliedstaat, in dem du wohnst.</p>
+  <p class="stand">Stand: November 2026</p>
+</main>
+</body>
+</html>

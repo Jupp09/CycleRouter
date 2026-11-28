@@ -136,6 +136,8 @@ async function route(req, res, url) {
 
   if (pathname === '/api/account/delete' && m === 'POST') {
     await confirmPassword(req, user, 'Passwort falsch.');
+    // Rückmeldungen des Kontos mit löschen (Datenschutzerklärung) – der Fremdschlüssel setzte sie nur auf „ohne Konto“
+    await query('DELETE FROM feedback WHERE user_id = ?', [user.id]);
     await query('DELETE FROM users WHERE id = ?', [user.id]); // Sitzungen, Einstellungen, Routen per CASCADE
     await destroySession(req, res);
     return json(res, 200, { ok: true });

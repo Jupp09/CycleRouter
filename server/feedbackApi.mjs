@@ -84,6 +84,26 @@ function notify(id, kind) {
     });
 }
 
+// ---------- Löschfrist ----------
+/** Erledigte Rückmeldungen so viele Monate nach dem Erledigen löschen (Datenschutzerklärung) */
+export const KEEP_DONE_MONTHS = 12;
+
+/** Abgelaufene erledigte Rückmeldungen löschen → Anzahl. Ältere ohne done_at zählen ab Antwort bzw. Eingang. */
+export async function purgeOldFeedback() {
+  const r = await query(`DELETE FROM feedback WHERE done = 1
+    AND COALESCE(done_at, replied_at, created_at) < NOW() - INTERVAL ${KEEP_DONE_MONTHS} MONTH`);
+  return r.affectedRows || 0;
+}
+
+/** Beim Start und dann täglich aufräumen (server.mjs, nach initDb) */
+export function scheduleFeedbackPurge(log = console.log) {
+  const run = () => purgeOldFeedback()
+    .then(n => { if (n) log(`Rückmeldungen: ${n} erledigte nach ${KEEP_DONE_MONTHS} Monaten gelöscht`); })
+    .catch(e => log(`Rückmeldungen: Aufräumen fehlgeschlagen – ${e.message}`));
+  run();
+  setInterval(run, 24 * 3600 * 1000).unref();
+}
+
 // Steuerzeichen raus, Zeilenumbrüche und Tabulatoren bleiben (mehrzeilige Beschreibungen)
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g;
@@ -204,14 +224,14 @@ async function admin(req, json, url, id) {
   const m = req.method;
   if (id == null && m === 'GET') {
     const status = Object.hasOwn(ADMIN_LIST, url.searchParams.get('status')) ? url.searchParams.get('status') : 'open';
-    const rows = await query(`SELECT f.id, f.kind, f.text, f.email, f.tech, f.route, f.done, f.reply, f.replied_at, f.created_at,
+    const rows = await query(`SELECT f.id, f.kind, f.text, f.email, f.tech, f.route, f.done, f.done_at, f.reply, f.replied_at, f.created_at,
         f.user_id, f.token_hash IS NOT NULL AS has_token, u.username
       FROM feedback f LEFT JOIN users u ON u.id = f.user_id ${ADMIN_LIST[status]} ORDER BY f.id DESC LIMIT 200`);
     const counts = (await query('SELECT done, COUNT(*) AS n FROM feedback GROUP BY done'))
       .reduce((c, r) => ({ ...c, [r.done ? 'done' : 'open']: r.n }), { open: 0, done: 0 });
     return json(200, { counts, items: rows.map(r => ({
       id: r.id, kind: r.kind, text: r.text, email: r.email, tech: r.tech ? fromJson(r.tech) : null, route: r.route,
-      done: !!r.done, reply: r.reply, repliedAt: r.replied_at, createdAt: r.created_at, username: r.username ?? null,
+      done: !!r.done, doneAt: r.done_at ?? null, reply: r.reply, repliedAt: r.replied_at, createdAt: r.created_at, username: r.username ?? null,
       // Ohne Konto und ohne Kennzeichen (vor der Antwort-Funktion gesendet) kommt eine Antwort nirgends an
       reachable: !!r.user_id || !!r.has_token,
     })) });
@@ -220,7 +240,8 @@ async function admin(req, json, url, id) {
   if (m === 'PATCH') {
     const p = cleanAdminPatch(await readJsonStrict(req, 16 * 1024));
     const sets = [], params = [];
-    if ('done' in p) { sets.push('done = ?'); params.push(p.done ? 1 : 0); }
+    // done_at: ab wann die Löschfrist läuft – bleibt beim erneuten „erledigt“ (z. B. durch eine Antwort) stehen
+    if ('done' in p) { sets.push('done = ?', 'done_at = IF(? = 1, COALESCE(done_at, NOW()), NULL)'); params.push(p.done ? 1 : 0, p.done ? 1 : 0); }
     if ('reply' in p) { sets.push('reply = ?', 'replied_at = ?'); params.push(p.reply, p.reply ? new Date() : null); }
     const r = await query(`UPDATE feedback SET ${sets.join(', ')} WHERE id = ?`, [...params, id]);
     if (!r.affectedRows) throw new HttpError(404, 'Rückmeldung nicht gefunden.');

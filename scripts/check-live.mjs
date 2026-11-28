@@ -73,6 +73,17 @@ await section('App-Dateien', async () => {
   }
 });
 
+await section('Impressum und Datenschutz', async () => {
+  for (const path of ['/impressum.html', '/datenschutz.html']) {
+    const res = await get(path);
+    const html = res.status === 200 ? await res.text() : (await res.body?.cancel(), '');
+    if (res.status !== 200) { fail(`${path} → ${res.status} (Deploy oder Freigabe in server.mjs/.htaccess fehlt?)`); continue; }
+    // Fehlende Angaben markiert der Server (server/static.mjs fillTemplate)
+    const missing = [...html.matchAll(/in der \.env eintragen: (\w+)/g)].map(m => m[1]);
+    check(!missing.length, `${path} vollständig`, `${path}: in der .env fehlt ${[...new Set(missing)].join(', ')} (danach App neu starten)`);
+  }
+});
+
 await section('Schnittstellen', async () => {
   const regions = await get('/api/regions', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keys: ['5073_710'] }),

@@ -381,6 +381,8 @@
       <button type="button" class="link-btn with-icon" id="btn-feedback">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Feedback geben – Fehler, Ideen, Kritik</button>
     </p>
+    <!-- Impressum und Datenschutz: immer erreichbar (Angaben setzt der Server aus der .env ein, server/static.mjs) -->
+    <p class="legal-links"><a href="impressum.html" target="_blank" rel="noopener">Impressum<span class="sr-only"> (öffnet in neuem Tab)</span></a> · <a href="datenschutz.html" target="_blank" rel="noopener">Datenschutz<span class="sr-only"> (öffnet in neuem Tab)</span></a></p>
     <!-- Handy: die Hauptaktionen am unteren Rand des Blatts, ohne Scrollen erreichbar (stagesView.js); am Rechner aus.
          Sie lösen die Knöpfe im Ergebnis aus (#btn-gpx, #btn-multiday). -->
     <div class="sheet-actions" id="sheet-actions" hidden>
@@ -438,7 +440,7 @@
             <button type="button" id="btn-logout">Abmelden</button>
           </div>
           <p class="hint" id="account-msg"></p>
-          <p class="hint" id="account-info">Mit Konto werden Einstellungen und gespeicherte Routen zwischen deinen Geräten abgeglichen. Der ORS-API-Key bleibt nur auf diesem Gerät.</p>
+          <p class="hint" id="account-info">Mit Konto werden Einstellungen und gespeicherte Routen zwischen deinen Geräten abgeglichen. Der ORS-API-Key bleibt nur auf diesem Gerät. Was gespeichert wird: <a href="datenschutz.html#konto" target="_blank" rel="noopener">Datenschutzerklärung<span class="sr-only"> (öffnet in neuem Tab)</span></a>.</p>
           <button type="button" class="nav-row" id="btn-change-password" hidden>Passwort ändern …<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
           <div id="account-password" class="account-form" hidden>
             <input id="account-pass-old" type="password" placeholder="Bisheriges Passwort" aria-label="Bisheriges Passwort" autocomplete="current-password">
@@ -638,7 +640,7 @@
             <summary>Was wird gesendet?</summary>
             <pre id="feedback-preview-text"></pre>
           </details>
-          <p class="hint">Deine Rückmeldung wird auf dem CycloRouter-Server gespeichert und nur zur Verbesserung der App gelesen. Eine Antwort siehst du hier in CycloRouter – angemeldet auf allen Geräten, sonst in diesem Browser.<span id="feedback-account-note"></span></p>
+          <p class="hint">Deine Rückmeldung wird auf dem CycloRouter-Server gespeichert und nur zur Verbesserung der App gelesen. Eine Antwort siehst du hier in CycloRouter – angemeldet auf allen Geräten, sonst in diesem Browser.<span id="feedback-account-note"></span> Mehr in der <a href="datenschutz.html#feedback" target="_blank" rel="noopener">Datenschutzerklärung<span class="sr-only"> (öffnet in neuem Tab)</span></a>.</p>
         </section>
         <p class="hint error" id="feedback-msg" role="alert" hidden></p>
       </div>

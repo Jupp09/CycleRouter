@@ -64,6 +64,12 @@ function item(f) {
   const head = el('h3', 'feedback-head', `#${f.id} · ${KIND[f.kind] ?? f.kind} · ${when(f.createdAt)}${f.done ? ' · erledigt' : ''}`);
   head.id = `fb-head-${f.id}`;
   li.append(head, el('p', 'feedback-meta', who), el('blockquote', 'feedback-text', f.text));
+  if (f.done && f.doneAt) {
+    // Löschfrist wie in der Datenschutzerklärung (server/feedbackApi.mjs KEEP_DONE_MONTHS)
+    const until = new Date(f.doneAt);
+    until.setMonth(until.getMonth() + 12);
+    li.append(el('p', 'hint', `Wird am ${formatDate(until)} automatisch gelöscht (12 Monate nach dem Erledigen).`));
+  }
 
   const facts = [];
   if (f.email) {
